@@ -21,4 +21,4 @@ Tests verify that execution logic is correct and stays correct.
 
 - Mirror the structure of `/execution` — one test file per script
 - Test files named `test_<script_name>` or `<script_name>.test.<ext>`
-- One-command execution: `npm test`, `pytest`, or equivalent must work from repo root
+- One-command execution from repo root: `python -m unittest discover -v -s tests`
