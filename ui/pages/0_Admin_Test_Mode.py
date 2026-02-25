@@ -32,6 +32,9 @@ from execution.admin.reset_progress import (          # noqa: E402
 )
 from execution.admin.seed_lead import seed_lead        # noqa: E402
 from execution.admin.simulate_scenario import simulate_scenario  # noqa: E402
+from execution.leads.write_hot_lead_sync_record import (         # noqa: E402
+    write_hot_lead_sync_record,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -228,4 +231,54 @@ if st.button(
         st.error("Database unavailable. Check that tmp/app.db is accessible.")
     except Exception:
         logging.exception("Unexpected error in Simulate Scenario")
+        st.error("An unexpected error occurred. See console for details.")
+
+# ===========================================================================
+# SECTION 4 — Sync Outbox (Dev)
+# ===========================================================================
+st.divider()
+st.header("Sync Outbox (Dev)")
+st.caption(
+    "Places a lead into HOT_READY state and writes a NEEDS_SYNC outbox row. "
+    "Use this to generate real rows for the Sync Outbox Viewer."
+)
+
+s4_lead_id = st.text_input(
+    "Lead ID (required)",
+    key="s4_lead_id",
+    value="OUTBOX_DEMO_01",
+)
+
+if st.button("Create HOT lead + write NEEDS_SYNC", key="btn_outbox_demo"):
+    try:
+        now = datetime.now(timezone.utc)
+        sim_result = simulate_scenario(
+            scenario_id="HOT_READY",
+            lead_id=s4_lead_id,
+            confirm=True,
+            now=now,
+            db_path=DB_PATH,
+        )
+        if not sim_result["ok"]:
+            st.error(sim_result["message"])
+        else:
+            outbox_result = write_hot_lead_sync_record(
+                lead_id=s4_lead_id,
+                now=now,
+                db_path=DB_PATH,
+            )
+            if outbox_result["ok"]:
+                st.success(
+                    f"Lead **{s4_lead_id}** set to HOT_READY. "
+                    f"Outbox result: `{outbox_result}`"
+                )
+                st.info("Open Sync Outbox Viewer to see the NEEDS_SYNC row.")
+            else:
+                st.error(f"Outbox write failed: {outbox_result}")
+    except (ValueError, OperationNotConfirmedError) as exc:
+        st.error(str(exc))
+    except sqlite3.OperationalError:
+        st.error("Database unavailable. Check that tmp/app.db is accessible.")
+    except Exception:
+        logging.exception("Unexpected error in Sync Outbox (Dev)")
         st.error("An unexpected error occurred. See console for details.")
