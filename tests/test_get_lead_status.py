@@ -61,7 +61,12 @@ class TestGetLeadStatus(unittest.TestCase):
     # Test 2 — lead exists but no related rows
     # ------------------------------------------------------------------
     def test_lead_exists_no_related_rows(self):
-        """A lead with no invites, events, or hot-lead signal must return safe defaults."""
+        """A lead with no invites and no progress must return NOT_HOT / NOT_INVITED.
+
+        Rule 1 of HotLeadSignal (directives/HOT_LEAD_SIGNAL.md) fires immediately
+        when invite_sent is False, so signal and reason are always deterministic —
+        never None — for a known lead.
+        """
         upsert_lead("L1", db_path=TEST_DB_PATH)
         status = get_lead_status("L1", db_path=TEST_DB_PATH)
 
@@ -70,9 +75,10 @@ class TestGetLeadStatus(unittest.TestCase):
         self.assertIsNone(status["course_state"]["current_section"])
         self.assertIsNone(status["course_state"]["completion_pct"])
         self.assertIsNone(status["course_state"]["last_activity_at"])
-        self.assertIsNone(status["hot_lead"]["signal"])
+        # HotLeadSignal Rule 1 fails (no invite) → always computable, never None.
+        self.assertEqual(status["hot_lead"]["signal"], "NOT_HOT")
         self.assertIsNone(status["hot_lead"]["score"])
-        self.assertIsNone(status["hot_lead"]["reason"])
+        self.assertEqual(status["hot_lead"]["reason"], "NOT_INVITED")
 
     # ------------------------------------------------------------------
     # Test 3 — invite_sent True when a course_invites row exists

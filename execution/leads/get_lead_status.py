@@ -70,24 +70,20 @@ def get_lead_status(
 
     now_utc = datetime.now(timezone.utc)
 
-    if cs is None:
-        hot_signal = None
-        hot_score = None
-        hot_reason = None
-    else:
-        last_activity_time = None
-        if cs["last_activity_at"] is not None:
-            raw = cs["last_activity_at"].replace("Z", "+00:00")
-            last_activity_time = datetime.fromisoformat(raw)
-        hot_result = compute_hot_lead_signal(
-            invite_sent=invite_count > 0,
-            completion_percent=cs["completion_pct"],
-            last_activity_time=last_activity_time,
-            now=now_utc,
-        )
-        hot_signal = "HOT" if hot_result["hot"] else "NOT_HOT"
-        hot_score = None
-        hot_reason = hot_result["reasons"][0]
+    last_activity_time = None
+    if cs is not None and cs["last_activity_at"] is not None:
+        raw = cs["last_activity_at"].replace("Z", "+00:00")
+        last_activity_time = datetime.fromisoformat(raw)
+
+    hot_result = compute_hot_lead_signal(
+        invite_sent=invite_count > 0,
+        completion_percent=cs["completion_pct"] if cs is not None else None,
+        last_activity_time=last_activity_time,
+        now=now_utc,
+    )
+    hot_signal = "HOT" if hot_result["hot"] else "NOT_HOT"
+    hot_score = None
+    hot_reason = hot_result["reasons"][0]
 
     return {
         "lead_exists": True,
