@@ -5,7 +5,10 @@ Assembles and returns a lead's current status summary from the database.
 No business logic or state computation lives here — only data retrieval.
 """
 
+from datetime import datetime, timezone
+
 from execution.db.sqlite import connect, init_db
+from execution.leads.compute_hot_lead_signal import compute_hot_lead_signal
 
 _EMPTY_STATUS = {
     "lead_exists": False,
@@ -29,8 +32,9 @@ def get_lead_status(
 ) -> dict:
     """Return a structured status summary for a lead.
 
-    Queries leads, course_state, course_invites, and hot_lead_signals and
-    assembles the results into a single dictionary for downstream use
+    Queries leads, course_state, and course_invites, then derives the
+    HotLeadSignal in-process and assembles the results into a single
+    dictionary for downstream use
     (e.g. Cora personalisation, GHL push decisions).
 
     Args:
@@ -61,13 +65,29 @@ def get_lead_status(
             (lead_id,),
         ).fetchone()
 
-        hl = conn.execute(
-            "SELECT signal, score, reason FROM hot_lead_signals WHERE lead_id = ?",
-            (lead_id,),
-        ).fetchone()
-
     finally:
         conn.close()
+
+    now_utc = datetime.now(timezone.utc)
+
+    if cs is None:
+        hot_signal = None
+        hot_score = None
+        hot_reason = None
+    else:
+        last_activity_time = None
+        if cs["last_activity_at"] is not None:
+            raw = cs["last_activity_at"].replace("Z", "+00:00")
+            last_activity_time = datetime.fromisoformat(raw)
+        hot_result = compute_hot_lead_signal(
+            invite_sent=invite_count > 0,
+            completion_percent=cs["completion_pct"],
+            last_activity_time=last_activity_time,
+            now=now_utc,
+        )
+        hot_signal = "HOT" if hot_result["hot"] else "NOT_HOT"
+        hot_score = None
+        hot_reason = hot_result["reasons"][0]
 
     return {
         "lead_exists": True,
@@ -78,8 +98,8 @@ def get_lead_status(
             "last_activity_at": cs["last_activity_at"] if cs else None,
         },
         "hot_lead": {
-            "signal": hl["signal"] if hl else None,
-            "score": hl["score"] if hl else None,
-            "reason": hl["reason"] if hl else None,
+            "signal": hot_signal,
+            "score": hot_score,
+            "reason": hot_reason,
         },
     }

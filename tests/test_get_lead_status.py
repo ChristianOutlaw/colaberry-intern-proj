@@ -123,20 +123,33 @@ class TestGetLeadStatus(unittest.TestCase):
         self.assertEqual(cs["last_activity_at"], "2026-01-02T00:00:00+00:00")
 
     # ------------------------------------------------------------------
-    # Test 5 — hot_lead fields populated when signal row exists
+    # Test 5 — hot_lead fields derived via compute-on-read HotLeadSignal
     # ------------------------------------------------------------------
     def test_hot_lead_fields_returned(self):
-        """hot_lead fields must reflect the row in hot_lead_signals."""
+        """hot_lead fields must reflect the computed HotLeadSignal, not a stored row.
+
+        A lead with an invite and a course_state that passes all three gates
+        (completion >= 25 %, last activity within 7 days) must produce
+        signal="HOT", score=None, reason="HOT_ENGAGED".
+        """
         upsert_lead("L1", db_path=TEST_DB_PATH)
 
         conn = connect(TEST_DB_PATH)
         try:
             conn.execute(
                 """
-                INSERT INTO hot_lead_signals (lead_id, signal, score, reason, updated_at)
+                INSERT INTO course_invites (id, lead_id, sent_at, channel, metadata_json)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                ("L1", "engaged", 0.9, "test", "2026-01-01T00:00:00+00:00"),
+                ("I1", "L1", "2026-02-20T12:00:00Z", "sms", None),
+            )
+            conn.execute(
+                """
+                INSERT INTO course_state
+                    (lead_id, current_section, completion_pct, last_activity_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("L1", "section_3", 30.0, "2026-02-21T12:00:00Z", "2026-02-21T12:00:00Z"),
             )
             conn.commit()
         finally:
@@ -145,9 +158,9 @@ class TestGetLeadStatus(unittest.TestCase):
         status = get_lead_status("L1", db_path=TEST_DB_PATH)
         hl = status["hot_lead"]
 
-        self.assertEqual(hl["signal"], "engaged")
-        self.assertAlmostEqual(hl["score"], 0.9, places=5)
-        self.assertEqual(hl["reason"], "test")
+        self.assertEqual(hl["signal"], "HOT")
+        self.assertIsNone(hl["score"])
+        self.assertEqual(hl["reason"], "HOT_ENGAGED")
 
 
 if __name__ == "__main__":
