@@ -55,6 +55,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         progress_events     — individual progress updates (phase/section level)
         course_state        — computed current position and completion for a lead
         hot_lead_signals    — derived readiness-for-booking indicator (rule-based)
+        sync_records        — outbox audit log for GHL push attempts (future use)
 
     Args:
         conn: An open sqlite3.Connection (foreign keys should already be ON).
@@ -104,5 +105,26 @@ def init_db(conn: sqlite3.Connection) -> None:
             updated_at TEXT,
             FOREIGN KEY (lead_id) REFERENCES leads (id)
         );
+
+        CREATE TABLE IF NOT EXISTS sync_records (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id       TEXT NOT NULL,
+            destination   TEXT NOT NULL,
+            status        TEXT NOT NULL,
+            reason        TEXT,
+            payload_json  TEXT,
+            response_json TEXT,
+            error         TEXT,
+            created_at    TEXT NOT NULL,
+            updated_at    TEXT NOT NULL,
+            FOREIGN KEY (lead_id) REFERENCES leads (id) ON DELETE CASCADE,
+            UNIQUE (lead_id, destination, status)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sync_records_status
+            ON sync_records (status);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_records_lead_id
+            ON sync_records (lead_id);
     """)
     conn.commit()
