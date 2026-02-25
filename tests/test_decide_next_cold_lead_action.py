@@ -77,7 +77,7 @@ class TestDecideNextColdLeadAction(unittest.TestCase):
         upsert_lead("L1", db_path=TEST_DB_PATH)
         mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
         record_progress_event(
-            "E1", "L1", "section_1",
+            "E1", "L1", "P1_S1",
             occurred_at="2026-01-01T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
@@ -93,7 +93,7 @@ class TestDecideNextColdLeadAction(unittest.TestCase):
         upsert_lead("L1", db_path=TEST_DB_PATH)
         mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
         record_progress_event(
-            "E1", "L1", "section_1",
+            "E1", "L1", "P1_S1",
             occurred_at="2026-01-01T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )

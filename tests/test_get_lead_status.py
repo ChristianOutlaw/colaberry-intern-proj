@@ -110,12 +110,12 @@ class TestGetLeadStatus(unittest.TestCase):
         """course_state fields must reflect the computed state from progress events."""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         record_progress_event(
-            "E1", "L1", "section_1",
+            "E1", "L1", "P1_S1",
             occurred_at="2026-01-01T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
         record_progress_event(
-            "E2", "L1", "section_2",
+            "E2", "L1", "P1_S2",
             occurred_at="2026-01-02T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
@@ -124,7 +124,7 @@ class TestGetLeadStatus(unittest.TestCase):
         status = get_lead_status("L1", db_path=TEST_DB_PATH)
         cs = status["course_state"]
 
-        self.assertEqual(cs["current_section"], "section_2")
+        self.assertEqual(cs["current_section"], "P1_S2")
         self.assertAlmostEqual(cs["completion_pct"], 20.0, places=5)
         self.assertEqual(cs["last_activity_at"], "2026-01-02T00:00:00+00:00")
 

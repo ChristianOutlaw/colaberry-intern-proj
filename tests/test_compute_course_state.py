@@ -53,7 +53,7 @@ class TestComputeCourseState(unittest.TestCase):
             os.remove(TEST_DB_PATH)
 
     # ------------------------------------------------------------------
-    # Test 1 — no events → no course_state row
+    # Test 1 — no events -> no course_state row
     # ------------------------------------------------------------------
     def test_no_events_creates_no_course_state(self):
         """compute_course_state must not write a row when the lead has no events."""
@@ -64,18 +64,18 @@ class TestComputeCourseState(unittest.TestCase):
         self.assertEqual(row, {}, "Expected no course_state row when lead has no events")
 
     # ------------------------------------------------------------------
-    # Test 2 — events present → correct row inserted
+    # Test 2 — events present -> correct row inserted
     # ------------------------------------------------------------------
     def test_inserts_course_state_from_events(self):
         """compute_course_state must insert a row with correct derived values."""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         record_progress_event(
-            "E1", "L1", "section_1",
+            "E1", "L1", "P1_S1",
             occurred_at="2026-01-01T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
         record_progress_event(
-            "E2", "L1", "section_2",
+            "E2", "L1", "P1_S2",
             occurred_at="2026-01-02T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
@@ -84,7 +84,7 @@ class TestComputeCourseState(unittest.TestCase):
         row = _fetch_course_state("L1")
 
         self.assertNotEqual(row, {}, "Expected a course_state row to be created")
-        self.assertEqual(row["current_section"], "section_2")
+        self.assertEqual(row["current_section"], "P1_S2")
         self.assertEqual(row["last_activity_at"], "2026-01-02T00:00:00+00:00")
         self.assertAlmostEqual(row["completion_pct"], 20.0, places=5)
 
@@ -95,12 +95,12 @@ class TestComputeCourseState(unittest.TestCase):
         """A second call to compute_course_state must update the existing row."""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         record_progress_event(
-            "E1", "L1", "section_1",
+            "E1", "L1", "P1_S1",
             occurred_at="2026-01-01T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
         record_progress_event(
-            "E2", "L1", "section_2",
+            "E2", "L1", "P1_S2",
             occurred_at="2026-01-02T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
@@ -110,7 +110,7 @@ class TestComputeCourseState(unittest.TestCase):
         first_updated_at = first["updated_at"]
 
         record_progress_event(
-            "E3", "L1", "section_3",
+            "E3", "L1", "P1_S3",
             occurred_at="2026-01-03T00:00:00+00:00",
             db_path=TEST_DB_PATH,
         )
@@ -118,7 +118,7 @@ class TestComputeCourseState(unittest.TestCase):
 
         second = _fetch_course_state("L1")
 
-        self.assertEqual(second["current_section"], "section_3")
+        self.assertEqual(second["current_section"], "P1_S3")
         self.assertAlmostEqual(second["completion_pct"], 30.0, places=5)
         self.assertNotEqual(
             second["updated_at"],

@@ -8,6 +8,7 @@ state computation lives here.
 
 from datetime import datetime, timezone
 
+from execution.course.course_registry import is_valid_section_id
 from execution.db.sqlite import connect, init_db
 
 
@@ -32,11 +33,19 @@ def record_progress_event(
     Args:
         event_id:      Stable unique identifier for this event (TEXT PRIMARY KEY).
         lead_id:       ID of the lead this event belongs to.
-        section:       Phase/section label (e.g. "phase1_section2").
+        section:       Canonical section ID (e.g. "P1_S1"). Must be one of the
+                       IDs defined in directives/COURSE_STRUCTURE.md and
+                       execution/course/course_registry.SECTION_IDS.
         occurred_at:   ISO 8601 timestamp; defaults to current UTC if None.
         metadata_json: Optional JSON string for extra context.
         db_path:       Path to the SQLite file; defaults to tmp/app.db.
+
+    Raises:
+        ValueError: If section is not a canonical section ID.
     """
+    if not is_valid_section_id(section):
+        raise ValueError(f"Invalid section_id: {section!r}")
+
     conn = connect(db_path)
     try:
         init_db(conn)
