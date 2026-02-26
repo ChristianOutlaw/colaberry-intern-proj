@@ -1,7 +1,7 @@
 """
 ui/student_portal/pages/1_Student_Course_Player.py
 
-Student Course Player — GPT-like tutor UI
+Student Course Player — tabbed Lesson / Quiz / Reflection / Tutor interface.
 Directive: directives/UI_STUDENT_COURSE_PLAYER.md
 
 Run from the repository root:
@@ -24,20 +24,65 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from execution.course.course_registry import SECTIONS, TOTAL_SECTIONS      # noqa: E402
-from execution.leads.get_lead_status import get_lead_status                # noqa: E402
-from execution.leads.upsert_lead import upsert_lead                        # noqa: E402
-from execution.progress.compute_course_state import compute_course_state   # noqa: E402
-from execution.progress.record_progress_event import record_progress_event  # noqa: E402
-from ui.theme import apply_colaberry_theme                                 # noqa: E402
-from ui.student_portal.ai_tutor import generate_tutor_reply                # noqa: E402
+from execution.course.course_registry import SECTIONS, TOTAL_SECTIONS               # noqa: E402
+from execution.course.load_course_map import load_course_map                        # noqa: E402
+from execution.course.load_quiz_library import load_quiz_library                    # noqa: E402
+from execution.leads.get_lead_status import get_lead_status                         # noqa: E402
+from execution.leads.upsert_lead import upsert_lead                                 # noqa: E402
+from execution.progress.compute_course_state import compute_course_state            # noqa: E402
+from execution.progress.record_progress_event import record_progress_event          # noqa: E402
+from execution.reflection.load_reflection_responses import load_reflection_responses  # noqa: E402
+from execution.reflection.save_reflection_response import save_reflection_response   # noqa: E402
+from ui.theme import apply_colaberry_theme                                          # noqa: E402
+from ui.student_portal.ai_tutor import generate_tutor_reply                         # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
 COURSE_CONTENT_DIR = REPO_ROOT / "course_content" / "FREE_INTRO_AI_V0"
+COURSE_ID = "FREE_INTRO_AI_V0"
 EM_DASH = "\u2014"
+
+# Human-readable question text for each reflection prompt identifier.
+_PROMPT_QUESTIONS: dict[str, str] = {
+    "confidence_start": (
+        "How confident were you about AI before starting this section? Describe your starting point."
+    ),
+    "early_surprise": "What surprised you most in this section?",
+    "motivation": "What is motivating you to learn about AI?",
+    "interest_area": "Which area of AI interests you most so far, and why?",
+    "confidence_current": "How has your understanding or confidence changed after this section?",
+    "real_world_interest": "Which real-world AI application interests you most? Why?",
+    "data_to_decision_reflection": (
+        "How do you see data being used to make better decisions in your life or work?"
+    ),
+    "intent_level": (
+        "How likely are you to continue learning AI after this course? "
+        "What factors are influencing you?"
+    ),
+    "preferred_path": (
+        "What learning path feels most right for you next — "
+        "hands-on projects, structured courses, or something else?"
+    ),
+    "open_reflection": (
+        "Is there anything else you want to capture about your learning journey so far?"
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Cached course data loaders — file I/O runs once per session.
+# ---------------------------------------------------------------------------
+@st.cache_data
+def _cached_course_map() -> dict:
+    return load_course_map(COURSE_ID)
+
+
+@st.cache_data
+def _cached_quiz_library() -> dict:
+    return load_quiz_library(COURSE_ID)
+
 
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call in the file.
@@ -62,6 +107,8 @@ if "tutor_pending" not in st.session_state:
     st.session_state["tutor_pending"] = None  # prompt enqueued by quick-action button
 if "tutor_section_id" not in st.session_state:
     st.session_state["tutor_section_id"] = None  # tracks section for history reset
+if "quiz_submitted" not in st.session_state:
+    st.session_state["quiz_submitted"] = set()  # set of "{section_id}:{quiz_id}"
 
 # ---------------------------------------------------------------------------
 # Sidebar — Lead ID only (auth boundary; stays out of main columns)
@@ -100,9 +147,9 @@ if st.session_state["player_status"] is None:
     st.session_state["player_status"] = _fetch_status(lead_id)
 
 # ---------------------------------------------------------------------------
-# 3-column layout  [nav | content | tutor]
+# 2-column layout  [nav | main]
 # ---------------------------------------------------------------------------
-col_nav, col_content, col_tutor = st.columns([1.2, 2.5, 1.3])
+col_nav, col_main = st.columns([1.2, 3.8])
 
 # ── LEFT: Section navigation + progress + Mark Complete ─────────────────────
 with col_nav:
@@ -146,7 +193,7 @@ with col_nav:
 
     st.divider()
 
-    # Mark Complete — unchanged business logic; just relocated from main area.
+    # Mark Complete — unchanged business logic.
     if st.button("Mark Complete", type="primary", use_container_width=True):
         occurred_at = datetime.now(timezone.utc).isoformat()
         event_id = f"{lead_id}:{active_section_id}"
@@ -179,8 +226,8 @@ with col_nav:
             logging.exception("Unexpected error in Mark Complete")
             st.error("An unexpected error occurred. See console for details.")
 
-# ── MIDDLE: Section title + content ─────────────────────────────────────────
-with col_content:
+# ── RIGHT: Section title + tabs ──────────────────────────────────────────────
+with col_main:
     # Flash message — stored before st.rerun() so it survives the cycle.
     if st.session_state["player_flash"] is not None:
         level, msg = st.session_state["player_flash"]
@@ -192,72 +239,215 @@ with col_content:
 
     st.title(f"{active_section_id} {EM_DASH} {active_title}")
 
+    # Load section markdown (shared by Lesson tab and Tutor tab).
     content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
     try:
         section_markdown = content_path.read_text(encoding="utf-8")
     except Exception:
         section_markdown = None
 
-    if section_markdown is None:
-        st.warning("Section content unavailable.")
-    else:
-        st.markdown(section_markdown)
+    # Load cached course data (file I/O once per session).
+    try:
+        course_map = _cached_course_map()
+        quiz_library = _cached_quiz_library()
+    except Exception:
+        logging.exception("Failed to load course map or quiz library")
+        course_map = {}
+        quiz_library = {}
 
-# ── RIGHT: AI Tutor panel ────────────────────────────────────────────────────
-with col_tutor:
-    st.subheader("AI Tutor")
+    section_data = course_map.get(active_section_id, {})
+    section_quiz_ids: list[str] = section_data.get("quiz_ids", [])
+    section_prompt_ids: list[str] = section_data.get("reflection_prompts", [])
 
-    # Process any prompt enqueued by a quick-action button click.
-    # This runs first so the new exchange appears immediately in the history.
-    if st.session_state["tutor_pending"] is not None:
-        pending = st.session_state["tutor_pending"]
-        st.session_state["tutor_pending"] = None
-        st.session_state["tutor_messages"].append({"role": "user", "content": pending})
-        reply = generate_tutor_reply(
-            section_title=active_title,
-            section_markdown=section_markdown or "",
-            user_message=pending,
-        )
-        st.session_state["tutor_messages"].append({"role": "assistant", "content": reply})
+    # ── Tabs ────────────────────────────────────────────────────────────────
+    tab_lesson, tab_quiz, tab_reflection, tab_tutor = st.tabs(
+        ["Lesson", "Quiz", "Reflection", "Tutor"]
+    )
 
-    # Quick-action buttons — 2 × 2 grid above the chat.
-    b_left, b_right = st.columns(2)
-    with b_left:
-        if st.button("Summarize", use_container_width=True, key="btn_summarize"):
-            st.session_state["tutor_pending"] = "Summarize this section for me."
-            st.rerun()
-        if st.button("Give me an example", use_container_width=True, key="btn_example"):
-            st.session_state["tutor_pending"] = (
-                "Give me a concrete example of the key ideas in this section."
+    # ── LESSON tab ──────────────────────────────────────────────────────────
+    with tab_lesson:
+        if section_markdown is None:
+            st.warning("Section content unavailable.")
+        else:
+            st.markdown(section_markdown)
+
+    # ── QUIZ tab ────────────────────────────────────────────────────────────
+    with tab_quiz:
+        if not section_quiz_ids:
+            st.info("No quiz for this section.")
+        else:
+            for quiz_id in section_quiz_ids:
+                quiz = quiz_library.get(quiz_id)
+                if quiz is None:
+                    st.warning(f"Quiz '{quiz_id}' not found in library.")
+                    continue
+
+                submitted_key = f"{active_section_id}:{quiz_id}"
+                already_submitted = submitted_key in st.session_state["quiz_submitted"]
+
+                if quiz.get("title"):
+                    st.subheader(quiz["title"])
+
+                questions = quiz.get("questions", [])
+
+                # Render each question; disable after submission.
+                selected_indices: list[int] = []
+                for q_idx, q in enumerate(questions):
+                    opts = q["options"]
+                    chosen = st.radio(
+                        f"**{q_idx + 1}.** {q['question']}",
+                        options=list(range(len(opts))),
+                        format_func=lambda j, o=opts: o[j],
+                        key=f"q_{active_section_id}_{quiz_id}_{q_idx}",
+                        disabled=already_submitted,
+                    )
+                    selected_indices.append(chosen)
+
+                if not already_submitted:
+                    if st.button(
+                        "Submit Quiz",
+                        key=f"submit_{active_section_id}_{quiz_id}",
+                    ):
+                        st.session_state["quiz_submitted"].add(submitted_key)
+                        # Capture selected answers at submit time.
+                        st.session_state[f"quiz_sel_{submitted_key}"] = selected_indices
+                        st.rerun()
+                else:
+                    # Retrieve answers stored at submit time.
+                    stored = st.session_state.get(
+                        f"quiz_sel_{submitted_key}", selected_indices
+                    )
+                    correct_count = sum(
+                        1
+                        for i, q in enumerate(questions)
+                        if stored[i] == q["correct_index"]
+                    )
+                    total = len(questions)
+                    st.success(f"Score: {correct_count} / {total}")
+                    for i, q in enumerate(questions):
+                        if stored[i] == q["correct_index"]:
+                            st.markdown(f"- Q{i + 1}: Correct")
+                        else:
+                            correct_text = q["options"][q["correct_index"]]
+                            st.markdown(
+                                f"- Q{i + 1}: Incorrect"
+                                f" {EM_DASH} correct answer: **{correct_text}**"
+                            )
+
+                st.divider()
+
+    # ── REFLECTION tab ──────────────────────────────────────────────────────
+    with tab_reflection:
+        if not section_prompt_ids:
+            st.info("No reflection prompts for this section.")
+        else:
+            # Load previously saved responses (fresh DB read each render).
+            try:
+                saved_by_section = load_reflection_responses(
+                    lead_id, COURSE_ID, db_path=DB_PATH
+                )
+            except Exception:
+                logging.exception("Error loading reflection responses")
+                saved_by_section = {}
+
+            saved_for_section: dict[int, str] = saved_by_section.get(active_section_id, {})
+
+            for p_idx, prompt_id in enumerate(section_prompt_ids):
+                question = _PROMPT_QUESTIONS.get(
+                    prompt_id,
+                    prompt_id.replace("_", " ").capitalize(),
+                )
+                st.markdown(f"**{p_idx + 1}. {question}**")
+
+                txt_key = f"reflection_txt_{active_section_id}_{p_idx}"
+                # value= sets the default; session state takes over after first render.
+                saved_text = saved_for_section.get(p_idx, "")
+
+                st.text_area(
+                    label=f"Prompt {p_idx + 1}",
+                    value=saved_text,
+                    key=txt_key,
+                    height=100,
+                    label_visibility="collapsed",
+                )
+
+                if st.button("Save", key=f"refl_save_{active_section_id}_{p_idx}"):
+                    current_text = st.session_state.get(txt_key, "").strip()
+                    if current_text:
+                        try:
+                            save_reflection_response(
+                                lead_id,
+                                COURSE_ID,
+                                active_section_id,
+                                p_idx,
+                                current_text,
+                                created_at=datetime.now(timezone.utc).isoformat(),
+                                db_path=DB_PATH,
+                            )
+                            st.success("Saved.")
+                        except Exception:
+                            logging.exception("Error saving reflection response")
+                            st.error("Could not save. Please try again.")
+                    else:
+                        st.warning("Cannot save an empty response.")
+
+                st.divider()
+
+    # ── TUTOR tab ───────────────────────────────────────────────────────────
+    with tab_tutor:
+        st.subheader("AI Tutor")
+
+        # Process any prompt enqueued by a quick-action button click.
+        # This runs first so the new exchange appears immediately in the history.
+        if st.session_state["tutor_pending"] is not None:
+            pending = st.session_state["tutor_pending"]
+            st.session_state["tutor_pending"] = None
+            st.session_state["tutor_messages"].append({"role": "user", "content": pending})
+            reply = generate_tutor_reply(
+                section_title=active_title,
+                section_markdown=section_markdown or "",
+                user_message=pending,
             )
-            st.rerun()
-    with b_right:
-        if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
-            st.session_state["tutor_pending"] = (
-                "Explain this section like I'm completely new to the topic."
+            st.session_state["tutor_messages"].append({"role": "assistant", "content": reply})
+
+        # Quick-action buttons — 2 × 2 grid above the chat.
+        b_left, b_right = st.columns(2)
+        with b_left:
+            if st.button("Summarize", use_container_width=True, key="btn_summarize"):
+                st.session_state["tutor_pending"] = "Summarize this section for me."
+                st.rerun()
+            if st.button("Give me an example", use_container_width=True, key="btn_example"):
+                st.session_state["tutor_pending"] = (
+                    "Give me a concrete example of the key ideas in this section."
+                )
+                st.rerun()
+        with b_right:
+            if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
+                st.session_state["tutor_pending"] = (
+                    "Explain this section like I'm completely new to the topic."
+                )
+                st.rerun()
+            if st.button("Quiz me (2 questions)", use_container_width=True, key="btn_quiz"):
+                st.session_state["tutor_pending"] = (
+                    "Quiz me with 2 questions about this section."
+                )
+                st.rerun()
+
+        st.divider()
+
+        # Chat history — rendered top-to-bottom.
+        for msg in st.session_state["tutor_messages"]:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Free-form input — student can type any question about the section.
+        user_input = st.chat_input("Ask about this section…")
+        if user_input:
+            st.session_state["tutor_messages"].append({"role": "user", "content": user_input})
+            reply = generate_tutor_reply(
+                section_title=active_title,
+                section_markdown=section_markdown or "",
+                user_message=user_input,
             )
+            st.session_state["tutor_messages"].append({"role": "assistant", "content": reply})
             st.rerun()
-        if st.button("Quiz me (2 questions)", use_container_width=True, key="btn_quiz"):
-            st.session_state["tutor_pending"] = (
-                "Quiz me with 2 questions about this section."
-            )
-            st.rerun()
-
-    st.divider()
-
-    # Chat history — rendered top-to-bottom inside a scrollable container.
-    for msg in st.session_state["tutor_messages"]:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    # Free-form input — student can type any question about the section.
-    user_input = st.chat_input("Ask about this section…")
-    if user_input:
-        st.session_state["tutor_messages"].append({"role": "user", "content": user_input})
-        reply = generate_tutor_reply(
-            section_title=active_title,
-            section_markdown=section_markdown or "",
-            user_message=user_input,
-        )
-        st.session_state["tutor_messages"].append({"role": "assistant", "content": reply})
-        st.rerun()
