@@ -158,7 +158,7 @@ def apply_colaberry_theme(
             </div>
 
             <div style="margin-left:auto; color:{_DARK_GRAY}; font-size:0.85rem;">
-                {/* right-side spacer (future: user badge / env tag) */}
+                <!-- right-side spacer -->
             </div>
         </div>
         """,
