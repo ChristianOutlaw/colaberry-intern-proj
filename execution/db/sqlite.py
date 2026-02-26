@@ -50,12 +50,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     Does not drop or migrate existing tables.
 
     Schema:
-        leads               — core person record
-        course_invites      — records that a "Free Intro to AI Class" invite was sent
-        progress_events     — individual progress updates (phase/section level)
-        course_state        — computed current position and completion for a lead
-        hot_lead_signals    — derived readiness-for-booking indicator (rule-based)
-        sync_records        — outbox audit log for GHL push attempts (future use)
+        leads                 — core person record
+        course_invites        — records that a "Free Intro to AI Class" invite was sent
+        progress_events       — individual progress updates (phase/section level)
+        course_state          — computed current position and completion for a lead
+        hot_lead_signals      — derived readiness-for-booking indicator (rule-based)
+        sync_records          — outbox audit log for GHL push attempts (future use)
+        reflection_responses  — student free-text reflection answers per section/prompt
 
     Args:
         conn: An open sqlite3.Connection (foreign keys should already be ON).
@@ -126,5 +127,19 @@ def init_db(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_records_lead_id
             ON sync_records (lead_id);
+
+        CREATE TABLE IF NOT EXISTS reflection_responses (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id       TEXT NOT NULL,
+            course_id     TEXT NOT NULL,
+            section_id    TEXT NOT NULL,
+            prompt_index  INTEGER NOT NULL,
+            response_text TEXT NOT NULL,
+            created_at    TEXT,
+            UNIQUE (lead_id, course_id, section_id, prompt_index)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reflection_lead_course
+            ON reflection_responses (lead_id, course_id);
     """)
     conn.commit()
