@@ -1,31 +1,226 @@
 """
 ui/instructor_portal/pages/0_Instructor_Dashboard.py
 
-Instructor Dashboard — placeholder (not yet implemented).
+Instructor Dashboard — All Leads overview with search and detail drill-down.
+Directive: directives/UI_LEAD_STATUS_VIEW.md (adapted for instructor view)
 
 Run from the repository root:
     streamlit run ui/instructor_portal/instructor_app.py
 """
 
+import logging
+import sqlite3
+import sys
+from pathlib import Path
+
 import streamlit as st
 
+# ---------------------------------------------------------------------------
+# sys.path bootstrap — this file lives three levels below repo root
+# (ui/instructor_portal/pages/).
+# ---------------------------------------------------------------------------
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from execution.leads.list_leads_overview import list_leads_overview          # noqa: E402
+from execution.leads.get_lead_status import get_lead_status                  # noqa: E402
+from execution.decision.decide_next_cold_lead_action import (                # noqa: E402
+    decide_next_cold_lead_action,
+)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
+
+_ACTION_LABELS: dict[str, str] = {
+    "NO_LEAD":           "Lead not found in database.",
+    "SEND_INVITE":       "Lead exists but has not received a course invite yet.",
+    "NUDGE_START_CLASS": "Invite sent — lead has not started the course.",
+    "NUDGE_PROGRESS":    "Course started — lead has not yet completed it.",
+    "READY_FOR_BOOKING": "Course complete — lead is ready for a booking call.",
+}
+
+# ---------------------------------------------------------------------------
+# Page config — must be the first Streamlit call in the file.
+# ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Instructor Dashboard",
     page_icon="📋",
     layout="wide",
 )
 
+# ---------------------------------------------------------------------------
+# Header
+# ---------------------------------------------------------------------------
 st.title("Instructor Dashboard")
-st.info("🚧 Coming soon — this page is a placeholder.")
-st.markdown(
-    """
-Planned features for this dashboard:
-
-- **Lead overview** — view all enrolled leads and their course progress
-- **Completion metrics** — aggregate completion rates by section and cohort
-- **Hot lead list** — leads flagged as HOT by the signal engine
-- **Outbox status** — CRM sync status at a glance
-
-No business logic has been implemented here yet.
-"""
+st.caption(
+    "Read-only view of all leads, their course progress, and recommended next action. "
+    "Select a lead from the table or search by name, email, phone, or ID."
 )
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Controls row
+# ---------------------------------------------------------------------------
+col_search, col_limit, col_hot = st.columns([3, 1, 1])
+
+with col_search:
+    search = st.text_input(
+        "Search",
+        placeholder="Filter by lead ID, name, email, or phone…",
+    )
+
+with col_limit:
+    limit = st.number_input(
+        "Limit",
+        min_value=1,
+        max_value=1000,
+        value=200,
+        step=1,
+    )
+
+with col_hot:
+    st.checkbox(
+        "HOT leads only",
+        value=False,
+        disabled=True,
+        help="HOT signal filtering is coming soon — requires hot_lead_signals in the overview query.",
+    )
+
+# ---------------------------------------------------------------------------
+# Load overview — auto-loads on every page render (read-only, fast).
+# ---------------------------------------------------------------------------
+all_rows: list[dict] = []
+load_error = False
+
+try:
+    all_rows = list_leads_overview(db_path=DB_PATH, limit=int(limit))
+except sqlite3.OperationalError:
+    st.error(
+        "Database unavailable. "
+        "Run `streamlit run ui/instructor_portal/instructor_app.py` from the repo root "
+        "to ensure tmp/app.db is initialised."
+    )
+    load_error = True
+except Exception:
+    logging.exception("Unexpected error loading leads overview")
+    st.error("An unexpected error occurred loading leads. See console for details.")
+    load_error = True
+
+# ---------------------------------------------------------------------------
+# Client-side search filter (case-insensitive substring match across 4 fields)
+# ---------------------------------------------------------------------------
+filtered_rows: list[dict] = all_rows
+q = search.strip().lower()
+if q and not load_error:
+    filtered_rows = [
+        r for r in all_rows
+        if q in (r["lead_id"]  or "").lower()
+        or q in (r["name"]     or "").lower()
+        or q in (r["email"]    or "").lower()
+        or q in (r["phone"]    or "").lower()
+    ]
+
+# ---------------------------------------------------------------------------
+# Overview table
+# ---------------------------------------------------------------------------
+st.subheader(f"Leads ({len(filtered_rows)} shown)")
+
+if not load_error:
+    if filtered_rows:
+        st.dataframe(filtered_rows, use_container_width=True)
+    else:
+        st.info("No leads match your search. Try a different term or clear the search box.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Lead selection — selectbox from filtered results + optional manual entry
+# ---------------------------------------------------------------------------
+st.subheader("Lead Detail")
+
+selected_lead_id: str | None = None
+
+if filtered_rows:
+    col_pick, col_manual = st.columns([2, 1])
+
+    with col_pick:
+        selected_from_list: str = st.selectbox(
+            "Select a lead from the list above",
+            options=[r["lead_id"] for r in filtered_rows],
+        )
+
+    with col_manual:
+        manual_input = st.text_input(
+            "Or type a Lead ID directly",
+            placeholder="e.g. lead-123",
+        )
+
+    selected_lead_id = manual_input.strip() if manual_input.strip() else selected_from_list
+
+else:
+    manual_input = st.text_input(
+        "Type a Lead ID directly",
+        placeholder="e.g. lead-123",
+    )
+    selected_lead_id = manual_input.strip() or None
+
+# ---------------------------------------------------------------------------
+# Details panel — rendered only when a lead_id is resolved
+# ---------------------------------------------------------------------------
+if selected_lead_id:
+    st.markdown(f"#### Details — `{selected_lead_id}`")
+
+    # ---- get_lead_status ------------------------------------------------
+    status: dict | None = None
+    try:
+        status = get_lead_status(selected_lead_id, db_path=DB_PATH)
+    except sqlite3.OperationalError:
+        st.error("Database unavailable when loading lead details.")
+    except Exception:
+        logging.exception("Unexpected error in get_lead_status for %s", selected_lead_id)
+        st.error("An unexpected error occurred loading lead details. See console.")
+
+    if status is not None:
+        if not status["lead_exists"]:
+            st.warning(f"Lead `{selected_lead_id}` does not exist in the database.")
+        else:
+            cs = status["course_state"]
+            hl = status["hot_lead"]
+
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Invite Sent",      "Yes" if status["invite_sent"] else "No")
+            col_b.metric("Completion",       f"{cs['completion_pct']:.1f} %" if cs["completion_pct"] is not None else "—")
+            col_c.metric("Hot Lead Signal",  hl["signal"] or "—")
+
+            col_d, col_e = st.columns(2)
+            col_d.markdown(f"**Current Section:** {cs['current_section'] or '—'}")
+            col_e.markdown(f"**Last Activity:** {cs['last_activity_at'] or '—'}")
+
+            if hl["reason"]:
+                st.caption(f"Signal reason: {hl['reason']}")
+
+    st.divider()
+
+    # ---- decide_next_cold_lead_action -----------------------------------
+    st.markdown("**Recommended Next Action**")
+
+    action: str | None = None
+    try:
+        action = decide_next_cold_lead_action(selected_lead_id, db_path=DB_PATH)
+    except sqlite3.OperationalError:
+        st.error("Database unavailable when computing recommended action.")
+    except Exception:
+        logging.exception("Unexpected error in decide_next_cold_lead_action for %s", selected_lead_id)
+        st.error("An unexpected error occurred computing the recommended action.")
+
+    if action is not None:
+        label = _ACTION_LABELS.get(action, action)
+        st.json({"action": action, "lead_id": selected_lead_id})
+        st.write(label)
+
+else:
+    st.info("Select or type a Lead ID above to view details.")
