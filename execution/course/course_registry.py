@@ -20,6 +20,20 @@ SECTION_IDS: frozenset[str] = frozenset({
 
 TOTAL_SECTIONS: int = 9
 
+# Ordered section list — canonical titles and IDs for FREE_INTRO_AI_V0.
+# UI layer imports this instead of maintaining its own copy.
+SECTIONS: tuple[tuple[str, str], ...] = (
+    ("P1_S1", "What Is AI?"),
+    ("P1_S2", "How Machines Learn"),
+    ("P1_S3", "AI in the Real World"),
+    ("P2_S1", "Understanding Data"),
+    ("P2_S2", "Exploring Data"),
+    ("P2_S3", "Preparing Data for AI"),
+    ("P3_S1", "Building Your First Model"),
+    ("P3_S2", "Evaluating Results"),
+    ("P3_S3", "Next Steps in AI"),
+)
+
 
 def is_valid_section_id(section_id: str) -> bool:
     """Return True if section_id is a canonical section for FREE_INTRO_AI_V0.

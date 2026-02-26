@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from execution.course.course_registry import SECTIONS, TOTAL_SECTIONS      # noqa: E402
 from execution.leads.get_lead_status import get_lead_status                # noqa: E402
 from execution.leads.upsert_lead import upsert_lead                        # noqa: E402
 from execution.progress.compute_course_state import compute_course_state   # noqa: E402
@@ -35,22 +36,7 @@ from ui.theme import apply_colaberry_theme                                 # noq
 # ---------------------------------------------------------------------------
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
 COURSE_CONTENT_DIR = REPO_ROOT / "course_content" / "FREE_INTRO_AI_V0"
-TOTAL_SECTIONS = 9
 EM_DASH = "\u2014"
-
-# Canonical section order — source of truth: directives/COURSE_STRUCTURE.md.
-# This list must stay in sync with execution/course/course_registry.SECTION_IDS.
-SECTIONS: list[tuple[str, str]] = [
-    ("P1_S1", "What Is AI?"),
-    ("P1_S2", "How Machines Learn"),
-    ("P1_S3", "AI in the Real World"),
-    ("P2_S1", "Understanding Data"),
-    ("P2_S2", "Exploring Data"),
-    ("P2_S3", "Preparing Data for AI"),
-    ("P3_S1", "Building Your First Model"),
-    ("P3_S2", "Evaluating Results"),
-    ("P3_S3", "Next Steps in AI"),
-]
 
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call in the file.
