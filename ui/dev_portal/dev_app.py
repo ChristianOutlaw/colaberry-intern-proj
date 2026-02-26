@@ -16,17 +16,5 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Dev Portal")
-st.warning("⚠ DEV ONLY — This portal exposes admin and diagnostic tools.")
-st.markdown(
-    """
-Use the sidebar to navigate to admin and outbox tools.
-
----
-
-**Run command (from repo root):**
-```
-streamlit run ui/dev_portal/dev_app.py
-```
-"""
-)
+st.switch_page("pages/0_Admin_Test_Mode.py")
+st.info("Redirecting… If you are not redirected, use the sidebar.")

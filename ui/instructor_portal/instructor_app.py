@@ -16,18 +16,5 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Instructor Portal")
-st.markdown(
-    """
-Welcome to the **Colaberry Instructor Portal**.
-
-Use the sidebar to navigate to instructor tools.
-
----
-
-**Run command (from repo root):**
-```
-streamlit run ui/instructor_portal/instructor_app.py
-```
-"""
-)
+st.switch_page("pages/0_Instructor_Dashboard.py")
+st.info("Redirecting… If you are not redirected, use the sidebar.")

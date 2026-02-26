@@ -16,18 +16,5 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Student Portal")
-st.markdown(
-    """
-Welcome to the **Colaberry Free Intro to AI** student portal.
-
-Use the sidebar to navigate to your course.
-
----
-
-**Run command (from repo root):**
-```
-streamlit run ui/student_portal/student_app.py
-```
-"""
-)
+st.switch_page("pages/1_Student_Course_Player.py")
+st.info("Redirecting… If you are not redirected, use the sidebar.")
