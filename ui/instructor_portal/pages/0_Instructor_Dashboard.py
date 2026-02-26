@@ -60,6 +60,8 @@ apply_colaberry_theme("Instructor Portal", "Lead progress & next actions")
 # ---------------------------------------------------------------------------
 if "selected_lead_id" not in st.session_state:
     st.session_state["selected_lead_id"] = None
+if "prev_show_hot_only" not in st.session_state:
+    st.session_state["prev_show_hot_only"] = False
 
 # ---------------------------------------------------------------------------
 # Header
@@ -104,6 +106,11 @@ with left_col:
             value=False,
             help="Show only leads with invite sent, ≥25% completion, and activity within the last 7 days.",
         )
+
+# HOT filter transition True → False: clear selection so the right panel hides
+if st.session_state["prev_show_hot_only"] and not show_hot_only:
+    st.session_state["selected_lead_id"] = None
+st.session_state["prev_show_hot_only"] = show_hot_only
 
 # ---------------------------------------------------------------------------
 # Load overview — auto-loads on every page render (read-only, fast).
