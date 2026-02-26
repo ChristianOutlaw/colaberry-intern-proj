@@ -62,6 +62,8 @@ if "selected_lead_id" not in st.session_state:
     st.session_state["selected_lead_id"] = None
 if "prev_show_hot_only" not in st.session_state:
     st.session_state["prev_show_hot_only"] = False
+if "leads_table_key_version" not in st.session_state:
+    st.session_state["leads_table_key_version"] = 0
 
 # ---------------------------------------------------------------------------
 # Header
@@ -110,6 +112,7 @@ with left_col:
 # HOT filter transition True → False: clear selection so the right panel hides
 if st.session_state["prev_show_hot_only"] and not show_hot_only:
     st.session_state["selected_lead_id"] = None
+    st.session_state["leads_table_key_version"] += 1
 st.session_state["prev_show_hot_only"] = show_hot_only
 
 # ---------------------------------------------------------------------------
@@ -211,6 +214,7 @@ with left_col:
                 on_select="rerun",
                 selection_mode="single-row",
                 column_config={"lead_id": None},  # hide key column from display
+                key=f"leads_table_{st.session_state['leads_table_key_version']}",
             )
             _sel_rows = tbl.selection.rows
             if _sel_rows:
