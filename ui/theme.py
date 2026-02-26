@@ -15,6 +15,7 @@ Brand tokens:
     text:         #1F2937
 """
 
+import base64
 from pathlib import Path
 
 import streamlit as st
@@ -96,22 +97,40 @@ def apply_colaberry_theme(
     # Inject brand CSS
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    # Header row: logo left, portal title + subtitle right
-    logo_col, title_col = st.columns([1, 4])
-
-    with logo_col:
-        if _LOGO_PATH.exists():
-            st.image(str(_LOGO_PATH), use_container_width=True)
-        else:
-            st.caption(f"Logo not found at expected path: {_LOGO_PATH}")
-
-    with title_col:
-        st.markdown(
-            f"<h2 style='margin: 0; padding-top: 0.3rem; color: {_DARK_BLACK};'>"
-            f"{portal_title}</h2>",
-            unsafe_allow_html=True,
+    # Logo: embed as base64 data URL so it renders inside st.markdown HTML.
+    if _LOGO_PATH.exists():
+        _img_b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode()
+        logo_html = (
+            f'<img src="data:image/png;base64,{_img_b64}"'
+            f' height="40" style="object-fit: contain;" />'
         )
-        if subtitle:
-            st.caption(subtitle)
+    else:
+        logo_html = f'<span style="color: white; font-size: 1rem;">{portal_title}</span>'
 
-    st.divider()
+    subtitle_html = (
+        f'<span style="color: {_LIGHT_GRAY}; font-size: 0.875rem;">{subtitle}</span>'
+        if subtitle else ""
+    )
+
+    st.markdown(
+        f"""
+        <div style="
+            background-color: {_DARK_BLACK};
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            border-bottom: 3px solid {_PRIMARY_RED};
+            margin-bottom: 1rem;
+        ">
+            {logo_html}
+            <div style="display: flex; flex-direction: column;">
+                <span style="color: white; font-size: 1.4rem; font-weight: 600; line-height: 1.2;">
+                    {portal_title}
+                </span>
+                {subtitle_html}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
