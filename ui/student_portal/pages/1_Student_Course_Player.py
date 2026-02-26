@@ -28,6 +28,7 @@ from execution.leads.get_lead_status import get_lead_status                # noq
 from execution.leads.upsert_lead import upsert_lead                        # noqa: E402
 from execution.progress.compute_course_state import compute_course_state   # noqa: E402
 from execution.progress.record_progress_event import record_progress_event  # noqa: E402
+from ui.theme import apply_colaberry_theme                                 # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants — hard-coded per directive; not exposed to the learner.
@@ -55,6 +56,7 @@ SECTIONS: list[tuple[str, str]] = [
 # Page config — must be the first Streamlit call in the file.
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Student Course Player", layout="wide")
+apply_colaberry_theme("Student Portal", "Free Intro to AI")
 
 # ---------------------------------------------------------------------------
 # Session state initialisation

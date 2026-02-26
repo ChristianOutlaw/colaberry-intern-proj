@@ -26,6 +26,7 @@ if str(REPO_ROOT) not in sys.path:
 from execution.leads.list_sync_records import list_sync_records  # noqa: E402
 from execution.leads.mark_sync_record_sent import mark_sync_record_sent  # noqa: E402
 from execution.leads.mark_sync_record_failed import mark_sync_record_failed  # noqa: E402
+from ui.theme import apply_colaberry_theme                       # noqa: E402
 
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
 
@@ -33,6 +34,8 @@ DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
 # Page config — must be the first Streamlit call in the file.
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Sync Outbox Viewer", layout="wide")
+apply_colaberry_theme("Dev Portal", "Sync outbox viewer")
+
 st.title("Sync Outbox Viewer")
 
 # ---------------------------------------------------------------------------

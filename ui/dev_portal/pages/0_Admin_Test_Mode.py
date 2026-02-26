@@ -36,6 +36,7 @@ from execution.admin.simulate_scenario import simulate_scenario  # noqa: E402
 from execution.leads.write_hot_lead_sync_record import (         # noqa: E402
     write_hot_lead_sync_record,
 )
+from ui.theme import apply_colaberry_theme             # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -55,6 +56,7 @@ SCENARIO_IDS: list[str] = [
 # Page config — must be the first Streamlit call in the file.
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Admin / Test Mode", layout="centered")
+apply_colaberry_theme("Dev Portal", "Admin & diagnostics (internal)")
 
 st.title("Admin / Test Mode (Dev Only)")
 st.warning("⚠ DEV ONLY — This tool modifies local SQLite data.")

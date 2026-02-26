@@ -29,6 +29,7 @@ from execution.leads.get_lead_status import get_lead_status                  # n
 from execution.decision.decide_next_cold_lead_action import (                # noqa: E402
     decide_next_cold_lead_action,
 )
+from ui.theme import apply_colaberry_theme                                   # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -51,6 +52,7 @@ st.set_page_config(
     page_icon="📋",
     layout="wide",
 )
+apply_colaberry_theme("Instructor Portal", "Lead progress & next actions")
 
 # ---------------------------------------------------------------------------
 # Header
