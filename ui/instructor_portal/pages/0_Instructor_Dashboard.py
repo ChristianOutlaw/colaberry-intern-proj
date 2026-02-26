@@ -139,14 +139,25 @@ if not load_error:
     m4.metric("Completed",    sum(1 for r in all_rows if r["completion_pct"] == 100.0))
 
 # ---------------------------------------------------------------------------
-# Overview table — is_hot rendered as emoji label before display
+# Overview table — clean column labels for display
 # ---------------------------------------------------------------------------
 st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
 if not load_error:
     if filtered_rows:
         display_rows = [
-            {**r, "is_hot": "🔥 HOT" if r["is_hot"] == 1 else "Cold"}
+            {
+                "Lead ID":       r["lead_id"],
+                "Invited":       "Yes" if r["invited_sent_at"] else "No",
+                "Completion":    (
+                    f"{r['completion_pct']:.1f} %"
+                    if r["completion_pct"] is not None
+                    else "—"
+                ),
+                "Section":       r["current_section"] or "—",
+                "Last Activity": r["last_activity_at"] or "—",
+                "Hot":           "🔥 HOT" if r["is_hot"] == 1 else "Cold",
+            }
             for r in filtered_rows
         ]
         st.dataframe(display_rows, use_container_width=True)
