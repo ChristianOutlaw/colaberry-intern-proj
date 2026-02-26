@@ -64,6 +64,8 @@ if "prev_show_hot_only" not in st.session_state:
     st.session_state["prev_show_hot_only"] = False
 if "leads_table_key_version" not in st.session_state:
     st.session_state["leads_table_key_version"] = 0
+if "selection_reset_pending" not in st.session_state:
+    st.session_state["selection_reset_pending"] = False
 
 # ---------------------------------------------------------------------------
 # Header
@@ -113,6 +115,7 @@ with left_col:
 if st.session_state["prev_show_hot_only"] and not show_hot_only:
     st.session_state["selected_lead_id"] = None
     st.session_state["leads_table_key_version"] += 1
+    st.session_state["selection_reset_pending"] = True
 st.session_state["prev_show_hot_only"] = show_hot_only
 
 # ---------------------------------------------------------------------------
@@ -217,7 +220,9 @@ with left_col:
                 key=f"leads_table_{st.session_state['leads_table_key_version']}",
             )
             _sel_rows = tbl.selection.rows
-            if _sel_rows:
+            if st.session_state["selection_reset_pending"]:
+                st.session_state["selection_reset_pending"] = False
+            elif _sel_rows:
                 st.session_state["selected_lead_id"] = display_df.iloc[_sel_rows[0]]["lead_id"]
         else:
             st.info("No leads match your search. Try a different term or clear the search box.")
