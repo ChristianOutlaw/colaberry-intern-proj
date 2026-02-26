@@ -141,12 +141,26 @@ if not load_error:
 # ---------------------------------------------------------------------------
 # Overview table — clean column labels for display
 # ---------------------------------------------------------------------------
+def _lifecycle_status(r: dict) -> str:
+    """Derive a single display label from a lead overview row. UI-only helper."""
+    if r["is_hot"] == 1:
+        return "🔥 HOT"
+    if r["completion_pct"] == 100.0:
+        return "✅ Completed"
+    if r["completion_pct"] is not None and r["completion_pct"] > 0:
+        return "📚 In Progress"
+    if r["invited_sent_at"] is not None:
+        return "📩 Invited"
+    return "❄️ Cold"
+
+
 st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
 if not load_error:
     if filtered_rows:
         display_rows = [
             {
+                "Status":        _lifecycle_status(r),
                 "Lead ID":       r["lead_id"],
                 "Invited":       "Yes" if r["invited_sent_at"] else "No",
                 "Completion":    (
