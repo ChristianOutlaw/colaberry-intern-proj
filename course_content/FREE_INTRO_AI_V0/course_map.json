@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "course_id": "FREE_INTRO_AI_V0",
+  "notes": "Maps each repo section_id to its corresponding curriculum references, quiz IDs, and reflection prompt identifiers. Source files: Curriculum_Map.md, Quiz_Library (2).json, Reflection_Prompts.md, Lesson_Content_Guide.md, Reinforcement_Playbook.md.",
+  "sections": [
+
+    {
+      "section_id": "P1_S1",
+      "title": "What Is AI?",
+      "curriculum_refs": [
+        { "phase_id": "phase1", "module_id": "module1_1", "step_id": "step1_1" },
+        { "phase_id": "phase1", "module_id": "module1_2", "step_id": "step1_2" },
+        { "phase_id": "phase1", "module_id": "module1_3", "step_id": "step1_3" }
+      ],
+      "quiz_ids": [
+        "quiz_phase1_mod1_1",
+        "quiz_phase1_mod1_2"
+      ],
+      "reflection_prompts": [
+        "confidence_start",
+        "early_surprise"
+      ]
+    },
+
+    {
+      "section_id": "P1_S2",
+      "title": "How Machines Learn",
+      "curriculum_refs": [
+        { "phase_id": "phase2", "module_id": "module2_1", "step_id": "step2_1" },
+        { "phase_id": "phase2", "module_id": "module2_2", "step_id": "step2_2" }
+      ],
+      "quiz_ids": [
+        "quiz_phase2_mod2_2"
+      ],
+      "reflection_prompts": [
+        "motivation",
+        "interest_area",
+        "confidence_current"
+      ]
+    },
+
+    {
+      "section_id": "P1_S3",
+      "title": "AI in the Real World",
+      "curriculum_refs": [
+        { "phase_id": "phase4", "module_id": "module4_1", "step_id": "step4_1" },
+        { "phase_id": "phase4", "module_id": "module4_3", "step_id": "step4_3" }
+      ],
+      "quiz_ids": [
+        "quiz_phase4_mod4_1"
+      ],
+      "reflection_prompts": [
+        "real_world_interest"
+      ]
+    },
+
+    {
+      "section_id": "P2_S1",
+      "title": "Understanding Data",
+      "curriculum_refs": [
+        { "phase_id": "phase2", "module_id": "module2_1", "step_id": "step2_1" }
+      ],
+      "quiz_ids": [
+        "quiz_phase2_mod2_1"
+      ],
+      "reflection_prompts": [
+        "motivation"
+      ]
+    },
+
+    {
+      "section_id": "P2_S2",
+      "title": "Exploring Data",
+      "curriculum_refs": [
+        { "phase_id": "phase3", "module_id": "module3_1", "step_id": "step3_1" },
+        { "phase_id": "phase3", "module_id": "module3_2", "step_id": "step3_2" }
+      ],
+      "quiz_ids": [
+        "quiz_phase3_mod3_1"
+      ],
+      "reflection_prompts": [
+        "data_to_decision_reflection"
+      ]
+    },
+
+    {
+      "section_id": "P2_S3",
+      "title": "Preparing Data for AI",
+      "curriculum_refs": [
+        { "phase_id": "phase2", "module_id": "module2_3", "step_id": "step2_3" },
+        { "phase_id": "phase3", "module_id": "module3_3", "step_id": "step3_3" }
+      ],
+      "quiz_ids": [
+        "quiz_phase3_mod3_2"
+      ],
+      "reflection_prompts": [
+        "confidence_current",
+        "data_to_decision_reflection"
+      ]
+    },
+
+    {
+      "section_id": "P3_S1",
+      "title": "Building Your First Model",
+      "curriculum_refs": [
+        { "phase_id": "phase2", "module_id": "module2_2", "step_id": "step2_2" },
+        { "phase_id": "phase2", "module_id": "module2_3", "step_id": "step2_3" }
+      ],
+      "quiz_ids": [],
+      "reflection_prompts": [
+        "interest_area",
+        "confidence_current"
+      ]
+    },
+
+    {
+      "section_id": "P3_S2",
+      "title": "Evaluating Results",
+      "curriculum_refs": [
+        { "phase_id": "phase4", "module_id": "module4_2", "step_id": "step4_2" }
+      ],
+      "quiz_ids": [
+        "quiz_phase4_mod4_2"
+      ],
+      "reflection_prompts": [
+        "real_world_interest"
+      ]
+    },
+
+    {
+      "section_id": "P3_S3",
+      "title": "Next Steps in AI",
+      "curriculum_refs": [
+        { "phase_id": "phase4", "module_id": "module4_3", "step_id": "step4_3" },
+        { "phase_id": "phase5", "module_id": "module5_1", "step_id": "step5_1" }
+      ],
+      "quiz_ids": [
+        "quiz_phase5_mod5_1"
+      ],
+      "reflection_prompts": [
+        "intent_level",
+        "preferred_path",
+        "open_reflection"
+      ]
+    }
+
+  ]
+}
