@@ -11,6 +11,7 @@ Run from the repository root:
 import logging
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
@@ -83,11 +84,10 @@ with col_limit:
     )
 
 with col_hot:
-    st.checkbox(
+    show_hot_only = st.checkbox(
         "HOT leads only",
         value=False,
-        disabled=True,
-        help="HOT signal filtering is coming soon — requires hot_lead_signals in the overview query.",
+        help="Show only leads with invite sent, ≥25% completion, and activity within the last 7 days.",
     )
 
 # ---------------------------------------------------------------------------
@@ -95,9 +95,10 @@ with col_hot:
 # ---------------------------------------------------------------------------
 all_rows: list[dict] = []
 load_error = False
+now_utc = datetime.now(timezone.utc)  # captured once per render; passed to execution layer
 
 try:
-    all_rows = list_leads_overview(db_path=DB_PATH, limit=int(limit))
+    all_rows = list_leads_overview(db_path=DB_PATH, limit=int(limit), now=now_utc)
 except sqlite3.OperationalError:
     st.error(
         "Database unavailable. "
@@ -111,7 +112,7 @@ except Exception:
     load_error = True
 
 # ---------------------------------------------------------------------------
-# Client-side search filter (case-insensitive substring match across 4 fields)
+# Client-side filters — search then HOT-only (order matters: search first)
 # ---------------------------------------------------------------------------
 filtered_rows: list[dict] = all_rows
 q = search.strip().lower()
@@ -123,6 +124,9 @@ if q and not load_error:
         or q in (r["email"]    or "").lower()
         or q in (r["phone"]    or "").lower()
     ]
+
+if show_hot_only and not load_error:
+    filtered_rows = [r for r in filtered_rows if r["is_hot"]]
 
 # ---------------------------------------------------------------------------
 # Overview table
