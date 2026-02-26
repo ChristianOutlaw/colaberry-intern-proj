@@ -20,6 +20,7 @@ import base64
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ---------------------------------------------------------------------------
 # Brand tokens
@@ -106,14 +107,6 @@ hr {{
 """
 
 
-def _logo_data_url() -> str | None:
-    """Return a base64 data URL for the Colaberry logo, or None if missing."""
-    if not _LOGO_PATH.exists():
-        return None
-    b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode("utf-8")
-    return f"data:image/png;base64,{b64}"
-
-
 def apply_colaberry_theme(
     portal_title: str,
     subtitle: str | None = None,
@@ -121,46 +114,50 @@ def apply_colaberry_theme(
     """Inject Colaberry brand CSS and render the shared sticky top bar.
 
     Must be called immediately after st.set_page_config() in each portal page.
+    Uses components.html() for the header so Streamlit does not escape the HTML.
     """
+    # 1) App-wide CSS tokens + layout styles
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    logo_url = _logo_data_url()
-    subtitle_html = (
-        f"<div style='color:{_LIGHT_GRAY}; font-size:0.85rem; margin-top:0.15rem;'>{subtitle}</div>"
-        if subtitle else
-        ""
-    )
+    # 2) Build logo element (base64 data URL — works without a running server)
+    logo_html = ""
+    if _LOGO_PATH.exists():
+        img_b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode("utf-8")
+        logo_html = (
+            f'<img src="data:image/png;base64,{img_b64}" '
+            f'style="height:40px; width:auto; display:block;" />'
+        )
 
-    # Sticky SaaS header (prevents the “logo floating weird / clipped” look)
-    st.markdown(
-        f"""
-        <div style="
-            position: sticky;
-            top: 0;
-            z-index: 999;
-            background: {_DARK_BLACK};
-            border-bottom: 3px solid {_PRIMARY_RED};
-            padding: 0.65rem 1.25rem;
-            margin: -0.75rem -1rem 1.0rem -1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        ">
-            <div style="display:flex; align-items:center;">
-                {"<img src='" + logo_url + "' style='height:44px; width:auto; display:block;' />" if logo_url else ""}
-            </div>
+    subtitle_html = ""
+    if subtitle:
+        subtitle_html = (
+            f'<div style="color:{_LIGHT_GRAY}; font-size:0.9rem; margin-top:0.15rem;">'
+            f'{subtitle}</div>'
+        )
 
-            <div style="display:flex; flex-direction:column; line-height:1.1;">
-                <div style="color:white; font-size:1.25rem; font-weight:650;">
-                    {portal_title}
-                </div>
-                {subtitle_html}
-            </div>
+    # 3) Render via components.html so Streamlit does not escape the markup
+    header_html = f"""
+<div style="
+    position: sticky; top: 0; z-index: 999;
+    background: {_DARK_BLACK};
+    border-bottom: 3px solid {_PRIMARY_RED};
+    padding: 0.85rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+">
+  <div style="display:flex; align-items:center;">
+    {logo_html}
+  </div>
 
-            <div style="margin-left:auto; color:{_DARK_GRAY}; font-size:0.85rem;">
-                <!-- right-side spacer -->
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+  <div style="display:flex; flex-direction:column; line-height:1.1;">
+    <div style="color:white; font-size:1.35rem; font-weight:650;">
+      {portal_title}
+    </div>
+    {subtitle_html}
+  </div>
+
+  <div style="margin-left:auto;"></div>
+</div>
+"""
+    components.html(header_html, height=90)
