@@ -14,6 +14,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,12 @@ st.set_page_config(
     layout="wide",
 )
 apply_colaberry_theme("Instructor Portal", "Lead progress & next actions")
+
+# ---------------------------------------------------------------------------
+# Session state — persists selected lead across reruns
+# ---------------------------------------------------------------------------
+if "selected_lead_id" not in st.session_state:
+    st.session_state["selected_lead_id"] = None
 
 # ---------------------------------------------------------------------------
 # Header
@@ -139,6 +146,13 @@ if show_hot_only and not load_error:
     filtered_rows = [r for r in filtered_rows if r["is_hot"]]
 
 # ---------------------------------------------------------------------------
+# Safety guard — clear selection if the selected lead left the filtered view
+# ---------------------------------------------------------------------------
+_filtered_ids = {r["lead_id"] for r in filtered_rows}
+if st.session_state["selected_lead_id"] not in _filtered_ids:
+    st.session_state["selected_lead_id"] = None
+
+# ---------------------------------------------------------------------------
 # LEFT — summary metrics row (unfiltered totals) + table
 # ---------------------------------------------------------------------------
 def _lifecycle_status(r: dict) -> str:
@@ -168,6 +182,7 @@ with left_col:
         if filtered_rows:
             display_rows = [
                 {
+                    "lead_id":       r["lead_id"],
                     "Status":        _lifecycle_status(r),
                     "Lead ID":       r["lead_id"],
                     "Invited":       "Yes" if r["invited_sent_at"] else "No",
@@ -182,7 +197,17 @@ with left_col:
                 }
                 for r in filtered_rows
             ]
-            st.dataframe(display_rows, use_container_width=True)
+            display_df = pd.DataFrame(display_rows)
+            tbl = st.dataframe(
+                display_df,
+                use_container_width=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                column_config={"lead_id": None},  # hide key column from display
+            )
+            _sel_rows = tbl.selection.rows
+            if _sel_rows:
+                st.session_state["selected_lead_id"] = display_df.iloc[_sel_rows[0]]["lead_id"]
         else:
             st.info("No leads match your search. Try a different term or clear the search box.")
 
@@ -192,31 +217,15 @@ with left_col:
 with right_col:
     st.subheader("Lead Detail")
 
-    selected_lead_id: str | None = None
+    # Manual override — takes priority over table click when non-empty
+    manual_input = st.text_input(
+        "Or type a Lead ID directly",
+        placeholder="e.g. lead-123",
+    )
+    if manual_input.strip():
+        st.session_state["selected_lead_id"] = manual_input.strip()
 
-    if filtered_rows:
-        col_pick, col_manual = st.columns([2, 1])
-
-        with col_pick:
-            selected_from_list: str = st.selectbox(
-                "Select a lead from the list above",
-                options=[r["lead_id"] for r in filtered_rows],
-            )
-
-        with col_manual:
-            manual_input = st.text_input(
-                "Or type a Lead ID directly",
-                placeholder="e.g. lead-123",
-            )
-
-        selected_lead_id = manual_input.strip() if manual_input.strip() else selected_from_list
-
-    else:
-        manual_input = st.text_input(
-            "Type a Lead ID directly",
-            placeholder="e.g. lead-123",
-        )
-        selected_lead_id = manual_input.strip() or None
+    selected_lead_id: str | None = st.session_state.get("selected_lead_id")
 
     # ---- details panel — only when a lead_id is resolved ----------------
     if selected_lead_id:
