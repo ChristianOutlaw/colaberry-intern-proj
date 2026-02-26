@@ -129,13 +129,27 @@ if show_hot_only and not load_error:
     filtered_rows = [r for r in filtered_rows if r["is_hot"]]
 
 # ---------------------------------------------------------------------------
-# Overview table
+# Summary metrics row — computed from all_rows (unfiltered totals)
+# ---------------------------------------------------------------------------
+if not load_error:
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Leads",  len(all_rows))
+    m2.metric("HOT Leads",    sum(1 for r in all_rows if r["is_hot"] == 1))
+    m3.metric("Invited",      sum(1 for r in all_rows if r["invited_sent_at"] is not None))
+    m4.metric("Completed",    sum(1 for r in all_rows if r["completion_pct"] == 100.0))
+
+# ---------------------------------------------------------------------------
+# Overview table — is_hot rendered as emoji label before display
 # ---------------------------------------------------------------------------
 st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
 if not load_error:
     if filtered_rows:
-        st.dataframe(filtered_rows, use_container_width=True)
+        display_rows = [
+            {**r, "is_hot": "🔥 HOT" if r["is_hot"] == 1 else "Cold"}
+            for r in filtered_rows
+        ]
+        st.dataframe(display_rows, use_container_width=True)
     else:
         st.info("No leads match your search. Try a different term or clear the search box.")
 
@@ -223,7 +237,6 @@ if selected_lead_id:
 
     if action is not None:
         label = _ACTION_LABELS.get(action, action)
-        st.json({"action": action, "lead_id": selected_lead_id})
         st.write(label)
 
 else:
