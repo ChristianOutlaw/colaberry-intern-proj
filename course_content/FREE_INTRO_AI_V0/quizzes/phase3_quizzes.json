@@ -1,0 +1,54 @@
+[
+  {
+    "quiz_id": "quiz_phase3_mod3_1",
+    "title": "Exploring Data — Check",
+    "questions": [
+      {
+        "question": "What does EDA stand for in data science?",
+        "options": [
+          "Enhanced Data Architecture",
+          "Exploratory Data Analysis",
+          "External Data Aggregation",
+          "Estimated Distribution Average"
+        ],
+        "correct_index": 1
+      },
+      {
+        "question": "Which chart type is best suited for showing the distribution of a single numeric variable?",
+        "options": [
+          "Pie chart",
+          "Histogram",
+          "Line chart",
+          "Scatter plot"
+        ],
+        "correct_index": 1
+      }
+    ]
+  },
+  {
+    "quiz_id": "quiz_phase3_mod3_2",
+    "title": "Preparing Data for AI — Check",
+    "questions": [
+      {
+        "question": "What is feature scaling used for in machine learning?",
+        "options": [
+          "Adding more rows to the dataset",
+          "Ensuring numeric features are on a comparable scale",
+          "Removing duplicate records",
+          "Converting text data to images"
+        ],
+        "correct_index": 1
+      },
+      {
+        "question": "Which technique replaces missing values with the column mean?",
+        "options": [
+          "One-hot encoding",
+          "Mean imputation",
+          "Min-max normalization",
+          "Label encoding"
+        ],
+        "correct_index": 1
+      }
+    ]
+  }
+]

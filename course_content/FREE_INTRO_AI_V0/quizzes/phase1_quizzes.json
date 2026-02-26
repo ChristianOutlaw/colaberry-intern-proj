@@ -1,0 +1,54 @@
+[
+  {
+    "quiz_id": "quiz_phase1_mod1_1",
+    "title": "What Is AI? — Check 1",
+    "questions": [
+      {
+        "question": "What does AI stand for?",
+        "options": [
+          "Artificial Intelligence",
+          "Automated Input",
+          "Advanced Interface",
+          "Analytic Integration"
+        ],
+        "correct_index": 0
+      },
+      {
+        "question": "Which of the following best describes Artificial Intelligence?",
+        "options": [
+          "Software that can only follow fixed, pre-written rules",
+          "Systems that simulate human-like reasoning or learning",
+          "Hardware designed exclusively for data storage",
+          "A type of internet connection"
+        ],
+        "correct_index": 1
+      }
+    ]
+  },
+  {
+    "quiz_id": "quiz_phase1_mod1_2",
+    "title": "What Is AI? — Check 2",
+    "questions": [
+      {
+        "question": "Which of the following is an example of AI in everyday life?",
+        "options": [
+          "A light switch",
+          "A spreadsheet formula",
+          "A spam filter that learns from feedback",
+          "A printed book"
+        ],
+        "correct_index": 2
+      },
+      {
+        "question": "AI is best described as a field of:",
+        "options": [
+          "Chemistry",
+          "Computer science",
+          "Civil engineering",
+          "Astronomy"
+        ],
+        "correct_index": 1
+      }
+    ]
+  }
+]

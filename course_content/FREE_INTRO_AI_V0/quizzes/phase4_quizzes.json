@@ -1,0 +1,54 @@
+[
+  {
+    "quiz_id": "quiz_phase4_mod4_1",
+    "title": "AI in the Real World — Check",
+    "questions": [
+      {
+        "question": "Which of the following is a real-world application of AI?",
+        "options": [
+          "A printed dictionary",
+          "A recommendation engine on a streaming platform",
+          "A mechanical clock",
+          "A filing cabinet"
+        ],
+        "correct_index": 1
+      },
+      {
+        "question": "AI systems in healthcare are most commonly used for:",
+        "options": [
+          "Scheduling hospital janitors",
+          "Diagnosing diseases from medical images",
+          "Printing patient forms",
+          "Ordering office supplies"
+        ],
+        "correct_index": 1
+      }
+    ]
+  },
+  {
+    "quiz_id": "quiz_phase4_mod4_2",
+    "title": "Evaluating Results — Check",
+    "questions": [
+      {
+        "question": "What does model accuracy measure?",
+        "options": [
+          "The speed of the model's predictions",
+          "The proportion of correct predictions out of all predictions",
+          "The total size of the training dataset",
+          "The number of features used by the model"
+        ],
+        "correct_index": 1
+      },
+      {
+        "question": "Overfitting occurs when a model:",
+        "options": [
+          "Performs well on training data but poorly on new data",
+          "Ignores all training data",
+          "Uses too few parameters",
+          "Predicts the same value for every input"
+        ],
+        "correct_index": 0
+      }
+    ]
+  }
+]
