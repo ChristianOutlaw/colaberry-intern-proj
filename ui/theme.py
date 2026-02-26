@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/theme.py
 
 Colaberry shared theme helper.
@@ -12,8 +12,9 @@ Brand tokens:
     dark gray:    #5B5A59
     muted teal:   #669091
     slate blue:   #497095
-    text:         #1F2937
 """
+
+from __future__ import annotations
 
 import base64
 from pathlib import Path
@@ -29,7 +30,6 @@ _LIGHT_GRAY   = "#EBEBE9"
 _DARK_GRAY    = "#5B5A59"
 _MUTED_TEAL   = "#669091"
 _SLATE_BLUE   = "#497095"
-_TEXT         = "#1F2937"
 
 _LOGO_PATH = Path(__file__).resolve().parent / "assets" / "colaberry_logo(wide).png"
 
@@ -39,96 +39,126 @@ _LOGO_PATH = Path(__file__).resolve().parent / "assets" / "colaberry_logo(wide).
 # ---------------------------------------------------------------------------
 _CSS = f"""
 <style>
-/* Reduce top whitespace */
+/* --- Global layout tightening --- */
 .block-container {{
-    padding-top: 1.2rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 2rem !important;
 }}
 
-/* Sidebar background */
+/* Hide Streamlit chrome (keeps your app feeling like a real product) */
+#MainMenu {{ visibility: hidden; }}
+footer {{ visibility: hidden; }}
+header {{ visibility: hidden; }}
+
+/* Sidebar background + spacing */
 section[data-testid="stSidebar"] > div:first-child {{
     background-color: {_LIGHT_GRAY};
+    padding-top: 0.75rem;
 }}
 
-/* Primary buttons */
+/* Sidebar nav pill styling */
+section[data-testid="stSidebar"] .stRadio > div {{
+    gap: 0.25rem;
+}}
+section[data-testid="stSidebar"] label {{
+    border-radius: 10px;
+    padding: 0.35rem 0.5rem;
+}}
+
+/* Buttons (primary + hover) */
 .stButton > button[kind="primary"] {{
     background-color: {_PRIMARY_RED} !important;
     color: white !important;
     border: none !important;
-    border-radius: 6px !important;
+    border-radius: 10px !important;
+    padding: 0.45rem 0.9rem !important;
 }}
 .stButton > button[kind="primary"]:hover {{
     background-color: #c92d2f !important;
     color: white !important;
 }}
 
+/* Secondary buttons look cleaner too */
+.stButton > button {{
+    border-radius: 10px !important;
+}}
+
 /* Metric cards */
 div[data-testid="metric-container"] {{
-    border: 1px solid #E0E0E0;
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
+    border: 1px solid #E4E4E4;
+    border-radius: 12px;
+    padding: 0.55rem 0.85rem;
     background-color: white;
 }}
 
-/* Red accent line above the header divider */
-hr {{
-    border-top: 3px solid {_PRIMARY_RED};
+/* Dataframe header bolder (best-effort across Streamlit versions) */
+div[data-testid="stDataFrameResizable"] th {{
+    font-weight: 650 !important;
 }}
 
-/* Dataframe header bolder (best-effort — selector may vary by Streamlit version) */
-div[data-testid="stDataFrameResizable"] th {{
-    font-weight: 600 !important;
+/* Cleaner dividers */
+hr {{
+    border: none !important;
+    border-top: 1px solid #E7E7E7 !important;
+    margin: 1rem 0 !important;
 }}
 </style>
 """
+
+
+def _logo_data_url() -> str | None:
+    """Return a base64 data URL for the Colaberry logo, or None if missing."""
+    if not _LOGO_PATH.exists():
+        return None
+    b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
 
 
 def apply_colaberry_theme(
     portal_title: str,
     subtitle: str | None = None,
 ) -> None:
-    """Inject Colaberry brand CSS and render the shared header bar.
+    """Inject Colaberry brand CSS and render the shared sticky top bar.
 
     Must be called immediately after st.set_page_config() in each portal page.
-
-    Args:
-        portal_title: Display name for the portal, e.g. "Student Portal".
-        subtitle:     Optional one-liner shown as a caption beneath the title.
     """
-    # Inject brand CSS
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    # Logo: embed as base64 data URL so it renders inside st.markdown HTML.
-    if _LOGO_PATH.exists():
-        _img_b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode()
-        logo_html = (
-            f'<img src="data:image/png;base64,{_img_b64}"'
-            f' height="40" style="object-fit: contain;" />'
-        )
-    else:
-        logo_html = f'<span style="color: white; font-size: 1rem;">{portal_title}</span>'
-
+    logo_url = _logo_data_url()
     subtitle_html = (
-        f'<span style="color: {_LIGHT_GRAY}; font-size: 0.875rem;">{subtitle}</span>'
-        if subtitle else ""
+        f"<div style='color:{_LIGHT_GRAY}; font-size:0.85rem; margin-top:0.15rem;'>{subtitle}</div>"
+        if subtitle else
+        ""
     )
 
+    # Sticky SaaS header (prevents the “logo floating weird / clipped” look)
     st.markdown(
         f"""
         <div style="
-            background-color: {_DARK_BLACK};
-            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: {_DARK_BLACK};
+            border-bottom: 3px solid {_PRIMARY_RED};
+            padding: 0.65rem 1.25rem;
+            margin: -0.75rem -1rem 1.0rem -1rem;
             display: flex;
             align-items: center;
-            gap: 1.5rem;
-            border-bottom: 3px solid {_PRIMARY_RED};
-            margin-bottom: 1rem;
+            gap: 1rem;
         ">
-            {logo_html}
-            <div style="display: flex; flex-direction: column;">
-                <span style="color: white; font-size: 1.4rem; font-weight: 600; line-height: 1.2;">
+            <div style="display:flex; align-items:center;">
+                {"<img src='" + logo_url + "' style='height:44px; width:auto; display:block;' />" if logo_url else ""}
+            </div>
+
+            <div style="display:flex; flex-direction:column; line-height:1.1;">
+                <div style="color:white; font-size:1.25rem; font-weight:650;">
                     {portal_title}
-                </span>
+                </div>
                 {subtitle_html}
+            </div>
+
+            <div style="margin-left:auto; color:{_DARK_GRAY}; font-size:0.85rem;">
+                {/* right-side spacer (future: user badge / env tag) */}
             </div>
         </div>
         """,
