@@ -66,31 +66,37 @@ st.caption(
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Controls row
+# Two-column CRM layout
 # ---------------------------------------------------------------------------
-col_search, col_limit, col_hot = st.columns([3, 1, 1])
+left_col, right_col = st.columns([2, 1])
 
-with col_search:
-    search = st.text_input(
-        "Search",
-        placeholder="Filter by lead ID, name, email, or phone…",
-    )
+# ---------------------------------------------------------------------------
+# LEFT — controls
+# ---------------------------------------------------------------------------
+with left_col:
+    col_search, col_limit, col_hot = st.columns([3, 1, 1])
 
-with col_limit:
-    limit = st.number_input(
-        "Limit",
-        min_value=1,
-        max_value=1000,
-        value=200,
-        step=1,
-    )
+    with col_search:
+        search = st.text_input(
+            "Search",
+            placeholder="Filter by lead ID, name, email, or phone…",
+        )
 
-with col_hot:
-    show_hot_only = st.checkbox(
-        "HOT leads only",
-        value=False,
-        help="Show only leads with invite sent, ≥25% completion, and activity within the last 7 days.",
-    )
+    with col_limit:
+        limit = st.number_input(
+            "Limit",
+            min_value=1,
+            max_value=1000,
+            value=200,
+            step=1,
+        )
+
+    with col_hot:
+        show_hot_only = st.checkbox(
+            "HOT leads only",
+            value=False,
+            help="Show only leads with invite sent, ≥25% completion, and activity within the last 7 days.",
+        )
 
 # ---------------------------------------------------------------------------
 # Load overview — auto-loads on every page render (read-only, fast).
@@ -102,15 +108,17 @@ now_utc = datetime.now(timezone.utc)  # captured once per render; passed to exec
 try:
     all_rows = list_leads_overview(db_path=DB_PATH, limit=int(limit), now=now_utc)
 except sqlite3.OperationalError:
-    st.error(
-        "Database unavailable. "
-        "Run `streamlit run ui/instructor_portal/instructor_app.py` from the repo root "
-        "to ensure tmp/app.db is initialised."
-    )
+    with left_col:
+        st.error(
+            "Database unavailable. "
+            "Run `streamlit run ui/instructor_portal/instructor_app.py` from the repo root "
+            "to ensure tmp/app.db is initialised."
+        )
     load_error = True
 except Exception:
     logging.exception("Unexpected error loading leads overview")
-    st.error("An unexpected error occurred loading leads. See console for details.")
+    with left_col:
+        st.error("An unexpected error occurred loading leads. See console for details.")
     load_error = True
 
 # ---------------------------------------------------------------------------
@@ -131,17 +139,7 @@ if show_hot_only and not load_error:
     filtered_rows = [r for r in filtered_rows if r["is_hot"]]
 
 # ---------------------------------------------------------------------------
-# Summary metrics row — computed from all_rows (unfiltered totals)
-# ---------------------------------------------------------------------------
-if not load_error:
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Leads",  len(all_rows))
-    m2.metric("HOT Leads",    sum(1 for r in all_rows if r["is_hot"] == 1))
-    m3.metric("Invited",      sum(1 for r in all_rows if r["invited_sent_at"] is not None))
-    m4.metric("Completed",    sum(1 for r in all_rows if r["completion_pct"] == 100.0))
-
-# ---------------------------------------------------------------------------
-# Overview table — clean column labels for display
+# LEFT — summary metrics row (unfiltered totals) + table
 # ---------------------------------------------------------------------------
 def _lifecycle_status(r: dict) -> str:
     """Derive a single display label from a lead overview row. UI-only helper."""
@@ -156,115 +154,120 @@ def _lifecycle_status(r: dict) -> str:
     return "❄️ Cold"
 
 
-st.subheader(f"Leads ({len(filtered_rows)} shown)")
+with left_col:
+    if not load_error:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Leads",  len(all_rows))
+        m2.metric("HOT Leads",    sum(1 for r in all_rows if r["is_hot"] == 1))
+        m3.metric("Invited",      sum(1 for r in all_rows if r["invited_sent_at"] is not None))
+        m4.metric("Completed",    sum(1 for r in all_rows if r["completion_pct"] == 100.0))
 
-if not load_error:
+    st.subheader(f"Leads ({len(filtered_rows)} shown)")
+
+    if not load_error:
+        if filtered_rows:
+            display_rows = [
+                {
+                    "Status":        _lifecycle_status(r),
+                    "Lead ID":       r["lead_id"],
+                    "Invited":       "Yes" if r["invited_sent_at"] else "No",
+                    "Completion":    (
+                        f"{r['completion_pct']:.1f} %"
+                        if r["completion_pct"] is not None
+                        else "—"
+                    ),
+                    "Section":       r["current_section"] or "—",
+                    "Last Activity": r["last_activity_at"] or "—",
+                    "Hot":           "🔥 HOT" if r["is_hot"] == 1 else "Cold",
+                }
+                for r in filtered_rows
+            ]
+            st.dataframe(display_rows, use_container_width=True)
+        else:
+            st.info("No leads match your search. Try a different term or clear the search box.")
+
+# ---------------------------------------------------------------------------
+# RIGHT — lead selection + detail panel
+# ---------------------------------------------------------------------------
+with right_col:
+    st.subheader("Lead Detail")
+
+    selected_lead_id: str | None = None
+
     if filtered_rows:
-        display_rows = [
-            {
-                "Status":        _lifecycle_status(r),
-                "Lead ID":       r["lead_id"],
-                "Invited":       "Yes" if r["invited_sent_at"] else "No",
-                "Completion":    (
-                    f"{r['completion_pct']:.1f} %"
-                    if r["completion_pct"] is not None
-                    else "—"
-                ),
-                "Section":       r["current_section"] or "—",
-                "Last Activity": r["last_activity_at"] or "—",
-                "Hot":           "🔥 HOT" if r["is_hot"] == 1 else "Cold",
-            }
-            for r in filtered_rows
-        ]
-        st.dataframe(display_rows, use_container_width=True)
+        col_pick, col_manual = st.columns([2, 1])
+
+        with col_pick:
+            selected_from_list: str = st.selectbox(
+                "Select a lead from the list above",
+                options=[r["lead_id"] for r in filtered_rows],
+            )
+
+        with col_manual:
+            manual_input = st.text_input(
+                "Or type a Lead ID directly",
+                placeholder="e.g. lead-123",
+            )
+
+        selected_lead_id = manual_input.strip() if manual_input.strip() else selected_from_list
+
     else:
-        st.info("No leads match your search. Try a different term or clear the search box.")
-
-st.divider()
-
-# ---------------------------------------------------------------------------
-# Lead selection — selectbox from filtered results + optional manual entry
-# ---------------------------------------------------------------------------
-st.subheader("Lead Detail")
-
-selected_lead_id: str | None = None
-
-if filtered_rows:
-    col_pick, col_manual = st.columns([2, 1])
-
-    with col_pick:
-        selected_from_list: str = st.selectbox(
-            "Select a lead from the list above",
-            options=[r["lead_id"] for r in filtered_rows],
-        )
-
-    with col_manual:
         manual_input = st.text_input(
-            "Or type a Lead ID directly",
+            "Type a Lead ID directly",
             placeholder="e.g. lead-123",
         )
+        selected_lead_id = manual_input.strip() or None
 
-    selected_lead_id = manual_input.strip() if manual_input.strip() else selected_from_list
+    # ---- details panel — only when a lead_id is resolved ----------------
+    if selected_lead_id:
+        st.markdown(f"#### Details — `{selected_lead_id}`")
 
-else:
-    manual_input = st.text_input(
-        "Type a Lead ID directly",
-        placeholder="e.g. lead-123",
-    )
-    selected_lead_id = manual_input.strip() or None
+        # ---- get_lead_status --------------------------------------------
+        status: dict | None = None
+        try:
+            status = get_lead_status(selected_lead_id, db_path=DB_PATH)
+        except sqlite3.OperationalError:
+            st.error("Database unavailable when loading lead details.")
+        except Exception:
+            logging.exception("Unexpected error in get_lead_status for %s", selected_lead_id)
+            st.error("An unexpected error occurred loading lead details. See console.")
 
-# ---------------------------------------------------------------------------
-# Details panel — rendered only when a lead_id is resolved
-# ---------------------------------------------------------------------------
-if selected_lead_id:
-    st.markdown(f"#### Details — `{selected_lead_id}`")
+        if status is not None:
+            if not status["lead_exists"]:
+                st.warning(f"Lead `{selected_lead_id}` does not exist in the database.")
+            else:
+                cs = status["course_state"]
+                hl = status["hot_lead"]
 
-    # ---- get_lead_status ------------------------------------------------
-    status: dict | None = None
-    try:
-        status = get_lead_status(selected_lead_id, db_path=DB_PATH)
-    except sqlite3.OperationalError:
-        st.error("Database unavailable when loading lead details.")
-    except Exception:
-        logging.exception("Unexpected error in get_lead_status for %s", selected_lead_id)
-        st.error("An unexpected error occurred loading lead details. See console.")
+                col_a, col_b, col_c = st.columns(3)
+                col_a.metric("Invite Sent",      "Yes" if status["invite_sent"] else "No")
+                col_b.metric("Completion",       f"{cs['completion_pct']:.1f} %" if cs["completion_pct"] is not None else "—")
+                col_c.metric("Hot Lead Signal",  hl["signal"] or "—")
 
-    if status is not None:
-        if not status["lead_exists"]:
-            st.warning(f"Lead `{selected_lead_id}` does not exist in the database.")
-        else:
-            cs = status["course_state"]
-            hl = status["hot_lead"]
+                col_d, col_e = st.columns(2)
+                col_d.markdown(f"**Current Section:** {cs['current_section'] or '—'}")
+                col_e.markdown(f"**Last Activity:** {cs['last_activity_at'] or '—'}")
 
-            col_a, col_b, col_c = st.columns(3)
-            col_a.metric("Invite Sent",      "Yes" if status["invite_sent"] else "No")
-            col_b.metric("Completion",       f"{cs['completion_pct']:.1f} %" if cs["completion_pct"] is not None else "—")
-            col_c.metric("Hot Lead Signal",  hl["signal"] or "—")
+                if hl["reason"]:
+                    st.caption(f"Signal reason: {hl['reason']}")
 
-            col_d, col_e = st.columns(2)
-            col_d.markdown(f"**Current Section:** {cs['current_section'] or '—'}")
-            col_e.markdown(f"**Last Activity:** {cs['last_activity_at'] or '—'}")
+        st.divider()
 
-            if hl["reason"]:
-                st.caption(f"Signal reason: {hl['reason']}")
+        # ---- decide_next_cold_lead_action --------------------------------
+        st.markdown("**Recommended Next Action**")
 
-    st.divider()
+        action: str | None = None
+        try:
+            action = decide_next_cold_lead_action(selected_lead_id, db_path=DB_PATH)
+        except sqlite3.OperationalError:
+            st.error("Database unavailable when computing recommended action.")
+        except Exception:
+            logging.exception("Unexpected error in decide_next_cold_lead_action for %s", selected_lead_id)
+            st.error("An unexpected error occurred computing the recommended action.")
 
-    # ---- decide_next_cold_lead_action -----------------------------------
-    st.markdown("**Recommended Next Action**")
+        if action is not None:
+            label = _ACTION_LABELS.get(action, action)
+            st.write(label)
 
-    action: str | None = None
-    try:
-        action = decide_next_cold_lead_action(selected_lead_id, db_path=DB_PATH)
-    except sqlite3.OperationalError:
-        st.error("Database unavailable when computing recommended action.")
-    except Exception:
-        logging.exception("Unexpected error in decide_next_cold_lead_action for %s", selected_lead_id)
-        st.error("An unexpected error occurred computing the recommended action.")
-
-    if action is not None:
-        label = _ACTION_LABELS.get(action, action)
-        st.write(label)
-
-else:
-    st.info("Select or type a Lead ID above to view details.")
+    else:
+        st.info("Select a lead from the table to view details.")
