@@ -156,6 +156,17 @@ if "player_flow_chunk_idx" not in st.session_state:
     st.session_state["player_flow_chunk_idx"] = 0      # current lesson chunk index
 if "player_flow_section_id" not in st.session_state:
     st.session_state["player_flow_section_id"] = None  # tracks section for flow reset
+# Step 2B — per-question quiz and per-prompt reflection indices.
+if "player_quiz_idx" not in st.session_state:
+    st.session_state["player_quiz_idx"] = 0          # index into section_quiz_ids
+if "player_quiz_q_idx" not in st.session_state:
+    st.session_state["player_quiz_q_idx"] = 0        # index into quiz["questions"]
+if "player_quiz_attempts" not in st.session_state:
+    st.session_state["player_quiz_attempts"] = {}    # {qk: attempt_count}
+if "player_quiz_correct" not in st.session_state:
+    st.session_state["player_quiz_correct"] = set()  # set of correct question keys
+if "player_refl_idx" not in st.session_state:
+    st.session_state["player_refl_idx"] = 0          # index into section_prompt_ids
 
 # ---------------------------------------------------------------------------
 # Helper — fetch lead status
@@ -218,6 +229,11 @@ with st.sidebar:
         st.session_state["player_flow_step"] = "welcome"
         st.session_state["player_flow_chunk_idx"] = 0
         st.session_state["player_flow_section_id"] = active_section_id
+        st.session_state["player_quiz_idx"] = 0
+        st.session_state["player_quiz_q_idx"] = 0
+        st.session_state["player_quiz_attempts"] = {}
+        st.session_state["player_quiz_correct"] = set()
+        st.session_state["player_refl_idx"] = 0
 
     st.divider()
     st.subheader("Progress")
@@ -415,80 +431,97 @@ elif step == "quiz":
             )
             st.rerun()
     else:
-        for quiz_id in section_quiz_ids:
-            quiz = quiz_library.get(quiz_id)
-            if quiz is None:
-                st.warning(f"Quiz '{quiz_id}' not found in library.")
-                continue
+        quiz_idx = st.session_state["player_quiz_idx"]
 
-            submitted_key = f"{active_section_id}:{quiz_id}"
-            already_submitted = submitted_key in st.session_state["quiz_submitted"]
-
-            if quiz.get("title"):
-                st.subheader(quiz["title"])
-
-            questions = quiz.get("questions", [])
-
-            # Render each question; disable inputs after submission.
-            selected_indices: list[int] = []
-            for q_idx, q in enumerate(questions):
-                opts = q["options"]
-                chosen = st.radio(
-                    f"**{q_idx + 1}.** {q['question']}",
-                    options=list(range(len(opts))),
-                    format_func=lambda j, o=opts: o[j],
-                    key=f"q_{active_section_id}_{quiz_id}_{q_idx}",
-                    disabled=already_submitted,
-                )
-                selected_indices.append(chosen)
-
-            if not already_submitted:
-                if st.button(
-                    "Submit Quiz",
-                    key=f"submit_{active_section_id}_{quiz_id}",
-                ):
-                    st.session_state["quiz_submitted"].add(submitted_key)
-                    # Capture selected answers at submit time.
-                    st.session_state[f"quiz_sel_{submitted_key}"] = selected_indices
-                    st.rerun()
-            else:
-                # Retrieve answers stored at submit time.
-                stored = st.session_state.get(
-                    f"quiz_sel_{submitted_key}", selected_indices
-                )
-                correct_count = sum(
-                    1
-                    for i, q in enumerate(questions)
-                    if stored[i] == q["correct_index"]
-                )
-                total = len(questions)
-                st.success(f"Score: {correct_count} / {total}")
-                for i, q in enumerate(questions):
-                    if stored[i] == q["correct_index"]:
-                        st.markdown(f"- Q{i + 1}: Correct")
-                    else:
-                        correct_text = q["options"][q["correct_index"]]
-                        st.markdown(
-                            f"- Q{i + 1}: Incorrect"
-                            f" {EM_DASH} correct answer: **{correct_text}**"
-                        )
-
-            st.divider()
-
-        # Show continue only when every quiz in this section is submitted.
-        all_submitted = all(
-            f"{active_section_id}:{qid}" in st.session_state["quiz_submitted"]
-            for qid in section_quiz_ids
-        )
-        if all_submitted:
-            if st.button(
-                "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →",
-                type="primary",
-            ):
+        if quiz_idx >= len(section_quiz_ids):
+            # All quizzes in this section finished — show continue.
+            next_label = (
+                "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →"
+            )
+            if st.button(next_label, type="primary"):
                 st.session_state["player_flow_step"] = (
                     "reflection" if section_prompt_ids else "complete"
                 )
                 st.rerun()
+        else:
+            quiz_id = section_quiz_ids[quiz_idx]
+            quiz = quiz_library.get(quiz_id)
+
+            if quiz is None:
+                st.warning(f"Quiz '{quiz_id}' not found in library.")
+            else:
+                questions = quiz.get("questions", [])
+
+                if not questions:
+                    st.info("This quiz has no questions.")
+                    if st.button("Next →", key=f"skip_quiz_{quiz_id}"):
+                        st.session_state["player_quiz_idx"] = quiz_idx + 1
+                        st.session_state["player_quiz_q_idx"] = 0
+                        st.rerun()
+                else:
+                    # Clamp question index (safe guard against content changes).
+                    q_idx = min(
+                        st.session_state["player_quiz_q_idx"], len(questions) - 1
+                    )
+                    q = questions[q_idx]
+                    opts = q["options"]
+
+                    # Progress caption.
+                    n_quizzes = len(section_quiz_ids)
+                    if n_quizzes > 1:
+                        st.caption(
+                            f"Quiz {quiz_idx + 1} of {n_quizzes}"
+                            f" — Question {q_idx + 1} of {len(questions)}"
+                        )
+                    else:
+                        st.caption(f"Question {q_idx + 1} of {len(questions)}")
+
+                    if quiz.get("title"):
+                        st.subheader(quiz["title"])
+
+                    st.markdown(f"**{q['question']}**")
+
+                    radio_key = f"qsel_{active_section_id}_{quiz_id}_{q_idx}"
+                    chosen = st.radio(
+                        "Choose your answer:",
+                        options=list(range(len(opts))),
+                        format_func=lambda j, o=opts: o[j],
+                        key=radio_key,
+                        label_visibility="collapsed",
+                    )
+
+                    qk = f"{active_section_id}:{quiz_id}:{q_idx}"
+                    attempts = st.session_state["player_quiz_attempts"].get(qk, 0)
+                    already_correct = qk in st.session_state["player_quiz_correct"]
+
+                    if already_correct:
+                        st.success("Correct!")
+                    elif attempts >= 3:
+                        correct_text = opts[q["correct_index"]]
+                        st.info(f"Correct answer: **{correct_text}**")
+                    else:
+                        if st.button("Submit Answer", key=f"submit_ans_{qk}"):
+                            if chosen == q["correct_index"]:
+                                st.session_state["player_quiz_correct"].add(qk)
+                                st.rerun()
+                            else:
+                                new_attempts = attempts + 1
+                                st.session_state["player_quiz_attempts"][qk] = new_attempts
+                                if new_attempts < 3:
+                                    st.warning("Not quite — try again.")
+                                else:
+                                    st.rerun()  # rerun to reveal correct answer
+
+                    # Next → shown when correct or all attempts exhausted.
+                    if already_correct or attempts >= 3:
+                        if st.button("Next →", type="primary", key=f"next_{qk}"):
+                            if q_idx < len(questions) - 1:
+                                st.session_state["player_quiz_q_idx"] = q_idx + 1
+                            else:
+                                # Last question in this quiz — advance to next quiz.
+                                st.session_state["player_quiz_idx"] = quiz_idx + 1
+                                st.session_state["player_quiz_q_idx"] = 0
+                            st.rerun()
 
     _render_tutor_expander()
 
@@ -500,37 +533,39 @@ elif step == "reflection":
             st.session_state["player_flow_step"] = "complete"
             st.rerun()
     else:
-        # Fresh DB read each render so saved state is always current.
-        try:
-            saved_by_section = load_reflection_responses(
-                lead_id, COURSE_ID, db_path=DB_PATH
-            )
-        except Exception:
-            logging.exception("Error loading reflection responses")
-            saved_by_section = {}
+        refl_idx = st.session_state["player_refl_idx"]
 
-        saved_for_section: dict[int, str] = saved_by_section.get(active_section_id, {})
-
-        for p_idx, prompt_id in enumerate(section_prompt_ids):
+        if refl_idx >= len(section_prompt_ids):
+            # All prompts answered — show continue.
+            if st.button("Continue to Complete →", type="primary"):
+                st.session_state["player_flow_step"] = "complete"
+                st.rerun()
+        else:
+            # Clamp (safe guard against content changes).
+            refl_idx = min(refl_idx, len(section_prompt_ids) - 1)
+            prompt_id = section_prompt_ids[refl_idx]
             question = _PROMPT_QUESTIONS.get(
                 prompt_id,
                 prompt_id.replace("_", " ").capitalize(),
             )
-            st.markdown(f"**{p_idx + 1}. {question}**")
 
-            txt_key = f"reflection_txt_{active_section_id}_{p_idx}"
-            # value= sets the default; session state takes over after first render.
-            saved_text = saved_for_section.get(p_idx, "")
+            st.caption(f"Reflection {refl_idx + 1} of {len(section_prompt_ids)}")
+            st.markdown(f"**{question}**")
 
+            txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
             st.text_area(
-                label=f"Prompt {p_idx + 1}",
-                value=saved_text,
+                label=f"Prompt {refl_idx + 1}",
                 key=txt_key,
-                height=100,
+                height=120,
+                placeholder="Write your response here…",
                 label_visibility="collapsed",
             )
 
-            if st.button("Save", key=f"refl_save_{active_section_id}_{p_idx}"):
+            if st.button(
+                "Save & Continue →",
+                type="primary",
+                key=f"refl_save_{active_section_id}_{refl_idx}",
+            ):
                 current_text = st.session_state.get(txt_key, "").strip()
                 if current_text:
                     try:
@@ -538,29 +573,18 @@ elif step == "reflection":
                             lead_id,
                             COURSE_ID,
                             active_section_id,
-                            p_idx,
+                            refl_idx,
                             current_text,
                             created_at=datetime.now(timezone.utc).isoformat(),
                             db_path=DB_PATH,
                         )
-                        st.success("Saved.")
+                        st.session_state["player_refl_idx"] = refl_idx + 1
+                        st.rerun()
                     except Exception:
                         logging.exception("Error saving reflection response")
                         st.error("Could not save. Please try again.")
                 else:
-                    st.warning("Cannot save an empty response.")
-
-            st.divider()
-
-        # Show continue only when every prompt has a non-empty saved response.
-        all_saved = all(
-            saved_for_section.get(p_idx, "").strip()
-            for p_idx in range(len(section_prompt_ids))
-        )
-        if all_saved:
-            if st.button("Continue to Complete →", type="primary"):
-                st.session_state["player_flow_step"] = "complete"
-                st.rerun()
+                    st.warning("Please write something before continuing.")
 
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
