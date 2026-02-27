@@ -9,6 +9,7 @@ Run from the repository root:
 """
 
 import logging
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -85,6 +86,45 @@ def _cached_quiz_library() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Markdown chunker — pure, deterministic, no randomness, stdlib only.
+# ---------------------------------------------------------------------------
+
+def _chunk_markdown(text: str) -> list[str]:
+    """Split markdown into deterministic chunks for the guided lesson flow.
+
+    Strategy 1 — heading split: each H1/H2/H3 heading plus its body becomes
+    one chunk.  Requires ≥ 2 headings to activate (single-heading docs fall
+    through to Strategy 2).
+
+    Strategy 2 — paragraph groups: blank-line-separated paragraphs are
+    collected and merged into at most 5 evenly-sized chunks.
+
+    Returns at least one non-empty string.  Pure function; no I/O, no imports
+    beyond stdlib re (already imported at module level).
+    """
+    text = text.replace("\r\n", "\n").strip()
+    if not text:
+        return [""]
+
+    # Strategy 1: insert a NUL sentinel before every heading line, then split.
+    _SENTINEL = "\x00CHUNK\x00"
+    marked = re.sub(r"^(#{1,3} )", _SENTINEL + r"\1", text, flags=re.MULTILINE)
+    parts = [p.strip() for p in marked.split(_SENTINEL) if p.strip()]
+    if len(parts) >= 2:
+        return parts
+
+    # Strategy 2: blank-line paragraph groups, capped at 5 chunks.
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    n = len(paragraphs)
+    if n <= 5:
+        return paragraphs or [text]
+    target = 5
+    size = (n + target - 1) // target  # ceiling division for even distribution
+    chunks = ["\n\n".join(paragraphs[i : i + size]) for i in range(0, n, size)]
+    return [c for c in chunks if c]
+
+
+# ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call in the file.
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Student Course Player", layout="wide")
@@ -109,6 +149,13 @@ if "tutor_section_id" not in st.session_state:
     st.session_state["tutor_section_id"] = None  # tracks section for history reset
 if "quiz_submitted" not in st.session_state:
     st.session_state["quiz_submitted"] = set()  # set of "{section_id}:{quiz_id}"
+# Flow Engine v1 — guided sequential step state.
+if "player_flow_step" not in st.session_state:
+    st.session_state["player_flow_step"] = "welcome"   # welcome|lesson|quiz|reflection|complete
+if "player_flow_chunk_idx" not in st.session_state:
+    st.session_state["player_flow_chunk_idx"] = 0      # current lesson chunk index
+if "player_flow_section_id" not in st.session_state:
+    st.session_state["player_flow_section_id"] = None  # tracks section for flow reset
 
 # ---------------------------------------------------------------------------
 # Sidebar — Lead ID only (auth boundary; stays out of main columns)
@@ -172,6 +219,12 @@ with col_nav:
         st.session_state["tutor_pending"] = None
         st.session_state["tutor_section_id"] = active_section_id
 
+    # Reset guided flow when the student navigates to a new section.
+    if active_section_id != st.session_state["player_flow_section_id"]:
+        st.session_state["player_flow_step"] = "welcome"
+        st.session_state["player_flow_chunk_idx"] = 0
+        st.session_state["player_flow_section_id"] = active_section_id
+
     st.divider()
     st.subheader("Progress")
 
@@ -226,7 +279,7 @@ with col_nav:
             logging.exception("Unexpected error in Mark Complete")
             st.error("An unexpected error occurred. See console for details.")
 
-# ── RIGHT: Section title + tabs ──────────────────────────────────────────────
+# ── RIGHT: Section title + guided flow ───────────────────────────────────────
 with col_main:
     # Flash message — stored before st.rerun() so it survives the cycle.
     if st.session_state["player_flash"] is not None:
@@ -239,7 +292,7 @@ with col_main:
 
     st.title(f"{active_section_id} {EM_DASH} {active_title}")
 
-    # Load section markdown (shared by Lesson tab and Tutor tab).
+    # Load section markdown (shared across all steps).
     content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
     try:
         section_markdown = content_path.read_text(encoding="utf-8")
@@ -259,22 +312,145 @@ with col_main:
     section_quiz_ids: list[str] = section_data.get("quiz_ids", [])
     section_prompt_ids: list[str] = section_data.get("reflection_prompts", [])
 
-    # ── Tabs ────────────────────────────────────────────────────────────────
-    tab_lesson, tab_quiz, tab_reflection, tab_tutor = st.tabs(
-        ["Lesson", "Quiz", "Reflection", "Tutor"]
-    )
+    # Chunk the lesson markdown (deterministic — no randomness).
+    chunks = _chunk_markdown(section_markdown) if section_markdown else ["Content unavailable."]
+    n_chunks = len(chunks)
 
-    # ── LESSON tab ──────────────────────────────────────────────────────────
-    with tab_lesson:
-        if section_markdown is None:
-            st.warning("Section content unavailable.")
-        else:
-            st.markdown(section_markdown)
+    # Clamp chunk_idx in case section content shrinks after a nav change.
+    chunk_idx = min(st.session_state["player_flow_chunk_idx"], max(0, n_chunks - 1))
+    step = st.session_state["player_flow_step"]
 
-    # ── QUIZ tab ────────────────────────────────────────────────────────────
-    with tab_quiz:
+    # ── Tutor expander — closure over active_title / section_markdown ─────────
+    def _render_tutor_expander() -> None:
+        with st.expander("Tutor"):
+            st.subheader("AI Tutor")
+
+            # Process any prompt enqueued by a quick-action button click.
+            if st.session_state["tutor_pending"] is not None:
+                pending = st.session_state["tutor_pending"]
+                st.session_state["tutor_pending"] = None
+                st.session_state["tutor_messages"].append({"role": "user", "content": pending})
+                tutor_reply = generate_tutor_reply(
+                    section_title=active_title,
+                    section_markdown=section_markdown or "",
+                    user_message=pending,
+                )
+                st.session_state["tutor_messages"].append(
+                    {"role": "assistant", "content": tutor_reply}
+                )
+
+            # Quick-action buttons — 2 × 2 grid.
+            b_left, b_right = st.columns(2)
+            with b_left:
+                if st.button("Summarize", use_container_width=True, key="btn_summarize"):
+                    st.session_state["tutor_pending"] = "Summarize this section for me."
+                    st.rerun()
+                if st.button("Give me an example", use_container_width=True, key="btn_example"):
+                    st.session_state["tutor_pending"] = (
+                        "Give me a concrete example of the key ideas in this section."
+                    )
+                    st.rerun()
+            with b_right:
+                if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
+                    st.session_state["tutor_pending"] = (
+                        "Explain this section like I'm completely new to the topic."
+                    )
+                    st.rerun()
+                if st.button(
+                    "Quiz me (2 questions)", use_container_width=True, key="btn_quiz"
+                ):
+                    st.session_state["tutor_pending"] = (
+                        "Quiz me with 2 questions about this section."
+                    )
+                    st.rerun()
+
+            st.divider()
+
+            # Chat history — rendered top-to-bottom.
+            for msg in st.session_state["tutor_messages"]:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            # Free-form input.
+            user_input = st.chat_input("Ask about this section…")
+            if user_input:
+                st.session_state["tutor_messages"].append(
+                    {"role": "user", "content": user_input}
+                )
+                tutor_reply = generate_tutor_reply(
+                    section_title=active_title,
+                    section_markdown=section_markdown or "",
+                    user_message=user_input,
+                )
+                st.session_state["tutor_messages"].append(
+                    {"role": "assistant", "content": tutor_reply}
+                )
+                st.rerun()
+
+    # ── WELCOME ───────────────────────────────────────────────────────────────
+    if step == "welcome":
+        st.markdown(
+            "Work through this section at your own pace. "
+            "You'll read the lesson content one part at a time, "
+            "then answer a short quiz and save a reflection before marking it done."
+        )
+        st.markdown("---")
+        if st.button("Start Section →", type="primary"):
+            st.session_state["player_flow_step"] = "lesson"
+            st.session_state["player_flow_chunk_idx"] = 0
+            st.rerun()
+
+    # ── LESSON ────────────────────────────────────────────────────────────────
+    elif step == "lesson":
+        st.caption(f"Chunk {chunk_idx + 1} of {n_chunks}")
+        st.markdown(chunks[chunk_idx])
+        st.divider()
+
+        col_back, col_fwd = st.columns([1, 2])
+        with col_back:
+            if chunk_idx > 0:
+                if st.button("← Back", use_container_width=True):
+                    st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
+                    st.rerun()
+        with col_fwd:
+            is_last_chunk = chunk_idx >= n_chunks - 1
+            if is_last_chunk:
+                if section_quiz_ids:
+                    fwd_label = "Continue to Quiz →"
+                elif section_prompt_ids:
+                    fwd_label = "Continue to Reflection →"
+                else:
+                    fwd_label = "Continue to Complete →"
+            else:
+                fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
+
+            if st.button(fwd_label, type="primary", use_container_width=True):
+                if is_last_chunk:
+                    if section_quiz_ids:
+                        st.session_state["player_flow_step"] = "quiz"
+                    elif section_prompt_ids:
+                        st.session_state["player_flow_step"] = "reflection"
+                    else:
+                        st.session_state["player_flow_step"] = "complete"
+                    st.session_state["player_flow_chunk_idx"] = 0
+                else:
+                    st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
+                st.rerun()
+
+        _render_tutor_expander()
+
+    # ── QUIZ ──────────────────────────────────────────────────────────────────
+    elif step == "quiz":
         if not section_quiz_ids:
             st.info("No quiz for this section.")
+            if st.button(
+                "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →",
+                type="primary",
+            ):
+                st.session_state["player_flow_step"] = (
+                    "reflection" if section_prompt_ids else "complete"
+                )
+                st.rerun()
         else:
             for quiz_id in section_quiz_ids:
                 quiz = quiz_library.get(quiz_id)
@@ -290,7 +466,7 @@ with col_main:
 
                 questions = quiz.get("questions", [])
 
-                # Render each question; disable after submission.
+                # Render each question; disable inputs after submission.
                 selected_indices: list[int] = []
                 for q_idx, q in enumerate(questions):
                     opts = q["options"]
@@ -336,12 +512,32 @@ with col_main:
 
                 st.divider()
 
-    # ── REFLECTION tab ──────────────────────────────────────────────────────
-    with tab_reflection:
+            # Show continue only when every quiz in this section is submitted.
+            all_submitted = all(
+                f"{active_section_id}:{qid}" in st.session_state["quiz_submitted"]
+                for qid in section_quiz_ids
+            )
+            if all_submitted:
+                if st.button(
+                    "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →",
+                    type="primary",
+                ):
+                    st.session_state["player_flow_step"] = (
+                        "reflection" if section_prompt_ids else "complete"
+                    )
+                    st.rerun()
+
+        _render_tutor_expander()
+
+    # ── REFLECTION ────────────────────────────────────────────────────────────
+    elif step == "reflection":
         if not section_prompt_ids:
             st.info("No reflection prompts for this section.")
+            if st.button("Continue to Complete →", type="primary"):
+                st.session_state["player_flow_step"] = "complete"
+                st.rerun()
         else:
-            # Load previously saved responses (fresh DB read each render).
+            # Fresh DB read each render so saved state is always current.
             try:
                 saved_by_section = load_reflection_responses(
                     lead_id, COURSE_ID, db_path=DB_PATH
@@ -393,61 +589,56 @@ with col_main:
 
                 st.divider()
 
-    # ── TUTOR tab ───────────────────────────────────────────────────────────
-    with tab_tutor:
-        st.subheader("AI Tutor")
-
-        # Process any prompt enqueued by a quick-action button click.
-        # This runs first so the new exchange appears immediately in the history.
-        if st.session_state["tutor_pending"] is not None:
-            pending = st.session_state["tutor_pending"]
-            st.session_state["tutor_pending"] = None
-            st.session_state["tutor_messages"].append({"role": "user", "content": pending})
-            reply = generate_tutor_reply(
-                section_title=active_title,
-                section_markdown=section_markdown or "",
-                user_message=pending,
+            # Show continue only when every prompt has a non-empty saved response.
+            all_saved = all(
+                saved_for_section.get(p_idx, "").strip()
+                for p_idx in range(len(section_prompt_ids))
             )
-            st.session_state["tutor_messages"].append({"role": "assistant", "content": reply})
+            if all_saved:
+                if st.button("Continue to Complete →", type="primary"):
+                    st.session_state["player_flow_step"] = "complete"
+                    st.rerun()
 
-        # Quick-action buttons — 2 × 2 grid above the chat.
-        b_left, b_right = st.columns(2)
-        with b_left:
-            if st.button("Summarize", use_container_width=True, key="btn_summarize"):
-                st.session_state["tutor_pending"] = "Summarize this section for me."
-                st.rerun()
-            if st.button("Give me an example", use_container_width=True, key="btn_example"):
-                st.session_state["tutor_pending"] = (
-                    "Give me a concrete example of the key ideas in this section."
+    # ── COMPLETE ──────────────────────────────────────────────────────────────
+    elif step == "complete":
+        st.success(f"You've worked through all the content for **{active_title}**!")
+        st.markdown(
+            "Click **Mark Complete** below to record your progress, "
+            "then select another section from the left panel."
+        )
+
+        if st.button("Mark Complete", type="primary"):
+            occurred_at = datetime.now(timezone.utc).isoformat()
+            event_id = f"{lead_id}:{active_section_id}"
+            try:
+                upsert_lead(lead_id, db_path=DB_PATH)
+                record_progress_event(
+                    event_id,
+                    lead_id,
+                    active_section_id,
+                    occurred_at=occurred_at,
+                    db_path=DB_PATH,
+                )
+                compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH)
+                updated_status = get_lead_status(lead_id, db_path=DB_PATH)
+                st.session_state["player_status"] = updated_status
+                st.session_state["player_completed"].add(active_section_id)
+                st.session_state["player_flash"] = (
+                    "success",
+                    f"\u2713 '{active_title}' marked complete.",
                 )
                 st.rerun()
-        with b_right:
-            if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
-                st.session_state["tutor_pending"] = (
-                    "Explain this section like I'm completely new to the topic."
-                )
-                st.rerun()
-            if st.button("Quiz me (2 questions)", use_container_width=True, key="btn_quiz"):
-                st.session_state["tutor_pending"] = (
-                    "Quiz me with 2 questions about this section."
-                )
-                st.rerun()
+            except ValueError:
+                logging.exception("ValueError marking %s complete", active_section_id)
+                st.error("Cannot record completion: unrecognised section.")
+            except sqlite3.OperationalError:
+                st.error("Could not save progress. Check that tmp/app.db is accessible.")
+            except Exception:
+                logging.exception("Unexpected error in Mark Complete")
+                st.error("An unexpected error occurred. See console for details.")
 
-        st.divider()
-
-        # Chat history — rendered top-to-bottom.
-        for msg in st.session_state["tutor_messages"]:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        # Free-form input — student can type any question about the section.
-        user_input = st.chat_input("Ask about this section…")
-        if user_input:
-            st.session_state["tutor_messages"].append({"role": "user", "content": user_input})
-            reply = generate_tutor_reply(
-                section_title=active_title,
-                section_markdown=section_markdown or "",
-                user_message=user_input,
-            )
-            st.session_state["tutor_messages"].append({"role": "assistant", "content": reply})
+        st.markdown("---")
+        if st.button("← Restart this Section"):
+            st.session_state["player_flow_step"] = "welcome"
+            st.session_state["player_flow_chunk_idx"] = 0
             st.rerun()
