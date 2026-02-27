@@ -130,6 +130,26 @@ def _chunk_markdown(text: str) -> list[str]:
 st.set_page_config(page_title="Student Course Player", layout="wide")
 apply_colaberry_theme("Student Portal", "Free Intro to AI")
 
+st.markdown(
+    """
+    <style>
+    .main .block-container { max-width: 980px; padding-top: 1rem; }
+    .cb-container { max-width: 980px; margin: 0 auto; }
+    .cb-card {
+        background: rgba(255,255,255,0.75);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 1rem;
+    }
+    .cb-footer { display: flex; gap: 12px; justify-content: space-between; margin-top: 16px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+_CARD_OPEN = '<div class="cb-container"><div class="cb-card">'
+_CARD_CLOSE = "</div></div>"
+
 # ---------------------------------------------------------------------------
 # Session state initialisation
 # ---------------------------------------------------------------------------
@@ -212,8 +232,15 @@ with st.sidebar:
         "Select a section",
         options=range(len(SECTIONS)),
         format_func=lambda i: (
-            f"\u2713 {SECTIONS[i][1]}" if SECTIONS[i][0] in completed else SECTIONS[i][1]
+            f"\u2713 {SECTIONS[i][1]}"
+            if SECTIONS[i][0] in completed
+            else (
+                f"\u25b6 {SECTIONS[i][1]}"
+                if i == st.session_state.get("_section_radio", 0)
+                else SECTIONS[i][1]
+            )
         ),
+        key="_section_radio",
         label_visibility="collapsed",
     )
     active_section_id, active_title = SECTIONS[active_idx]
@@ -267,7 +294,8 @@ if st.session_state["player_flash"] is not None:
     else:
         st.error(msg)
 
-st.title(f"{active_section_id} {EM_DASH} {active_title}")
+st.caption(f"Section {active_idx + 1} of {len(SECTIONS)}")
+st.title(active_title)
 
 # Load section markdown (shared across all steps).
 content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
@@ -368,6 +396,7 @@ def _render_tutor_expander() -> None:
 
 # ── WELCOME ───────────────────────────────────────────────────────────────────
 if step == "welcome":
+    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
     st.markdown(
         "Work through this section at your own pace. "
         "You'll read the lesson content one part at a time, "
@@ -378,32 +407,34 @@ if step == "welcome":
         st.session_state["player_flow_step"] = "lesson"
         st.session_state["player_flow_chunk_idx"] = 0
         st.rerun()
+    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
 
 # ── LESSON ────────────────────────────────────────────────────────────────────
 elif step == "lesson":
+    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
     st.caption(f"Chunk {chunk_idx + 1} of {n_chunks}")
     st.markdown(chunks[chunk_idx])
     st.divider()
 
-    col_back, col_fwd = st.columns([1, 2])
+    is_last_chunk = chunk_idx >= n_chunks - 1
+    if is_last_chunk:
+        if section_quiz_ids:
+            fwd_label = "Continue to Quiz →"
+        elif section_prompt_ids:
+            fwd_label = "Continue to Reflection →"
+        else:
+            fwd_label = "Continue to Complete →"
+    else:
+        fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
+
+    col_back, col_fwd = st.columns([1, 3])
     with col_back:
         if chunk_idx > 0:
-            if st.button("← Back", use_container_width=True):
+            if st.button("← Back"):
                 st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
                 st.rerun()
     with col_fwd:
-        is_last_chunk = chunk_idx >= n_chunks - 1
-        if is_last_chunk:
-            if section_quiz_ids:
-                fwd_label = "Continue to Quiz →"
-            elif section_prompt_ids:
-                fwd_label = "Continue to Reflection →"
-            else:
-                fwd_label = "Continue to Complete →"
-        else:
-            fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
-
-        if st.button(fwd_label, type="primary", use_container_width=True):
+        if st.button(fwd_label, type="primary"):
             if is_last_chunk:
                 if section_quiz_ids:
                     st.session_state["player_flow_step"] = "quiz"
@@ -415,11 +446,13 @@ elif step == "lesson":
             else:
                 st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
             st.rerun()
+    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
 
     _render_tutor_expander()
 
 # ── QUIZ ──────────────────────────────────────────────────────────────────────
 elif step == "quiz":
+    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
     if not section_quiz_ids:
         st.info("No quiz for this section.")
         if st.button(
@@ -523,10 +556,12 @@ elif step == "quiz":
                                 st.session_state["player_quiz_q_idx"] = 0
                             st.rerun()
 
+    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
     _render_tutor_expander()
 
 # ── REFLECTION ────────────────────────────────────────────────────────────────
 elif step == "reflection":
+    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
     if not section_prompt_ids:
         st.info("No reflection prompts for this section.")
         if st.button("Continue to Complete →", type="primary"):
@@ -585,9 +620,11 @@ elif step == "reflection":
                         st.error("Could not save. Please try again.")
                 else:
                     st.warning("Please write something before continuing.")
+    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
 
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
+    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
     st.success(f"You've worked through all the content for **{active_title}**!")
     st.markdown(
         "Click **Mark Complete** below to record your progress, "
@@ -629,3 +666,4 @@ elif step == "complete":
         st.session_state["player_flow_step"] = "welcome"
         st.session_state["player_flow_chunk_idx"] = 0
         st.rerun()
+    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
