@@ -172,8 +172,10 @@ if "tutor_section_id" not in st.session_state:
 if "quiz_submitted" not in st.session_state:
     st.session_state["quiz_submitted"] = set()  # set of "{section_id}:{quiz_id}"
 # Flow Engine v1 — guided sequential step state.
+if "player_course_started" not in st.session_state:
+    st.session_state["player_course_started"] = False  # True after Begin Course clicked
 if "player_flow_step" not in st.session_state:
-    st.session_state["player_flow_step"] = "welcome"   # welcome|lesson|quiz|reflection|complete
+    st.session_state["player_flow_step"] = "lesson"    # lesson|quiz|reflection|complete (welcome unused)
 if "player_flow_chunk_idx" not in st.session_state:
     st.session_state["player_flow_chunk_idx"] = 0      # current lesson chunk index
 if "player_flow_section_id" not in st.session_state:
@@ -218,70 +220,70 @@ with st.sidebar:
         st.session_state["player_completed"] = set()
         st.session_state["player_status"] = None
         st.session_state["player_lead_id"] = lead_id
+        st.session_state["player_course_started"] = False
 
     if not lead_id:
         st.error("Lead ID is required.")
-        st.stop()
-
-    # Load status once per session (or after a lead change).
-    if st.session_state["player_status"] is None:
-        st.session_state["player_status"] = _fetch_status(lead_id)
-
-    st.subheader("Sections")
-    completed: set[str] = st.session_state["player_completed"]
-
-    active_idx: int = st.radio(
-        "Select a section",
-        options=range(len(SECTIONS)),
-        format_func=lambda i: (
-            f"\u2713 {SECTIONS[i][1]}"
-            if SECTIONS[i][0] in completed
-            else (
-                f"\u25b6 {SECTIONS[i][1]}"
-                if i == st.session_state.get("_section_radio", 0)
-                else SECTIONS[i][1]
-            )
-        ),
-        key="_section_radio",
-        label_visibility="collapsed",
-    )
-    active_section_id, active_title = SECTIONS[active_idx]
-
-    # Reset tutor history when the student navigates to a new section.
-    if active_section_id != st.session_state["tutor_section_id"]:
-        st.session_state["tutor_messages"] = []
-        st.session_state["tutor_pending"] = None
-        st.session_state["tutor_section_id"] = active_section_id
-
-    # Reset guided flow when the student navigates to a new section.
-    if active_section_id != st.session_state["player_flow_section_id"]:
-        st.session_state["player_flow_step"] = "welcome"
-        st.session_state["player_flow_chunk_idx"] = 0
-        st.session_state["player_flow_section_id"] = active_section_id
-        st.session_state["player_quiz_idx"] = 0
-        st.session_state["player_quiz_q_idx"] = 0
-        st.session_state["player_quiz_attempts"] = {}
-        st.session_state["player_quiz_correct"] = set()
-        st.session_state["player_refl_idx"] = 0
-
-    st.divider()
-    st.subheader("Progress")
-
-    status = st.session_state["player_status"]
-    if status is None or not status.get("lead_exists"):
-        pct = 0.0
-        current = EM_DASH
-        last_activity = EM_DASH
     else:
-        cs = status["course_state"]
-        pct = cs["completion_pct"] if cs["completion_pct"] is not None else 0.0
-        current = cs["current_section"] or EM_DASH
-        last_activity = cs["last_activity_at"] or EM_DASH
+        # Load status once per session (or after a lead change).
+        if st.session_state["player_status"] is None:
+            st.session_state["player_status"] = _fetch_status(lead_id)
 
-    st.metric("Completion", f"{pct:.2f} %")
-    st.progress(pct / 100.0)
-    st.write(f"**Current:** {current}")
-    st.write(f"**Last activity:** {last_activity}")
+        st.subheader("Sections")
+        completed: set[str] = st.session_state["player_completed"]
+
+        active_idx: int = st.radio(
+            "Select a section",
+            options=range(len(SECTIONS)),
+            format_func=lambda i: (
+                f"\u2713 {SECTIONS[i][1]}"
+                if SECTIONS[i][0] in completed
+                else (
+                    f"\u25b6 {SECTIONS[i][1]}"
+                    if i == st.session_state.get("_section_radio", 0)
+                    else SECTIONS[i][1]
+                )
+            ),
+            key="_section_radio",
+            label_visibility="collapsed",
+        )
+        active_section_id, active_title = SECTIONS[active_idx]
+
+        # Reset tutor history when the student navigates to a new section.
+        if active_section_id != st.session_state["tutor_section_id"]:
+            st.session_state["tutor_messages"] = []
+            st.session_state["tutor_pending"] = None
+            st.session_state["tutor_section_id"] = active_section_id
+
+        # Reset guided flow when the student navigates to a new section.
+        if active_section_id != st.session_state["player_flow_section_id"]:
+            st.session_state["player_flow_step"] = "lesson"
+            st.session_state["player_flow_chunk_idx"] = 0
+            st.session_state["player_flow_section_id"] = active_section_id
+            st.session_state["player_quiz_idx"] = 0
+            st.session_state["player_quiz_q_idx"] = 0
+            st.session_state["player_quiz_attempts"] = {}
+            st.session_state["player_quiz_correct"] = set()
+            st.session_state["player_refl_idx"] = 0
+
+        st.divider()
+        st.subheader("Progress")
+
+        status = st.session_state["player_status"]
+        if status is None or not status.get("lead_exists"):
+            pct = 0.0
+            current = EM_DASH
+            last_activity = EM_DASH
+        else:
+            cs = status["course_state"]
+            pct = cs["completion_pct"] if cs["completion_pct"] is not None else 0.0
+            current = cs["current_section"] or EM_DASH
+            last_activity = cs["last_activity_at"] or EM_DASH
+
+        st.metric("Completion", f"{pct:.2f} %")
+        st.progress(pct / 100.0)
+        st.write(f"**Current:** {current}")
+        st.write(f"**Last activity:** {last_activity}")
 
 # ---------------------------------------------------------------------------
 # Main content area — guided flow (full width, no column wrapper)
@@ -296,6 +298,48 @@ if st.session_state["player_flash"] is not None:
     else:
         st.error(msg)
 
+
+# ── Course-level welcome screen ────────────────────────────────────────────────
+# Shown once per lead (or when no lead_id is entered) before any section begins.
+if not lead_id or not st.session_state.get("player_course_started"):
+    _cw_lines = [
+        "This course guides you through the fundamentals of AI in 9 short sections.",
+        "Each section follows the same pattern: read a guided lesson, test your "
+        "understanding with a quiz, then capture a brief reflection.",
+        "Work at your own pace — your progress is saved automatically after each section.",
+    ]
+    _cw_key = f"course_welcome_typed_{lead_id}" if lead_id else "course_welcome_typed_anon"
+    with st.container(border=True):
+        st.markdown("## Welcome to **Intro to AI**")
+        _cw_ph = st.empty()
+        if _cw_key not in st.session_state:
+            st.session_state[_cw_key] = False
+        if st.session_state.get(_cw_key) is False:
+            _cw_text = ""
+            for _cw_line in _cw_lines:
+                for _cw_char in _cw_line:
+                    _cw_text += _cw_char
+                    _cw_ph.markdown(_cw_text)
+                    time.sleep(0.01)
+                _cw_text += "\n\n"
+            st.session_state[_cw_key] = True
+        else:
+            _cw_ph.markdown("\n\n".join(_cw_lines))
+        st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
+        if not lead_id:
+            st.info("Enter your Lead ID in the sidebar to begin.")
+            st.button("Begin Course →", type="primary", key="btn_begin_course", disabled=True)
+        elif st.button("Begin Course →", type="primary", key="btn_begin_course"):
+            st.session_state["player_course_started"] = True
+            st.session_state["player_flow_step"] = "lesson"
+            st.session_state["player_flow_chunk_idx"] = 0
+            st.session_state["player_quiz_idx"] = 0
+            st.session_state["player_quiz_q_idx"] = 0
+            st.session_state["player_quiz_attempts"] = {}
+            st.session_state["player_quiz_correct"] = set()
+            st.session_state["player_refl_idx"] = 0
+            st.rerun()
+    st.stop()
 
 # Load section markdown (shared across all steps).
 content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
@@ -477,7 +521,28 @@ elif step == "lesson":
             f"Chunk {chunk_idx + 1} of {n_chunks}</div>",
             unsafe_allow_html=True,
         )
-        st.markdown(chunks[chunk_idx])
+        _chunk_key = f"chunk_typed_{active_section_id}_{chunk_idx}"
+        _chunk_ph = st.empty()
+        if _chunk_key not in st.session_state:
+            st.session_state[_chunk_key] = False
+        if st.session_state.get(_chunk_key) is False:
+            _chunk_text = chunks[chunk_idx]
+            _built = ""
+            for _line in _chunk_text.splitlines():
+                _line_words = _line.split()
+                if not _line_words:
+                    _built += "\n"
+                    continue
+                _line_built = ""
+                for _wi in range(0, len(_line_words), 3):
+                    _line_built = " ".join(_line_words[: _wi + 3])
+                    _chunk_ph.write(_built + _line_built)
+                    time.sleep(0.02)
+                _built += _line_built + "\n"
+            _chunk_ph.markdown(_chunk_text)
+            st.session_state[_chunk_key] = True
+        else:
+            _chunk_ph.markdown(chunks[chunk_idx])
         st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         st.divider()
 
@@ -739,10 +804,10 @@ elif step == "complete":
         _next_idx = (active_idx + 1) % len(SECTIONS)
         if st.button("Go to next section →", type="primary"):
             st.session_state["_section_radio"] = _next_idx
-            st.session_state["player_flow_step"] = "welcome"
+            st.session_state["player_flow_step"] = "lesson"
             st.session_state["player_flow_chunk_idx"] = 0
             st.rerun()
         if st.button("← Restart this Section"):
-            st.session_state["player_flow_step"] = "welcome"
+            st.session_state["player_flow_step"] = "lesson"
             st.session_state["player_flow_chunk_idx"] = 0
             st.rerun()
