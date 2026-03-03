@@ -297,14 +297,16 @@ if st.session_state["player_flash"] is not None:
 
 # Sticky section header — state only, no DB calls.
 _bar_status = st.session_state.get("player_status")
-if (
-    _bar_status
-    and _bar_status.get("lead_exists")
-    and _bar_status["course_state"]["completion_pct"] is not None
-):
-    _bar_val = _bar_status["course_state"]["completion_pct"] / 100.0
+_bar_pct = (
+    _bar_status.get("course_state", {}).get("completion_pct")
+    if _bar_status and _bar_status.get("lead_exists")
+    else None
+)
+if isinstance(_bar_pct, (int, float)):
+    _bar_val = _bar_pct / 100.0
 else:
-    _bar_val = len(st.session_state["player_completed"]) / 9
+    _bar_val = len(st.session_state["player_completed"]) / len(SECTIONS)
+_bar_val = max(0.0, min(1.0, _bar_val))
 
 st.markdown(
     f"""<div class="cb-topbar">
