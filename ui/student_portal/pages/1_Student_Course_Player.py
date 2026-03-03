@@ -212,8 +212,11 @@ def _fetch_status(lid: str) -> dict | None:
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.title("Course Player")
-    raw_lead_id = st.text_input("Lead ID", placeholder="e.g. lead-123")
-    lead_id = raw_lead_id.strip()
+    lead_id = st.text_input(
+        "Lead ID",
+        value=st.session_state["player_lead_id"],
+        placeholder="e.g. lead-123",
+    ).strip()
 
     # Reset per-session tracking whenever the lead changes.
     if lead_id != st.session_state["player_lead_id"]:
@@ -221,6 +224,12 @@ with st.sidebar:
         st.session_state["player_status"] = None
         st.session_state["player_lead_id"] = lead_id
         st.session_state["player_course_started"] = False
+
+    # Apply deferred section navigation BEFORE the radio is instantiated.
+    # (Setting _section_radio after the widget exists raises a Streamlit error.)
+    if "_section_radio_pending" in st.session_state:
+        st.session_state["_section_radio"] = int(st.session_state["_section_radio_pending"])
+        del st.session_state["_section_radio_pending"]
 
     # Sections + progress only render once lead is entered AND course has started.
     if lead_id and st.session_state.get("player_course_started"):
@@ -329,6 +338,28 @@ if not st.session_state.get("player_course_started"):
             if not lead_id:
                 st.info("Enter your Lead ID in the sidebar to begin.")
             else:
+                # Resume: pick up at the last recorded section when available.
+                status = st.session_state.get("player_status")
+                if status is None:
+                    try:
+                        st.session_state["player_status"] = _fetch_status(lead_id)
+                        status = st.session_state["player_status"]
+                    except Exception:
+                        status = None
+
+                resume_idx = 0
+                try:
+                    cs = (status or {}).get("course_state") or {}
+                    current_section = cs.get("current_section")
+                    if current_section:
+                        _idx_map = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
+                        resume_idx = _idx_map.get(current_section, 0)
+                        # Advance past sections already completed this session.
+                        if current_section in st.session_state.get("player_completed", set()):
+                            resume_idx = min(resume_idx + 1, len(SECTIONS) - 1)
+                except Exception:
+                    resume_idx = 0
+
                 st.session_state["player_course_started"] = True
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
@@ -337,6 +368,8 @@ if not st.session_state.get("player_course_started"):
                 st.session_state["player_quiz_attempts"] = {}
                 st.session_state["player_quiz_correct"] = set()
                 st.session_state["player_refl_idx"] = 0
+                # Write before rerun so the radio picks it up on the next render.
+                st.session_state["_section_radio"] = resume_idx
                 st.rerun()
     st.stop()
 
@@ -753,6 +786,8 @@ elif step == "complete":
             "Record your progress below, then move on to the next section."
         )
 
+        _already_completed = active_section_id in st.session_state.get("player_completed", set())
+
         # Compact progress summary — prefer already-fetched player_status.
         _status = st.session_state.get("player_status")
         if (
@@ -769,7 +804,9 @@ elif step == "complete":
 
         st.divider()
 
-        if st.button("Mark Complete", type="primary"):
+        if _already_completed:
+            st.success("Progress saved — this section is marked complete.")
+        elif st.button("Mark Complete", type="primary"):
             occurred_at = datetime.now(timezone.utc).isoformat()
             event_id = f"{lead_id}:{active_section_id}"
             try:
@@ -801,12 +838,24 @@ elif step == "complete":
 
         st.markdown("---")
         _next_idx = (active_idx + 1) % len(SECTIONS)
-        if st.button("Go to next section →", type="primary"):
-            st.session_state["_section_radio"] = _next_idx
-            st.session_state["player_flow_step"] = "lesson"
-            st.session_state["player_flow_chunk_idx"] = 0
-            st.rerun()
-        if st.button("← Restart this Section"):
-            st.session_state["player_flow_step"] = "lesson"
-            st.session_state["player_flow_chunk_idx"] = 0
-            st.rerun()
+        _already_completed = active_section_id in st.session_state.get("player_completed", set())
+
+        if not _already_completed:
+            st.info("Mark the section complete to unlock the next section.")
+        else:
+            if st.button("Go to next section →", type="primary"):
+                # Defer navigation: pending key is resolved before the radio renders.
+                st.session_state["_section_radio_pending"] = _next_idx
+                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_chunk_idx"] = 0
+                st.session_state["player_quiz_idx"] = 0
+                st.session_state["player_quiz_q_idx"] = 0
+                st.session_state["player_quiz_attempts"] = {}
+                st.session_state["player_quiz_correct"] = set()
+                st.session_state["player_refl_idx"] = 0
+                st.rerun()
+
+            if st.button("← Restart this Section"):
+                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_chunk_idx"] = 0
+                st.rerun()
