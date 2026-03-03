@@ -453,8 +453,14 @@ if step == "welcome":
 # ── LESSON ────────────────────────────────────────────────────────────────────
 elif step == "lesson":
     with st.container(border=True):
-        st.caption(f"Chunk {chunk_idx + 1} of {n_chunks}")
+        st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='font-size:0.8rem;color:#6B7280;margin-bottom:6px;'>"
+            f"Chunk {chunk_idx + 1} of {n_chunks}</div>",
+            unsafe_allow_html=True,
+        )
         st.markdown(chunks[chunk_idx])
+        st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         st.divider()
 
         is_last_chunk = chunk_idx >= n_chunks - 1
@@ -468,6 +474,7 @@ elif step == "lesson":
         else:
             fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
 
+        st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
         col_back, col_fwd = st.columns([1, 3])
         with col_back:
             if chunk_idx > 0:
