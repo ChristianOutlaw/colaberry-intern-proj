@@ -317,6 +317,28 @@ st.markdown(
 )
 st.progress(_bar_val)
 
+# ── Section navigator ──────────────────────────────────────────────────────────
+_nav_cols = st.columns(len(SECTIONS))
+for _ni, (_sid, _stitle) in enumerate(SECTIONS):
+    with _nav_cols[_ni]:
+        if st.button(
+            str(_ni + 1),
+            key=f"nav_sec_{_ni}",
+            type="primary" if _ni == active_idx else "secondary",
+            use_container_width=True,
+            help=_stitle,
+        ):
+            if _ni != active_idx:
+                st.session_state["_section_radio"] = _ni
+                st.session_state["player_flow_step"] = "welcome"
+                st.session_state["player_flow_chunk_idx"] = 0
+                st.session_state["player_quiz_idx"] = 0
+                st.session_state["player_quiz_q_idx"] = 0
+                st.session_state["player_quiz_attempts"] = {}
+                st.session_state["player_quiz_correct"] = set()
+                st.session_state["player_refl_idx"] = 0
+                st.rerun()
+
 # Load section markdown (shared across all steps).
 content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
 try:
