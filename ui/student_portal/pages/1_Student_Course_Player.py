@@ -612,11 +612,27 @@ elif step == "reflection":
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
     with st.container(border=True):
-        st.success(f"You've worked through all the content for **{active_title}**!")
+        st.subheader("Section completed")
         st.markdown(
-            "Click **Mark Complete** below to record your progress, "
-            "then select another section from the left panel."
+            "You've finished all the content for this section. "
+            "Record your progress below, then move on to the next section."
         )
+
+        # Compact progress summary — prefer already-fetched player_status.
+        _status = st.session_state.get("player_status")
+        if (
+            _status
+            and _status.get("lead_exists")
+            and _status["course_state"]["completion_pct"] is not None
+        ):
+            st.metric("Course progress", f"{_status['course_state']['completion_pct']:.1f} %")
+        else:
+            st.metric(
+                "Completed sections",
+                f"{len(st.session_state['player_completed'])}/9",
+            )
+
+        st.divider()
 
         if st.button("Mark Complete", type="primary"):
             occurred_at = datetime.now(timezone.utc).isoformat()
@@ -649,6 +665,12 @@ elif step == "complete":
                 st.error("An unexpected error occurred. See console for details.")
 
         st.markdown("---")
+        _next_idx = (active_idx + 1) % len(SECTIONS)
+        if st.button("Go to next section →", type="primary"):
+            st.session_state["_section_radio"] = _next_idx
+            st.session_state["player_flow_step"] = "welcome"
+            st.session_state["player_flow_chunk_idx"] = 0
+            st.rerun()
         if st.button("← Restart this Section"):
             st.session_state["player_flow_step"] = "welcome"
             st.session_state["player_flow_chunk_idx"] = 0
