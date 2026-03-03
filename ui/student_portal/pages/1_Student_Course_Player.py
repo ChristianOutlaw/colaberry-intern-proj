@@ -133,7 +133,19 @@ apply_colaberry_theme("Student Portal", "Free Intro to AI")
 st.markdown(
     """
     <style>
-    .main .block-container { max-width: 980px; padding-top: 1rem; }
+    .main .block-container { max-width: 980px; padding-top: 0.25rem; }
+    .cb-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(4px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        padding: 0.5rem 0 0.4rem;
+        margin-bottom: 0.5rem;
+    }
+    .cb-topbar-caption { font-size: 0.75rem; color: #5B5A59; margin: 0 0 2px; }
+    .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -283,10 +295,25 @@ if st.session_state["player_flash"] is not None:
     else:
         st.error(msg)
 
-_, _hdr_col, _ = st.columns([1, 6, 1])
-with _hdr_col:
-    st.caption(f"Section {active_idx + 1} of {len(SECTIONS)}")
-    st.title(active_title)
+# Sticky section header — state only, no DB calls.
+_bar_status = st.session_state.get("player_status")
+if (
+    _bar_status
+    and _bar_status.get("lead_exists")
+    and _bar_status["course_state"]["completion_pct"] is not None
+):
+    _bar_val = _bar_status["course_state"]["completion_pct"] / 100.0
+else:
+    _bar_val = len(st.session_state["player_completed"]) / 9
+
+st.markdown(
+    f"""<div class="cb-topbar">
+      <p class="cb-topbar-caption">Section {active_idx + 1} of {len(SECTIONS)}</p>
+      <p class="cb-topbar-title">{active_title}</p>
+    </div>""",
+    unsafe_allow_html=True,
+)
+st.progress(_bar_val)
 
 # Load section markdown (shared across all steps).
 content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
