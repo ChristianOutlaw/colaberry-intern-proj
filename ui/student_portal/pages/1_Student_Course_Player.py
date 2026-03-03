@@ -222,9 +222,8 @@ with st.sidebar:
         st.session_state["player_lead_id"] = lead_id
         st.session_state["player_course_started"] = False
 
-    if not lead_id:
-        st.error("Lead ID is required.")
-    else:
+    # Sections + progress only render once lead is entered AND course has started.
+    if lead_id and st.session_state.get("player_course_started"):
         # Load status once per session (or after a lead change).
         if st.session_state["player_status"] is None:
             st.session_state["player_status"] = _fetch_status(lead_id)
@@ -300,15 +299,15 @@ if st.session_state["player_flash"] is not None:
 
 
 # ── Course-level welcome screen ────────────────────────────────────────────────
-# Shown once per lead (or when no lead_id is entered) before any section begins.
-if not lead_id or not st.session_state.get("player_course_started"):
+# Portal gate: always shown until the student clicks "Begin Course →".
+if not st.session_state.get("player_course_started"):
     _cw_lines = [
         "This course guides you through the fundamentals of AI in 9 short sections.",
         "Each section follows the same pattern: read a guided lesson, test your "
         "understanding with a quiz, then capture a brief reflection.",
         "Work at your own pace — your progress is saved automatically after each section.",
     ]
-    _cw_key = f"course_welcome_typed_{lead_id}" if lead_id else "course_welcome_typed_anon"
+    _cw_key = "course_welcome_typed"
     with st.container(border=True):
         st.markdown("## Welcome to **Intro to AI**")
         _cw_ph = st.empty()
@@ -326,19 +325,19 @@ if not lead_id or not st.session_state.get("player_course_started"):
         else:
             _cw_ph.markdown("\n\n".join(_cw_lines))
         st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
-        if not lead_id:
-            st.info("Enter your Lead ID in the sidebar to begin.")
-            st.button("Begin Course →", type="primary", key="btn_begin_course", disabled=True)
-        elif st.button("Begin Course →", type="primary", key="btn_begin_course"):
-            st.session_state["player_course_started"] = True
-            st.session_state["player_flow_step"] = "lesson"
-            st.session_state["player_flow_chunk_idx"] = 0
-            st.session_state["player_quiz_idx"] = 0
-            st.session_state["player_quiz_q_idx"] = 0
-            st.session_state["player_quiz_attempts"] = {}
-            st.session_state["player_quiz_correct"] = set()
-            st.session_state["player_refl_idx"] = 0
-            st.rerun()
+        if st.button("Begin Course →", type="primary", key="btn_begin_course"):
+            if not lead_id:
+                st.info("Enter your Lead ID in the sidebar to begin.")
+            else:
+                st.session_state["player_course_started"] = True
+                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_chunk_idx"] = 0
+                st.session_state["player_quiz_idx"] = 0
+                st.session_state["player_quiz_q_idx"] = 0
+                st.session_state["player_quiz_attempts"] = {}
+                st.session_state["player_quiz_correct"] = set()
+                st.session_state["player_refl_idx"] = 0
+                st.rerun()
     st.stop()
 
 # Load section markdown (shared across all steps).
