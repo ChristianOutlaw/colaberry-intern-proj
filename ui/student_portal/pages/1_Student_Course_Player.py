@@ -47,6 +47,21 @@ COURSE_ID = "FREE_INTRO_AI_V0"
 EM_DASH = "\u2014"
 
 
+# ── Hydration helper ──────────────────────────────────────────────────────────
+def _hydrate_completed_from_status(status: dict | None) -> None:
+    """Merge DB-completed sections into player_completed (never overwrites in-session work)."""
+    try:
+        done = _status_completed_sections(status)
+        if done:
+            st.session_state["player_completed"] |= set(done)
+    except Exception:
+        pass
+
+
+def _clamp_section_idx(idx: int) -> int:
+    return max(0, min(len(SECTIONS) - 1, int(idx)))
+
+
 # ── Progress helpers ──────────────────────────────────────────────────────────
 def _status_completed_sections(status: dict | None) -> set[str]:
     """Extract completed section IDs from a get_lead_status payload (best-effort)."""
@@ -243,6 +258,11 @@ if "player_quiz_correct" not in st.session_state:
     st.session_state["player_quiz_correct"] = set()  # set of correct question keys
 if "player_refl_idx" not in st.session_state:
     st.session_state["player_refl_idx"] = 0          # index into section_prompt_ids
+# Back-nav tracking: furthest section the student has confirmed reaching.
+if "_section_radio_confirmed" not in st.session_state:
+    st.session_state["_section_radio_confirmed"] = 0
+if "_backnav_pending_idx" not in st.session_state:
+    st.session_state["_backnav_pending_idx"] = None
 
 # ---------------------------------------------------------------------------
 # Helper — fetch lead status
@@ -281,7 +301,11 @@ with st.sidebar:
     # (Setting _section_radio after the widget exists raises a Streamlit error.)
     if "_section_radio_pending" in st.session_state:
         _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
-        st.session_state["_section_radio"] = _pend
+        _frontier = _unlocked_frontier_idx(
+            st.session_state.get("player_completed", set()),
+            st.session_state.get("player_status"),
+        )
+        st.session_state["_section_radio"] = min(_pend, int(_frontier))
         del st.session_state["_section_radio_pending"]
 
     # Sections + progress only render once lead is entered AND course has started.
@@ -289,23 +313,17 @@ with st.sidebar:
         # Load status once per session (or after a lead change).
         if st.session_state["player_status"] is None:
             st.session_state["player_status"] = _fetch_status(lead_id)
-            # Hydrate completed sections from DB so locks + resume reflect real progress.
-            try:
-                _db_done = _status_completed_sections(st.session_state.get("player_status"))
-                if _db_done:
-                    st.session_state["player_completed"] |= set(_db_done)
-            except Exception:
-                pass
+            _hydrate_completed_from_status(st.session_state.get("player_status"))
 
         st.subheader("Sections")
         completed: set[str] = st.session_state["player_completed"]
-        allowed_max_idx = _unlocked_frontier_idx(completed, st.session_state.get("player_status"))
+        allowed_max_idx = int(_unlocked_frontier_idx(completed, st.session_state.get("player_status")))
 
         active_idx: int = st.radio(
             "Select a section",
             options=range(len(SECTIONS)),
             format_func=lambda i: (
-                f"\u2713 {SECTIONS[i][1]}"
+                f"\u2705 {SECTIONS[i][1]}"
                 if SECTIONS[i][0] in completed
                 else (
                     f"\U0001f512 {SECTIONS[i][1]}"
@@ -321,6 +339,15 @@ with st.sidebar:
             label_visibility="collapsed",
         )
         active_section_id, active_title = SECTIONS[active_idx]
+
+        # Back-nav confirmation intercept:
+        # If student clicks a previously completed section, stash the intent and bounce
+        # the radio back — confirmation UI will be rendered in the main area.
+        _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
+        if active_idx < _confirmed_idx:
+            st.session_state["_backnav_pending_idx"] = int(active_idx)
+            st.session_state["_section_radio_pending"] = _confirmed_idx
+            st.rerun()
 
         # Enforce lock: redirect back to the furthest allowed section.
         if active_idx > allowed_max_idx:
@@ -381,6 +408,47 @@ if st.session_state["player_flash"] is not None:
         st.error(msg)
 
 
+# ── Back-nav reset confirmation UI ────────────────────────────────────────────
+# Shown when student selects a previously completed section.
+# The sidebar intercept stashes the target index here and bounces the radio back.
+if st.session_state.get("_backnav_pending_idx") is not None:
+    _target_idx = int(st.session_state["_backnav_pending_idx"])
+    _target_sid, _target_title = SECTIONS[_target_idx]
+
+    with st.container(border=True):
+        st.warning(
+            f"You selected **{_target_title}** (a previously completed section).\n\n"
+            "If you continue, **all progress after this section will be reset and relocked** "
+            "(completed checkmarks, quizzes, and reflections for later sections)."
+        )
+        _c1, _c2 = st.columns(2)
+        with _c1:
+            if st.button("Continue and reset later progress", type="primary", key="btn_backnav_confirm"):
+                _keep = {
+                    sid for i, (sid, _t) in enumerate(SECTIONS)
+                    if i < _target_idx
+                    and sid in st.session_state.get("player_completed", set())
+                }
+                st.session_state["player_completed"] = set(_keep)
+                st.session_state["_section_radio_confirmed"] = _target_idx
+                st.session_state["_section_radio_pending"] = _target_idx
+                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_chunk_idx"] = 0
+                st.session_state["player_quiz_idx"] = 0
+                st.session_state["player_quiz_q_idx"] = 0
+                st.session_state["player_quiz_attempts"] = {}
+                st.session_state["player_quiz_correct"] = set()
+                st.session_state["player_refl_idx"] = 0
+                st.session_state["_backnav_pending_idx"] = None
+                st.rerun()
+        with _c2:
+            if st.button("Cancel", key="btn_backnav_cancel"):
+                st.session_state["_backnav_pending_idx"] = None
+                st.rerun()
+
+    st.stop()
+
+
 # ── Course-level welcome screen ────────────────────────────────────────────────
 # Portal gate: always shown until the student clicks "Begin Course →".
 if not st.session_state.get("player_course_started"):
@@ -421,14 +489,7 @@ if not st.session_state.get("player_course_started"):
                     except Exception:
                         status = None
 
-                # Hydrate completed from DB, then resume to section after last completed.
-                try:
-                    _db_done = _status_completed_sections(status)
-                    if _db_done:
-                        st.session_state["player_completed"] |= set(_db_done)
-                except Exception:
-                    pass
-
+                _hydrate_completed_from_status(status)
                 resume_idx = _unlocked_frontier_idx(st.session_state.get("player_completed", set()), status)
                 # If DB current_section points further ahead, prefer it.
                 try:
@@ -451,6 +512,7 @@ if not st.session_state.get("player_course_started"):
                 st.session_state["player_refl_idx"] = 0
                 # Write before rerun so the radio picks it up on the next render.
                 st.session_state["_section_radio"] = resume_idx
+                st.session_state["_section_radio_confirmed"] = int(resume_idx)
                 st.rerun()
     st.stop()
 
@@ -902,6 +964,7 @@ elif step == "complete":
                 compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH)
                 updated_status = get_lead_status(lead_id, db_path=DB_PATH)
                 st.session_state["player_status"] = updated_status
+                _hydrate_completed_from_status(updated_status)
                 st.session_state["player_completed"].add(active_section_id)
                 # Show unlock feedback when a new section becomes available.
                 try:
@@ -938,7 +1001,7 @@ elif step == "complete":
 
         st.markdown("---")
         _has_next = active_idx < (len(SECTIONS) - 1)
-        _next_idx = active_idx + 1 if _has_next else None
+        _next_idx = active_idx + 1
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
 
         if not _already_completed:
@@ -950,9 +1013,10 @@ elif step == "complete":
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.rerun()
         else:
-            if st.button("Go to next section →", type="primary"):
+            if _has_next and st.button("Go to next section \u2192", type="primary"):
                 # Defer navigation: pending key is resolved before the radio renders.
                 st.session_state["_section_radio_pending"] = _next_idx
+                st.session_state["_section_radio_confirmed"] = int(_next_idx)
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.session_state["player_quiz_idx"] = 0
