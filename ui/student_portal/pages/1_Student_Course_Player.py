@@ -11,6 +11,7 @@ Run from the repository root:
 import logging
 import re
 import sqlite3
+import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -436,13 +437,33 @@ def _render_tutor_expander() -> None:
 # ── WELCOME ───────────────────────────────────────────────────────────────────
 if step == "welcome":
     with st.container(border=True):
-        st.markdown(
-            "Work through this section at your own pace. "
-            "You'll read the lesson content one part at a time, "
-            "then answer a short quiz and save a reflection before marking it done."
-        )
-        st.markdown("---")
-        if st.button("Start Section →", type="primary"):
+        st.markdown(f"## Welcome to **{active_title}**")
+
+        _welcome_lines = [
+            "In this section, we'll explore the core ideas step by step.",
+            "You'll read a guided lesson, test your understanding, and reflect briefly.",
+            "Move at your own pace — your progress is saved automatically.",
+        ]
+        _placeholder = st.empty()
+        _typed_key = f"welcome_typed_{active_section_id}"
+
+        if _typed_key not in st.session_state:
+            st.session_state[_typed_key] = False
+
+        if st.session_state.get(_typed_key) is False:
+            _current_text = ""
+            for _line in _welcome_lines:
+                for _char in _line:
+                    _current_text += _char
+                    _placeholder.markdown(_current_text)
+                    time.sleep(0.01)
+                _current_text += "\n\n"
+            st.session_state[_typed_key] = True
+        else:
+            _placeholder.markdown("\n\n".join(_welcome_lines))
+
+        st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
+        if st.button("Begin Section →", type="primary"):
             st.session_state["player_flow_step"] = "lesson"
             st.session_state["player_flow_chunk_idx"] = 0
             st.rerun()
