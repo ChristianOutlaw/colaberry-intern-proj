@@ -295,49 +295,6 @@ if st.session_state["player_flash"] is not None:
     else:
         st.error(msg)
 
-# Sticky section header — state only, no DB calls.
-_bar_status = st.session_state.get("player_status")
-_bar_pct = (
-    _bar_status.get("course_state", {}).get("completion_pct")
-    if _bar_status and _bar_status.get("lead_exists")
-    else None
-)
-if isinstance(_bar_pct, (int, float)):
-    _bar_val = _bar_pct / 100.0
-else:
-    _bar_val = len(st.session_state["player_completed"]) / len(SECTIONS)
-_bar_val = max(0.0, min(1.0, _bar_val))
-
-st.markdown(
-    f"""<div class="cb-topbar">
-      <p class="cb-topbar-caption">Section {active_idx + 1} of {len(SECTIONS)}</p>
-      <p class="cb-topbar-title">{active_title}</p>
-    </div>""",
-    unsafe_allow_html=True,
-)
-st.progress(_bar_val)
-
-# ── Section navigator ──────────────────────────────────────────────────────────
-_nav_cols = st.columns(len(SECTIONS))
-for _ni, (_sid, _stitle) in enumerate(SECTIONS):
-    with _nav_cols[_ni]:
-        if st.button(
-            str(_ni + 1),
-            key=f"nav_sec_{_ni}",
-            type="primary" if _ni == active_idx else "secondary",
-            use_container_width=True,
-            help=_stitle,
-        ):
-            if _ni != active_idx:
-                st.session_state["_section_radio"] = _ni
-                st.session_state["player_flow_step"] = "welcome"
-                st.session_state["player_flow_chunk_idx"] = 0
-                st.session_state["player_quiz_idx"] = 0
-                st.session_state["player_quiz_q_idx"] = 0
-                st.session_state["player_quiz_attempts"] = {}
-                st.session_state["player_quiz_correct"] = set()
-                st.session_state["player_refl_idx"] = 0
-                st.rerun()
 
 # Load section markdown (shared across all steps).
 content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
@@ -366,6 +323,46 @@ n_chunks = len(chunks)
 # Clamp chunk_idx in case section content shrinks after a nav change.
 chunk_idx = min(st.session_state["player_flow_chunk_idx"], max(0, n_chunks - 1))
 step = st.session_state["player_flow_step"]
+
+# ── Sticky section header — weighted monotonic section progress ────────────────
+_WELCOME_W = 0.05
+_LESSON_W  = 0.55
+_QUIZ_W    = 0.25
+_REFL_W    = 0.10
+# _COMPLETE_BONUS = 0.05  (sum of weights = 1.0 at complete)
+
+_lesson_frac = (chunk_idx + 1) / max(1, n_chunks) if step != "welcome" else 0.0
+_n_quizzes   = len(section_quiz_ids)
+_quiz_frac   = (
+    1.0 if _n_quizzes == 0
+    else min(1.0, st.session_state["player_quiz_idx"] / _n_quizzes)
+)
+_n_prompts   = len(section_prompt_ids)
+_refl_frac   = (
+    1.0 if _n_prompts == 0
+    else min(1.0, st.session_state["player_refl_idx"] / _n_prompts)
+)
+
+if step == "welcome":
+    _bar_val = 0.0
+elif step == "lesson":
+    _bar_val = _WELCOME_W + _LESSON_W * _lesson_frac
+elif step == "quiz":
+    _bar_val = _WELCOME_W + _LESSON_W + _QUIZ_W * _quiz_frac
+elif step == "reflection":
+    _bar_val = _WELCOME_W + _LESSON_W + _QUIZ_W + _REFL_W * _refl_frac
+else:  # complete
+    _bar_val = 1.0
+_bar_val = max(0.0, min(1.0, _bar_val))
+
+st.markdown(
+    f"""<div class="cb-topbar">
+      <p class="cb-topbar-caption">Section {active_idx + 1} of {len(SECTIONS)}</p>
+      <p class="cb-topbar-title">{active_title}</p>
+    </div>""",
+    unsafe_allow_html=True,
+)
+st.progress(_bar_val)
 
 
 # ── Tutor expander — closure over active_title / section_markdown ─────────────
@@ -549,12 +546,7 @@ elif step == "quiz":
                         # Progress caption.
                         n_quizzes = len(section_quiz_ids)
                         if n_quizzes > 1:
-                            st.caption(
-                                f"Quiz {quiz_idx + 1} of {n_quizzes}"
-                                f" — Question {q_idx + 1} of {len(questions)}"
-                            )
-                        else:
-                            st.caption(f"Question {q_idx + 1} of {len(questions)}")
+                            st.caption(f"Quiz {quiz_idx + 1} of {n_quizzes}")
 
                         if quiz.get("title"):
                             st.subheader(quiz["title"])
