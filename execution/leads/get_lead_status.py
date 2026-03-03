@@ -29,6 +29,7 @@ _EMPTY_STATUS = {
 def get_lead_status(
     lead_id: str,
     db_path: str | None = None,
+    now_utc: datetime | None = None,
 ) -> dict:
     """Return a structured status summary for a lead.
 
@@ -68,7 +69,7 @@ def get_lead_status(
     finally:
         conn.close()
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = now_utc or datetime.now(timezone.utc)
 
     last_activity_time = None
     if cs is not None and cs["last_activity_at"] is not None:

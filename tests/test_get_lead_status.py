@@ -9,6 +9,7 @@ the application database (tmp/app.db).
 import os
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -161,7 +162,11 @@ class TestGetLeadStatus(unittest.TestCase):
         finally:
             conn.close()
 
-        status = get_lead_status("L1", db_path=TEST_DB_PATH)
+        status = get_lead_status(
+            "L1",
+            db_path=TEST_DB_PATH,
+            now_utc=datetime(2026, 2, 23, 12, 0, 0, tzinfo=timezone.utc),
+        )
         hl = status["hot_lead"]
 
         self.assertEqual(hl["signal"], "HOT")
