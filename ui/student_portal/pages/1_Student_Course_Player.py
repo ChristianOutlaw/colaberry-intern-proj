@@ -134,21 +134,10 @@ st.markdown(
     """
     <style>
     .main .block-container { max-width: 980px; padding-top: 1rem; }
-    .cb-container { max-width: 980px; margin: 0 auto; }
-    .cb-card {
-        background: rgba(255,255,255,0.75);
-        border: 1px solid rgba(0,0,0,0.06);
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 1rem;
-    }
-    .cb-footer { display: flex; gap: 12px; justify-content: space-between; margin-top: 16px; }
     </style>
     """,
     unsafe_allow_html=True,
 )
-_CARD_OPEN = '<div class="cb-container"><div class="cb-card">'
-_CARD_CLOSE = "</div></div>"
 
 # ---------------------------------------------------------------------------
 # Session state initialisation
@@ -294,8 +283,10 @@ if st.session_state["player_flash"] is not None:
     else:
         st.error(msg)
 
-st.caption(f"Section {active_idx + 1} of {len(SECTIONS)}")
-st.title(active_title)
+_, _hdr_col, _ = st.columns([1, 6, 1])
+with _hdr_col:
+    st.caption(f"Section {active_idx + 1} of {len(SECTIONS)}")
+    st.title(active_title)
 
 # Load section markdown (shared across all steps).
 content_path = COURSE_CONTENT_DIR / f"{active_section_id}.md"
@@ -396,274 +387,269 @@ def _render_tutor_expander() -> None:
 
 # ── WELCOME ───────────────────────────────────────────────────────────────────
 if step == "welcome":
-    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
-    st.markdown(
-        "Work through this section at your own pace. "
-        "You'll read the lesson content one part at a time, "
-        "then answer a short quiz and save a reflection before marking it done."
-    )
-    st.markdown("---")
-    if st.button("Start Section →", type="primary"):
-        st.session_state["player_flow_step"] = "lesson"
-        st.session_state["player_flow_chunk_idx"] = 0
-        st.rerun()
-    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(
+            "Work through this section at your own pace. "
+            "You'll read the lesson content one part at a time, "
+            "then answer a short quiz and save a reflection before marking it done."
+        )
+        st.markdown("---")
+        if st.button("Start Section →", type="primary"):
+            st.session_state["player_flow_step"] = "lesson"
+            st.session_state["player_flow_chunk_idx"] = 0
+            st.rerun()
 
 # ── LESSON ────────────────────────────────────────────────────────────────────
 elif step == "lesson":
-    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
-    st.caption(f"Chunk {chunk_idx + 1} of {n_chunks}")
-    st.markdown(chunks[chunk_idx])
-    st.divider()
+    with st.container(border=True):
+        st.caption(f"Chunk {chunk_idx + 1} of {n_chunks}")
+        st.markdown(chunks[chunk_idx])
+        st.divider()
 
-    is_last_chunk = chunk_idx >= n_chunks - 1
-    if is_last_chunk:
-        if section_quiz_ids:
-            fwd_label = "Continue to Quiz →"
-        elif section_prompt_ids:
-            fwd_label = "Continue to Reflection →"
-        else:
-            fwd_label = "Continue to Complete →"
-    else:
-        fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
-
-    col_back, col_fwd = st.columns([1, 3])
-    with col_back:
-        if chunk_idx > 0:
-            if st.button("← Back"):
-                st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
-                st.rerun()
-    with col_fwd:
-        if st.button(fwd_label, type="primary"):
-            if is_last_chunk:
-                if section_quiz_ids:
-                    st.session_state["player_flow_step"] = "quiz"
-                elif section_prompt_ids:
-                    st.session_state["player_flow_step"] = "reflection"
-                else:
-                    st.session_state["player_flow_step"] = "complete"
-                st.session_state["player_flow_chunk_idx"] = 0
+        is_last_chunk = chunk_idx >= n_chunks - 1
+        if is_last_chunk:
+            if section_quiz_ids:
+                fwd_label = "Continue to Quiz →"
+            elif section_prompt_ids:
+                fwd_label = "Continue to Reflection →"
             else:
-                st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
-            st.rerun()
-    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
+                fwd_label = "Continue to Complete →"
+        else:
+            fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
+
+        col_back, col_fwd = st.columns([1, 3])
+        with col_back:
+            if chunk_idx > 0:
+                if st.button("← Back"):
+                    st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
+                    st.rerun()
+        with col_fwd:
+            if st.button(fwd_label, type="primary"):
+                if is_last_chunk:
+                    if section_quiz_ids:
+                        st.session_state["player_flow_step"] = "quiz"
+                    elif section_prompt_ids:
+                        st.session_state["player_flow_step"] = "reflection"
+                    else:
+                        st.session_state["player_flow_step"] = "complete"
+                    st.session_state["player_flow_chunk_idx"] = 0
+                else:
+                    st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
+                st.rerun()
 
     _render_tutor_expander()
 
 # ── QUIZ ──────────────────────────────────────────────────────────────────────
 elif step == "quiz":
-    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
-    if not section_quiz_ids:
-        st.info("No quiz for this section.")
-        if st.button(
-            "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →",
-            type="primary",
-        ):
-            st.session_state["player_flow_step"] = (
-                "reflection" if section_prompt_ids else "complete"
-            )
-            st.rerun()
-    else:
-        quiz_idx = st.session_state["player_quiz_idx"]
-
-        if quiz_idx >= len(section_quiz_ids):
-            # All quizzes in this section finished — show continue.
-            next_label = (
-                "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →"
-            )
-            if st.button(next_label, type="primary"):
+    with st.container(border=True):
+        if not section_quiz_ids:
+            st.info("No quiz for this section.")
+            if st.button(
+                "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →",
+                type="primary",
+            ):
                 st.session_state["player_flow_step"] = (
                     "reflection" if section_prompt_ids else "complete"
                 )
                 st.rerun()
         else:
-            quiz_id = section_quiz_ids[quiz_idx]
-            quiz = quiz_library.get(quiz_id)
+            quiz_idx = st.session_state["player_quiz_idx"]
 
-            if quiz is None:
-                st.warning(f"Quiz '{quiz_id}' not found in library.")
+            if quiz_idx >= len(section_quiz_ids):
+                # All quizzes in this section finished — show continue.
+                next_label = (
+                    "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →"
+                )
+                if st.button(next_label, type="primary"):
+                    st.session_state["player_flow_step"] = (
+                        "reflection" if section_prompt_ids else "complete"
+                    )
+                    st.rerun()
             else:
-                questions = quiz.get("questions", [])
+                quiz_id = section_quiz_ids[quiz_idx]
+                quiz = quiz_library.get(quiz_id)
 
-                if not questions:
-                    st.info("This quiz has no questions.")
-                    if st.button("Next →", key=f"skip_quiz_{quiz_id}"):
-                        st.session_state["player_quiz_idx"] = quiz_idx + 1
-                        st.session_state["player_quiz_q_idx"] = 0
-                        st.rerun()
+                if quiz is None:
+                    st.warning(f"Quiz '{quiz_id}' not found in library.")
                 else:
-                    # Clamp question index (safe guard against content changes).
-                    q_idx = min(
-                        st.session_state["player_quiz_q_idx"], len(questions) - 1
-                    )
-                    q = questions[q_idx]
-                    opts = q["options"]
+                    questions = quiz.get("questions", [])
 
-                    # Progress caption.
-                    n_quizzes = len(section_quiz_ids)
-                    if n_quizzes > 1:
-                        st.caption(
-                            f"Quiz {quiz_idx + 1} of {n_quizzes}"
-                            f" — Question {q_idx + 1} of {len(questions)}"
-                        )
-                    else:
-                        st.caption(f"Question {q_idx + 1} of {len(questions)}")
-
-                    if quiz.get("title"):
-                        st.subheader(quiz["title"])
-
-                    st.markdown(f"**{q['question']}**")
-
-                    radio_key = f"qsel_{active_section_id}_{quiz_id}_{q_idx}"
-                    chosen = st.radio(
-                        "Choose your answer:",
-                        options=list(range(len(opts))),
-                        format_func=lambda j, o=opts: o[j],
-                        key=radio_key,
-                        label_visibility="collapsed",
-                    )
-
-                    qk = f"{active_section_id}:{quiz_id}:{q_idx}"
-                    attempts = st.session_state["player_quiz_attempts"].get(qk, 0)
-                    already_correct = qk in st.session_state["player_quiz_correct"]
-
-                    if already_correct:
-                        st.success("Correct!")
-                    elif attempts >= 3:
-                        correct_text = opts[q["correct_index"]]
-                        st.info(f"Correct answer: **{correct_text}**")
-                    else:
-                        if st.button("Submit Answer", key=f"submit_ans_{qk}"):
-                            if chosen == q["correct_index"]:
-                                st.session_state["player_quiz_correct"].add(qk)
-                                st.rerun()
-                            else:
-                                new_attempts = attempts + 1
-                                st.session_state["player_quiz_attempts"][qk] = new_attempts
-                                if new_attempts < 3:
-                                    st.warning("Not quite — try again.")
-                                else:
-                                    st.rerun()  # rerun to reveal correct answer
-
-                    # Next → shown when correct or all attempts exhausted.
-                    if already_correct or attempts >= 3:
-                        if st.button("Next →", type="primary", key=f"next_{qk}"):
-                            if q_idx < len(questions) - 1:
-                                st.session_state["player_quiz_q_idx"] = q_idx + 1
-                            else:
-                                # Last question in this quiz — advance to next quiz.
-                                st.session_state["player_quiz_idx"] = quiz_idx + 1
-                                st.session_state["player_quiz_q_idx"] = 0
+                    if not questions:
+                        st.info("This quiz has no questions.")
+                        if st.button("Next →", key=f"skip_quiz_{quiz_id}"):
+                            st.session_state["player_quiz_idx"] = quiz_idx + 1
+                            st.session_state["player_quiz_q_idx"] = 0
                             st.rerun()
+                    else:
+                        # Clamp question index (safe guard against content changes).
+                        q_idx = min(
+                            st.session_state["player_quiz_q_idx"], len(questions) - 1
+                        )
+                        q = questions[q_idx]
+                        opts = q["options"]
 
-    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
+                        # Progress caption.
+                        n_quizzes = len(section_quiz_ids)
+                        if n_quizzes > 1:
+                            st.caption(
+                                f"Quiz {quiz_idx + 1} of {n_quizzes}"
+                                f" — Question {q_idx + 1} of {len(questions)}"
+                            )
+                        else:
+                            st.caption(f"Question {q_idx + 1} of {len(questions)}")
+
+                        if quiz.get("title"):
+                            st.subheader(quiz["title"])
+
+                        st.markdown(f"**{q['question']}**")
+
+                        radio_key = f"qsel_{active_section_id}_{quiz_id}_{q_idx}"
+                        chosen = st.radio(
+                            "Choose your answer:",
+                            options=list(range(len(opts))),
+                            format_func=lambda j, o=opts: o[j],
+                            key=radio_key,
+                            label_visibility="collapsed",
+                        )
+
+                        qk = f"{active_section_id}:{quiz_id}:{q_idx}"
+                        attempts = st.session_state["player_quiz_attempts"].get(qk, 0)
+                        already_correct = qk in st.session_state["player_quiz_correct"]
+
+                        if already_correct:
+                            st.success("Correct!")
+                        elif attempts >= 3:
+                            correct_text = opts[q["correct_index"]]
+                            st.info(f"Correct answer: **{correct_text}**")
+                        else:
+                            if st.button("Submit Answer", key=f"submit_ans_{qk}"):
+                                if chosen == q["correct_index"]:
+                                    st.session_state["player_quiz_correct"].add(qk)
+                                    st.rerun()
+                                else:
+                                    new_attempts = attempts + 1
+                                    st.session_state["player_quiz_attempts"][qk] = new_attempts
+                                    if new_attempts < 3:
+                                        st.warning("Not quite — try again.")
+                                    else:
+                                        st.rerun()  # rerun to reveal correct answer
+
+                        # Next → shown when correct or all attempts exhausted.
+                        if already_correct or attempts >= 3:
+                            if st.button("Next →", type="primary", key=f"next_{qk}"):
+                                if q_idx < len(questions) - 1:
+                                    st.session_state["player_quiz_q_idx"] = q_idx + 1
+                                else:
+                                    # Last question in this quiz — advance to next quiz.
+                                    st.session_state["player_quiz_idx"] = quiz_idx + 1
+                                    st.session_state["player_quiz_q_idx"] = 0
+                                st.rerun()
+
     _render_tutor_expander()
 
 # ── REFLECTION ────────────────────────────────────────────────────────────────
 elif step == "reflection":
-    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
-    if not section_prompt_ids:
-        st.info("No reflection prompts for this section.")
-        if st.button("Continue to Complete →", type="primary"):
-            st.session_state["player_flow_step"] = "complete"
-            st.rerun()
-    else:
-        refl_idx = st.session_state["player_refl_idx"]
-
-        if refl_idx >= len(section_prompt_ids):
-            # All prompts answered — show continue.
+    with st.container(border=True):
+        if not section_prompt_ids:
+            st.info("No reflection prompts for this section.")
             if st.button("Continue to Complete →", type="primary"):
                 st.session_state["player_flow_step"] = "complete"
                 st.rerun()
         else:
-            # Clamp (safe guard against content changes).
-            refl_idx = min(refl_idx, len(section_prompt_ids) - 1)
-            prompt_id = section_prompt_ids[refl_idx]
-            question = _PROMPT_QUESTIONS.get(
-                prompt_id,
-                prompt_id.replace("_", " ").capitalize(),
-            )
+            refl_idx = st.session_state["player_refl_idx"]
 
-            st.caption(f"Reflection {refl_idx + 1} of {len(section_prompt_ids)}")
-            st.markdown(f"**{question}**")
+            if refl_idx >= len(section_prompt_ids):
+                # All prompts answered — show continue.
+                if st.button("Continue to Complete →", type="primary"):
+                    st.session_state["player_flow_step"] = "complete"
+                    st.rerun()
+            else:
+                # Clamp (safe guard against content changes).
+                refl_idx = min(refl_idx, len(section_prompt_ids) - 1)
+                prompt_id = section_prompt_ids[refl_idx]
+                question = _PROMPT_QUESTIONS.get(
+                    prompt_id,
+                    prompt_id.replace("_", " ").capitalize(),
+                )
 
-            txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
-            st.text_area(
-                label=f"Prompt {refl_idx + 1}",
-                key=txt_key,
-                height=120,
-                placeholder="Write your response here…",
-                label_visibility="collapsed",
-            )
+                st.caption(f"Reflection {refl_idx + 1} of {len(section_prompt_ids)}")
+                st.markdown(f"**{question}**")
 
-            if st.button(
-                "Save & Continue →",
-                type="primary",
-                key=f"refl_save_{active_section_id}_{refl_idx}",
-            ):
-                current_text = st.session_state.get(txt_key, "").strip()
-                if current_text:
-                    try:
-                        save_reflection_response(
-                            lead_id,
-                            COURSE_ID,
-                            active_section_id,
-                            refl_idx,
-                            current_text,
-                            created_at=datetime.now(timezone.utc).isoformat(),
-                            db_path=DB_PATH,
-                        )
-                        st.session_state["player_refl_idx"] = refl_idx + 1
-                        st.rerun()
-                    except Exception:
-                        logging.exception("Error saving reflection response")
-                        st.error("Could not save. Please try again.")
-                else:
-                    st.warning("Please write something before continuing.")
-    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
+                txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
+                st.text_area(
+                    label=f"Prompt {refl_idx + 1}",
+                    key=txt_key,
+                    height=120,
+                    placeholder="Write your response here…",
+                    label_visibility="collapsed",
+                )
+
+                if st.button(
+                    "Save & Continue →",
+                    type="primary",
+                    key=f"refl_save_{active_section_id}_{refl_idx}",
+                ):
+                    current_text = st.session_state.get(txt_key, "").strip()
+                    if current_text:
+                        try:
+                            save_reflection_response(
+                                lead_id,
+                                COURSE_ID,
+                                active_section_id,
+                                refl_idx,
+                                current_text,
+                                created_at=datetime.now(timezone.utc).isoformat(),
+                                db_path=DB_PATH,
+                            )
+                            st.session_state["player_refl_idx"] = refl_idx + 1
+                            st.rerun()
+                        except Exception:
+                            logging.exception("Error saving reflection response")
+                            st.error("Could not save. Please try again.")
+                    else:
+                        st.warning("Please write something before continuing.")
 
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
-    st.markdown(_CARD_OPEN, unsafe_allow_html=True)
-    st.success(f"You've worked through all the content for **{active_title}**!")
-    st.markdown(
-        "Click **Mark Complete** below to record your progress, "
-        "then select another section from the left panel."
-    )
+    with st.container(border=True):
+        st.success(f"You've worked through all the content for **{active_title}**!")
+        st.markdown(
+            "Click **Mark Complete** below to record your progress, "
+            "then select another section from the left panel."
+        )
 
-    if st.button("Mark Complete", type="primary"):
-        occurred_at = datetime.now(timezone.utc).isoformat()
-        event_id = f"{lead_id}:{active_section_id}"
-        try:
-            upsert_lead(lead_id, db_path=DB_PATH)
-            record_progress_event(
-                event_id,
-                lead_id,
-                active_section_id,
-                occurred_at=occurred_at,
-                db_path=DB_PATH,
-            )
-            compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH)
-            updated_status = get_lead_status(lead_id, db_path=DB_PATH)
-            st.session_state["player_status"] = updated_status
-            st.session_state["player_completed"].add(active_section_id)
-            st.session_state["player_flash"] = (
-                "success",
-                f"\u2713 '{active_title}' marked complete.",
-            )
+        if st.button("Mark Complete", type="primary"):
+            occurred_at = datetime.now(timezone.utc).isoformat()
+            event_id = f"{lead_id}:{active_section_id}"
+            try:
+                upsert_lead(lead_id, db_path=DB_PATH)
+                record_progress_event(
+                    event_id,
+                    lead_id,
+                    active_section_id,
+                    occurred_at=occurred_at,
+                    db_path=DB_PATH,
+                )
+                compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH)
+                updated_status = get_lead_status(lead_id, db_path=DB_PATH)
+                st.session_state["player_status"] = updated_status
+                st.session_state["player_completed"].add(active_section_id)
+                st.session_state["player_flash"] = (
+                    "success",
+                    f"\u2713 '{active_title}' marked complete.",
+                )
+                st.rerun()
+            except ValueError:
+                logging.exception("ValueError marking %s complete", active_section_id)
+                st.error("Cannot record completion: unrecognised section.")
+            except sqlite3.OperationalError:
+                st.error("Could not save progress. Check that tmp/app.db is accessible.")
+            except Exception:
+                logging.exception("Unexpected error in Mark Complete")
+                st.error("An unexpected error occurred. See console for details.")
+
+        st.markdown("---")
+        if st.button("← Restart this Section"):
+            st.session_state["player_flow_step"] = "welcome"
+            st.session_state["player_flow_chunk_idx"] = 0
             st.rerun()
-        except ValueError:
-            logging.exception("ValueError marking %s complete", active_section_id)
-            st.error("Cannot record completion: unrecognised section.")
-        except sqlite3.OperationalError:
-            st.error("Could not save progress. Check that tmp/app.db is accessible.")
-        except Exception:
-            logging.exception("Unexpected error in Mark Complete")
-            st.error("An unexpected error occurred. See console for details.")
-
-    st.markdown("---")
-    if st.button("← Restart this Section"):
-        st.session_state["player_flow_step"] = "welcome"
-        st.session_state["player_flow_chunk_idx"] = 0
-        st.rerun()
-    st.markdown(_CARD_CLOSE, unsafe_allow_html=True)
