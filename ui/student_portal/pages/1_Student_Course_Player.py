@@ -46,6 +46,58 @@ COURSE_CONTENT_DIR = REPO_ROOT / "course_content" / "FREE_INTRO_AI_V0"
 COURSE_ID = "FREE_INTRO_AI_V0"
 EM_DASH = "\u2014"
 
+
+# ── Progress helpers ──────────────────────────────────────────────────────────
+def _status_completed_sections(status: dict | None) -> set[str]:
+    """Extract completed section IDs from a get_lead_status payload (best-effort)."""
+    if not status or not status.get("lead_exists"):
+        return set()
+    cs = status.get("course_state") or {}
+    out: set[str] = set()
+    for c in [
+        cs.get("completed_sections"), cs.get("completed"),
+        status.get("completed_sections"), status.get("completed"),
+    ]:
+        if isinstance(c, (list, tuple, set)):
+            out |= {str(x) for x in c}
+        elif isinstance(c, dict):
+            out |= {str(k) for k, v in c.items() if v is True}
+    return out
+
+
+def _allowed_max_idx(completed: set[str]) -> int:
+    """Furthest section index accessible = length of consecutive completion prefix from 0."""
+    sid_to_idx = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
+    completed_idxs = {sid_to_idx[sid] for sid in completed if sid in sid_to_idx}
+    prefix_len = 0
+    while prefix_len < len(SECTIONS) and prefix_len in completed_idxs:
+        prefix_len += 1
+    return min(prefix_len, len(SECTIONS) - 1)
+
+
+def _completion_prefix_idx_from_status(status: dict | None) -> int:
+    """Fallback unlock/resume frontier derived from completion_pct.
+
+    Example: 22.22% with 9 sections => round(0.2222 * 9) = 2 => index 2 is the frontier.
+    """
+    try:
+        if not status or not status.get("lead_exists"):
+            return 0
+        cs = status.get("course_state") or {}
+        pct = cs.get("completion_pct")
+        if pct is None:
+            return 0
+        completed_count = int(round((float(pct) / 100.0) * max(1, len(SECTIONS))))
+        return max(0, min(len(SECTIONS) - 1, completed_count))
+    except Exception:
+        return 0
+
+
+def _unlocked_frontier_idx(completed: set[str], status: dict | None) -> int:
+    """Combine explicit completions + DB completion_pct fallback for the best resume point."""
+    return max(_allowed_max_idx(completed), _completion_prefix_idx_from_status(status))
+
+
 # Human-readable question text for each reflection prompt identifier.
 _PROMPT_QUESTIONS: dict[str, str] = {
     "confidence_start": (
@@ -228,7 +280,8 @@ with st.sidebar:
     # Apply deferred section navigation BEFORE the radio is instantiated.
     # (Setting _section_radio after the widget exists raises a Streamlit error.)
     if "_section_radio_pending" in st.session_state:
-        st.session_state["_section_radio"] = int(st.session_state["_section_radio_pending"])
+        _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
+        st.session_state["_section_radio"] = _pend
         del st.session_state["_section_radio_pending"]
 
     # Sections + progress only render once lead is entered AND course has started.
@@ -236,18 +289,17 @@ with st.sidebar:
         # Load status once per session (or after a lead change).
         if st.session_state["player_status"] is None:
             st.session_state["player_status"] = _fetch_status(lead_id)
+            # Hydrate completed sections from DB so locks + resume reflect real progress.
+            try:
+                _db_done = _status_completed_sections(st.session_state.get("player_status"))
+                if _db_done:
+                    st.session_state["player_completed"] |= set(_db_done)
+            except Exception:
+                pass
 
         st.subheader("Sections")
         completed: set[str] = st.session_state["player_completed"]
-
-        # Compute the furthest section the student may access.
-        # Only consecutive completion from index 0 counts (no skipping).
-        _sid_to_idx = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
-        _completed_idxs = {_sid_to_idx[sid] for sid in completed if sid in _sid_to_idx}
-        _prefix_len = 0
-        while _prefix_len < len(SECTIONS) and _prefix_len in _completed_idxs:
-            _prefix_len += 1
-        allowed_max_idx = min(_prefix_len, len(SECTIONS) - 1)
+        allowed_max_idx = _unlocked_frontier_idx(completed, st.session_state.get("player_status"))
 
         active_idx: int = st.radio(
             "Select a section",
@@ -369,18 +421,25 @@ if not st.session_state.get("player_course_started"):
                     except Exception:
                         status = None
 
-                resume_idx = 0
+                # Hydrate completed from DB, then resume to section after last completed.
+                try:
+                    _db_done = _status_completed_sections(status)
+                    if _db_done:
+                        st.session_state["player_completed"] |= set(_db_done)
+                except Exception:
+                    pass
+
+                resume_idx = _unlocked_frontier_idx(st.session_state.get("player_completed", set()), status)
+                # If DB current_section points further ahead, prefer it.
                 try:
                     cs = (status or {}).get("course_state") or {}
                     current_section = cs.get("current_section")
                     if current_section:
                         _idx_map = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
-                        resume_idx = _idx_map.get(current_section, 0)
-                        # Advance past sections already completed this session.
-                        if current_section in st.session_state.get("player_completed", set()):
-                            resume_idx = min(resume_idx + 1, len(SECTIONS) - 1)
+                        resume_idx = max(resume_idx, _idx_map.get(current_section, 0))
                 except Exception:
-                    resume_idx = 0
+                    pass
+                resume_idx = max(0, min(len(SECTIONS) - 1, int(resume_idx)))
 
                 st.session_state["player_course_started"] = True
                 st.session_state["player_flow_step"] = "lesson"
@@ -844,10 +903,29 @@ elif step == "complete":
                 updated_status = get_lead_status(lead_id, db_path=DB_PATH)
                 st.session_state["player_status"] = updated_status
                 st.session_state["player_completed"].add(active_section_id)
-                st.session_state["player_flash"] = (
-                    "success",
-                    f"\u2713 '{active_title}' marked complete.",
-                )
+                # Show unlock feedback when a new section becomes available.
+                try:
+                    _unlock_before = _allowed_max_idx(
+                        st.session_state["player_completed"] - {active_section_id}
+                    )
+                    _unlock_after = _allowed_max_idx(st.session_state["player_completed"])
+                    if _unlock_after > _unlock_before and _unlock_after < len(SECTIONS):
+                        _unlocked_title = SECTIONS[_unlock_after][1]
+                        try:
+                            st.toast(f"Unlocked: {_unlocked_title}")
+                        except Exception:
+                            pass
+                        st.session_state["player_flash"] = (
+                            "success", f"Unlocked: {_unlocked_title}"
+                        )
+                    else:
+                        st.session_state["player_flash"] = (
+                            "success", f"\u2713 '{active_title}' marked complete."
+                        )
+                except Exception:
+                    st.session_state["player_flash"] = (
+                        "success", f"\u2713 '{active_title}' marked complete."
+                    )
                 st.rerun()
             except ValueError:
                 logging.exception("ValueError marking %s complete", active_section_id)
