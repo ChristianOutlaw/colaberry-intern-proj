@@ -240,6 +240,15 @@ with st.sidebar:
         st.subheader("Sections")
         completed: set[str] = st.session_state["player_completed"]
 
+        # Compute the furthest section the student may access.
+        # Only consecutive completion from index 0 counts (no skipping).
+        _sid_to_idx = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
+        _completed_idxs = {_sid_to_idx[sid] for sid in completed if sid in _sid_to_idx}
+        _prefix_len = 0
+        while _prefix_len < len(SECTIONS) and _prefix_len in _completed_idxs:
+            _prefix_len += 1
+        allowed_max_idx = min(_prefix_len, len(SECTIONS) - 1)
+
         active_idx: int = st.radio(
             "Select a section",
             options=range(len(SECTIONS)),
@@ -247,15 +256,28 @@ with st.sidebar:
                 f"\u2713 {SECTIONS[i][1]}"
                 if SECTIONS[i][0] in completed
                 else (
-                    f"\u25b6 {SECTIONS[i][1]}"
-                    if i == st.session_state.get("_section_radio", 0)
-                    else SECTIONS[i][1]
+                    f"\U0001f512 {SECTIONS[i][1]}"
+                    if i > allowed_max_idx
+                    else (
+                        f"\u25b6 {SECTIONS[i][1]}"
+                        if i == st.session_state.get("_section_radio", 0)
+                        else SECTIONS[i][1]
+                    )
                 )
             ),
             key="_section_radio",
             label_visibility="collapsed",
         )
         active_section_id, active_title = SECTIONS[active_idx]
+
+        # Enforce lock: redirect back to the furthest allowed section.
+        if active_idx > allowed_max_idx:
+            st.session_state["_section_radio_pending"] = allowed_max_idx
+            st.session_state["player_flash"] = (
+                "info",
+                "Complete the current section to unlock the next one.",
+            )
+            st.rerun()
 
         # Reset tutor history when the student navigates to a new section.
         if active_section_id != st.session_state["tutor_section_id"]:
@@ -837,11 +859,18 @@ elif step == "complete":
                 st.error("An unexpected error occurred. See console for details.")
 
         st.markdown("---")
-        _next_idx = (active_idx + 1) % len(SECTIONS)
+        _has_next = active_idx < (len(SECTIONS) - 1)
+        _next_idx = active_idx + 1 if _has_next else None
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
 
         if not _already_completed:
             st.info("Mark the section complete to unlock the next section.")
+        elif _already_completed and not _has_next:
+            st.success("🎉 Course complete! You've finished all sections.")
+            if st.button("← Review this Section"):
+                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_chunk_idx"] = 0
+                st.rerun()
         else:
             if st.button("Go to next section →", type="primary"):
                 # Defer navigation: pending key is resolved before the radio renders.
