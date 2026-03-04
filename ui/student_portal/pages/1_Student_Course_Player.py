@@ -1119,6 +1119,16 @@ elif step == "complete":
                 st.session_state["player_status"] = updated_status
                 _hydrate_completed_from_status(updated_status)
                 st.session_state["player_completed"].add(active_section_id)
+                # Advance confirmed to the newly unlocked frontier so that the
+                # just-completed section no longer triggers the back-nav warning.
+                try:
+                    _new_frontier = _unlocked_frontier_idx(
+                        st.session_state.get("player_completed", set()),
+                        st.session_state.get("player_status"),
+                    )
+                    st.session_state["_section_radio_confirmed"] = int(_new_frontier)
+                except Exception:
+                    pass
                 # Show unlock feedback when a new section becomes available.
                 try:
                     _unlock_before = _allowed_max_idx(
@@ -1169,7 +1179,9 @@ elif step == "complete":
             if _has_next and st.button("Go to next section \u2192", type="primary"):
                 # Defer navigation: pending key is resolved before the radio renders.
                 st.session_state["_section_radio_pending"] = _next_idx
-                st.session_state["_section_radio_confirmed"] = int(_next_idx)
+                # confirmed stays at active_idx (where the student IS, not where they're going).
+                # Setting it to _next_idx would make the next rerun's intercept see active_idx < confirmed.
+                st.session_state["_section_radio_confirmed"] = int(active_idx)
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.session_state["player_quiz_idx"] = 0
