@@ -49,9 +49,27 @@ EM_DASH = "\u2014"
 
 # ── Hydration helper ──────────────────────────────────────────────────────────
 def _hydrate_completed_from_status(status: dict | None) -> None:
-    """Merge DB-completed sections into player_completed (never overwrites in-session work)."""
+    """Merge DB-completed sections into player_completed.
+
+    Some status payloads don't include explicit completed section IDs; in that
+    case, synthesize a completion prefix from completion_pct (best-effort).
+    """
     try:
         done = _status_completed_sections(status)
+
+        # Fallback: synthesize consecutive completed prefix from completion_pct.
+        if not done:
+            try:
+                if status and status.get("lead_exists"):
+                    cs = status.get("course_state") or {}
+                    pct = cs.get("completion_pct")
+                    if pct is not None:
+                        total = max(1, len(SECTIONS))
+                        completed_count = max(0, min(total, int(round((float(pct) / 100.0) * total))))
+                        done = {sid for sid, _t in SECTIONS[:completed_count]}
+            except Exception:
+                pass
+
         if done:
             st.session_state["player_completed"] |= set(done)
     except Exception:
@@ -386,7 +404,9 @@ with st.sidebar:
         else:
             cs = status["course_state"]
             pct = cs["completion_pct"] if cs["completion_pct"] is not None else 0.0
-            current = cs["current_section"] or EM_DASH
+            _raw_current = cs["current_section"]
+            _sid_to_title = {sid: title for sid, title in SECTIONS}
+            current = _sid_to_title.get(_raw_current, _raw_current) if _raw_current else EM_DASH
             last_activity = cs["last_activity_at"] or EM_DASH
 
         st.metric("Completion", f"{pct:.2f} %")
@@ -417,13 +437,16 @@ if st.session_state.get("_backnav_pending_idx") is not None:
 
     with st.container(border=True):
         st.warning(
-            f"You selected **{_target_title}** (a previously completed section).\n\n"
-            "If you continue, **all progress after this section will be reset and relocked** "
-            "(completed checkmarks, quizzes, and reflections for later sections)."
+            f"### Jump back to **{_target_title}**?\n"
+            "You've already completed this section. If you continue:\n\n"
+            "\u2022 Sections after this one will be **reset and relocked**\n"
+            "\u2022 Later quiz/reflection progress will be **cleared**\n"
+            "\u2022 Your saved progress will roll back to this point\n\n"
+            "**This action can't be undone.**"
         )
         _c1, _c2 = st.columns(2)
         with _c1:
-            if st.button("Continue and reset later progress", type="primary", key="btn_backnav_confirm"):
+            if st.button("Continue and reset progress", type="primary", key="btn_backnav_confirm"):
                 _keep = {
                     sid for i, (sid, _t) in enumerate(SECTIONS)
                     if i < _target_idx
