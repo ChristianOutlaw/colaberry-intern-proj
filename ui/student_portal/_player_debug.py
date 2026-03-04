@@ -29,6 +29,8 @@ def snap(session_state: dict, extra: dict | None = None) -> dict:
         "_section_radio_pending",
         "_section_radio_confirmed",
         "_backnav_pending_idx",
+        "_last_sidebar_idx",
+        "_suppress_backnav_once",
         "player_flash",
     ]
     out = {k: session_state.get(k) for k in keys if k in session_state}

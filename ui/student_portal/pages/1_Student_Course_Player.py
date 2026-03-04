@@ -394,7 +394,7 @@ if "_backnav_pending_idx" not in st.session_state:
 if "_suppress_backnav_once" not in st.session_state:
     st.session_state["_suppress_backnav_once"] = False
 if "_last_sidebar_idx" not in st.session_state:
-    st.session_state["_last_sidebar_idx"] = 0
+    st.session_state["_last_sidebar_idx"] = None
 
 # ---------------------------------------------------------------------------
 # Helper — fetch lead status
@@ -498,7 +498,7 @@ with st.sidebar:
         # Only trigger when the student *clicks* a previously completed section in the sidebar.
         # Prevents false warnings during internal reruns / pending navigation.
         _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
-        _last_idx      = int(st.session_state.get("_last_sidebar_idx", _confirmed_idx))
+        _last_idx      = st.session_state.get("_last_sidebar_idx")
         _has_pending   = "_section_radio_pending" in st.session_state
 
         # One-shot suppression: forward nav and Mark Complete set this flag before rerun.
@@ -513,7 +513,7 @@ with st.sidebar:
         else:
             # Only treat it as a sidebar click when the index actually changed AND
             # there is no internal pending navigation in flight.
-            _user_changed_sidebar = (active_idx != _last_idx) and (not _has_pending)
+            _user_changed_sidebar = (_last_idx is not None) and (active_idx != _last_idx) and (not _has_pending)
             _target_completed     = SECTIONS[active_idx][0] in st.session_state.get("player_completed", set())
 
             if _user_changed_sidebar and _target_completed and active_idx < _confirmed_idx:
@@ -525,7 +525,7 @@ with st.sidebar:
                     state=_dbg_snap(st.session_state, {"allowed_max_idx": int(allowed_max_idx)}),
                 )
                 st.session_state["_backnav_pending_idx"] = int(active_idx)
-                st.session_state["_section_radio_pending"] = _confirmed_idx
+                st.session_state["_section_radio_pending"] = int(_last_idx)
                 st.rerun()
 
         # Track last rendered sidebar selection (stabilises click detection).
