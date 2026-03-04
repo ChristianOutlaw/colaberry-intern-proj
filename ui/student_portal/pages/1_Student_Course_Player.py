@@ -8,6 +8,7 @@ Run from the repository root:
     streamlit run ui/student_portal/student_app.py
 """
 
+import json
 import logging
 import re
 import sqlite3
@@ -78,6 +79,99 @@ def _hydrate_completed_from_status(status: dict | None) -> None:
 
 def _clamp_section_idx(idx: int) -> int:
     return max(0, min(len(SECTIONS) - 1, int(idx)))
+
+
+# ── DB reset helpers ───────────────────────────────────────────────────────────
+def _db_table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    """Return column names for *table*, or empty set if table doesn't exist."""
+    try:
+        cur = conn.execute(f"PRAGMA table_info({table})")
+        return {row[1] for row in cur.fetchall()}
+    except Exception:
+        return set()
+
+
+def _try_insert_backnav_audit(conn: sqlite3.Connection, lead_id: str, target_idx: int) -> None:
+    """Append a row to backnav_audit if that table exists and has the expected columns."""
+    try:
+        cols = _db_table_columns(conn, "backnav_audit")
+        if not cols:
+            return
+        row: dict = {
+            "lead_id": lead_id,
+            "target_idx": target_idx,
+            "target_section_id": SECTIONS[target_idx][0] if 0 <= target_idx < len(SECTIONS) else None,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        row = {k: v for k, v in row.items() if k in cols}
+        if not row:
+            return
+        placeholders = ", ".join("?" for _ in row)
+        col_names = ", ".join(row.keys())
+        conn.execute(
+            f"INSERT INTO backnav_audit ({col_names}) VALUES ({placeholders})",
+            list(row.values()),
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
+def _reset_db_progress_from_idx(lead_id: str, target_idx: int) -> None:
+    """Schema-agnostic DB reset: delete per-section rows beyond target_idx,
+    update course_state JSON, and log a backnav_audit row (best-effort)."""
+    if not lead_id:
+        return
+    sections_to_reset = [sid for sid, _t in SECTIONS[target_idx:]]
+    if not sections_to_reset:
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        # ── Delete per-section rows in any table that has section_id + lead_id ──
+        for table in ["progress_events", "quiz_attempts", "reflection_responses"]:
+            cols = _db_table_columns(conn, table)
+            if "lead_id" in cols and "section_id" in cols:
+                placeholders = ", ".join("?" for _ in sections_to_reset)
+                conn.execute(
+                    f"DELETE FROM {table} WHERE lead_id = ? AND section_id IN ({placeholders})",
+                    [lead_id, *sections_to_reset],
+                )
+        # ── Patch course_state JSON on the leads/course_enrollments row ──
+        for table in ["course_enrollments", "leads"]:
+            cols = _db_table_columns(conn, table)
+            if "lead_id" in cols and "course_state" in cols:
+                row = conn.execute(
+                    f"SELECT course_state FROM {table} WHERE lead_id = ?", [lead_id]
+                ).fetchone()
+                if row:
+                    try:
+                        cs = json.loads(row[0] or "{}")
+                    except Exception:
+                        cs = {}
+                    # Remove reset sections from completed lists.
+                    for key in ["completed_sections", "completed"]:
+                        if isinstance(cs.get(key), list):
+                            cs[key] = [s for s in cs[key] if s not in sections_to_reset]
+                    # Roll back current_section to target.
+                    target_sid = SECTIONS[target_idx][0] if target_idx < len(SECTIONS) else None
+                    if target_sid:
+                        cs["current_section"] = target_sid
+                    conn.execute(
+                        f"UPDATE {table} SET course_state = ? WHERE lead_id = ?",
+                        [json.dumps(cs), lead_id],
+                    )
+                break  # only patch the first matching table
+        # ── Recompute canonical course_state via compute_course_state ──
+        try:
+            compute_course_state(lead_id=lead_id, db_path=DB_PATH)
+        except Exception:
+            pass
+        # ── Audit log ──
+        _try_insert_backnav_audit(conn, lead_id, target_idx)
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────
@@ -453,6 +547,12 @@ if st.session_state.get("_backnav_pending_idx") is not None:
                     and sid in st.session_state.get("player_completed", set())
                 }
                 st.session_state["player_completed"] = set(_keep)
+                _reset_db_progress_from_idx(lead_id, _target_idx)
+                try:
+                    st.session_state["player_status"] = get_lead_status(lead_id, db_path=DB_PATH)
+                    _hydrate_completed_from_status(st.session_state.get("player_status"))
+                except Exception:
+                    pass
                 st.session_state["_section_radio_confirmed"] = _target_idx
                 st.session_state["_section_radio_pending"] = _target_idx
                 st.session_state["player_flow_step"] = "lesson"
