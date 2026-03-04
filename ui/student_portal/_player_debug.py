@@ -16,7 +16,7 @@ def log(event: str, **data):
         return
     payload = {"ts": _now(), "event": event, **data}
     # one-line JSON for easy grepping
-    print("[PLAYER_DEBUG] " + json.dumps(payload, ensure_ascii=False))
+    print("[PLAYER_DEBUG] " + json.dumps(payload, ensure_ascii=True))
 
 
 def snap(session_state: dict, extra: dict | None = None) -> dict:
