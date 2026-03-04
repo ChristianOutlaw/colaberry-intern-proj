@@ -454,9 +454,11 @@ with st.sidebar:
 
         # Apply deferred section navigation BEFORE the radio is instantiated.
         # (Setting _section_radio after the widget exists raises a Streamlit error.)
+        _pending_applied_this_run = False
         if "_section_radio_pending" in st.session_state:
             _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
             st.session_state["_section_radio"] = _pend
+            _pending_applied_this_run = True
             del st.session_state["_section_radio_pending"]
             # PLAYER_DEBUG: pending-apply log
             _dbg_log(
@@ -504,7 +506,7 @@ with st.sidebar:
             _user_changed_sidebar = (active_idx != _last_idx) and (not _has_pending_nav)
             _target_completed = active_section_id in st.session_state.get("player_completed", set())
 
-            if _user_changed_sidebar and _target_completed and (active_idx < _confirmed_idx):
+            if (not _pending_applied_this_run) and _user_changed_sidebar and _target_completed and (active_idx < _confirmed_idx):
                 st.session_state["_backnav_pending_idx"] = int(active_idx)
                 st.session_state["_section_radio_pending"] = _confirmed_idx
                 st.rerun()
@@ -1158,6 +1160,7 @@ elif step == "complete":
                 _hydrate_completed_from_status(updated_status)
                 st.session_state["player_completed"].add(active_section_id)
                 # Suppress intercept on the immediate Mark Complete rerun (student stays on same section).
+                st.session_state["_backnav_pending_idx"] = None
                 st.session_state["_suppress_backnav_once"] = True
                 # PLAYER_DEBUG: mark-complete log
                 _dbg_log(
@@ -1223,6 +1226,7 @@ elif step == "complete":
                     state=_dbg_snap(st.session_state),
                 )
                 # Suppress intercept on the immediate rerun (internal forward navigation).
+                st.session_state["_backnav_pending_idx"] = None
                 st.session_state["_suppress_backnav_once"] = True
                 # Defer navigation: pending key is resolved before the radio renders.
                 st.session_state["_section_radio_pending"] = _next_idx
