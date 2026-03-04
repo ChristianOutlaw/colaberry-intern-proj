@@ -394,7 +394,7 @@ if "_backnav_pending_idx" not in st.session_state:
 if "_suppress_backnav_once" not in st.session_state:
     st.session_state["_suppress_backnav_once"] = False
 if "_last_sidebar_idx" not in st.session_state:
-    st.session_state["_last_sidebar_idx"] = None
+    st.session_state["_last_sidebar_idx"] = 0
 
 # ---------------------------------------------------------------------------
 # Helper — fetch lead status
@@ -462,6 +462,7 @@ with st.sidebar:
             _pending_applied_this_run = True
             del st.session_state["_section_radio_pending"]
             # IMPORTANT: this change was internal, not a user click.
+            st.session_state["_backnav_pending_idx"] = None
             st.session_state["_suppress_backnav_once"] = True
             st.session_state["_last_sidebar_idx"] = int(_applied)
             # PLAYER_DEBUG: pending-apply log
