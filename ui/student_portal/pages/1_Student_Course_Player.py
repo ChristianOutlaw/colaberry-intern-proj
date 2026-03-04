@@ -38,6 +38,7 @@ from execution.reflection.load_reflection_responses import load_reflection_respo
 from execution.reflection.save_reflection_response import save_reflection_response   # noqa: E402
 from ui.theme import apply_colaberry_theme                                          # noqa: E402
 from ui.student_portal.ai_tutor import generate_tutor_reply                         # noqa: E402
+from ui.student_portal._player_debug import log as _dbg_log, snap as _dbg_snap, enabled as _dbg_enabled  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -409,6 +410,11 @@ def _fetch_status(lid: str) -> dict | None:
 # Sidebar — Lead ID + Sections + Progress
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    # PLAYER_DEBUG: sidebar expander
+    if _dbg_enabled():
+        with st.expander("Debug: Player state", expanded=False):
+            st.json(_dbg_snap(st.session_state))
+
     st.title("Course Player")
     lead_id = st.text_input(
         "Lead ID",
@@ -429,6 +435,14 @@ with st.sidebar:
         _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
         st.session_state["_section_radio"] = _pend
         del st.session_state["_section_radio_pending"]
+        # PLAYER_DEBUG: pending-apply log
+        _dbg_log(
+            "pending_applied",
+            applied_section=int(st.session_state.get("_section_radio", -1)),
+            pending_was=int(_pend),
+            frontier=int(_frontier) if "_frontier" in dir() else None,
+            state=_dbg_snap(st.session_state),
+        )
 
     # Sections + progress only render once lead is entered AND course has started.
     if lead_id and st.session_state.get("player_course_started"):
@@ -440,6 +454,13 @@ with st.sidebar:
         st.subheader("Sections")
         completed: set[str] = st.session_state["player_completed"]
         allowed_max_idx = int(_unlocked_frontier_idx(completed, st.session_state.get("player_status")))
+        # PLAYER_DEBUG: allowed_max_idx log
+        _dbg_log(
+            "frontier_computed",
+            allowed_max_idx=int(allowed_max_idx),
+            completed_count=len(completed),
+            state=_dbg_snap(st.session_state),
+        )
 
         active_idx: int = st.radio(
             "Select a section",
@@ -476,6 +497,16 @@ with st.sidebar:
             active_idx < _prev_confirmed_idx
             and SECTIONS[active_idx][0] in st.session_state.get("player_completed", set())
         ):
+            # PLAYER_DEBUG: backnav intercept tripped log
+            _dbg_log(
+                "backnav_intercept_TRIPPED",
+                active_idx=int(active_idx),
+                prev_confirmed_idx=int(_prev_confirmed_idx),
+                confirmed_idx=int(_confirmed_idx),
+                active_section_id=active_section_id,
+                note="True back-nav: student clicked a previously completed section.",
+                state=_dbg_snap(st.session_state, {"allowed_max_idx": int(allowed_max_idx)}),
+            )
             st.session_state["_backnav_pending_idx"] = int(active_idx)
             st.session_state["_section_radio_pending"] = int(_prev_confirmed_idx)
             st.rerun()
@@ -1124,6 +1155,13 @@ elif step == "complete":
                 st.session_state["player_status"] = updated_status
                 _hydrate_completed_from_status(updated_status)
                 st.session_state["player_completed"].add(active_section_id)
+                # PLAYER_DEBUG: mark-complete log
+                _dbg_log(
+                    "marked_complete",
+                    active_idx=int(active_idx),
+                    active_section_id=active_section_id,
+                    state=_dbg_snap(st.session_state),
+                )
                 # Show unlock feedback when a new section becomes available.
                 try:
                     _unlock_before = _allowed_max_idx(
@@ -1172,6 +1210,14 @@ elif step == "complete":
                 st.rerun()
         else:
             if _has_next and st.button("Go to next section \u2192", type="primary"):
+                # PLAYER_DEBUG: next-section click log
+                _dbg_log(
+                    "next_section_clicked",
+                    from_active_idx=int(active_idx),
+                    to_next_idx=int(_next_idx),
+                    flow_step=st.session_state.get("player_flow_step"),
+                    state=_dbg_snap(st.session_state),
+                )
                 # Defer navigation: pending key is resolved before the radio renders.
                 st.session_state["_section_radio_pending"] = _next_idx
                 st.session_state["player_flow_step"] = "lesson"
