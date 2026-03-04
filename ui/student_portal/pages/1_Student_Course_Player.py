@@ -457,13 +457,17 @@ with st.sidebar:
         _pending_applied_this_run = False
         if "_section_radio_pending" in st.session_state:
             _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
-            st.session_state["_section_radio"] = _pend
+            _applied = min(_pend, int(allowed_max_idx))
+            st.session_state["_section_radio"] = _applied
             _pending_applied_this_run = True
             del st.session_state["_section_radio_pending"]
+            # IMPORTANT: this change was internal, not a user click.
+            st.session_state["_suppress_backnav_once"] = True
+            st.session_state["_last_sidebar_idx"] = int(_applied)
             # PLAYER_DEBUG: pending-apply log
             _dbg_log(
                 "pending_applied",
-                applied_section=int(st.session_state.get("_section_radio", -1)),
+                applied_section=int(_applied),
                 pending_was=int(_pend),
                 state=_dbg_snap(st.session_state),
             )
@@ -501,7 +505,10 @@ with st.sidebar:
         if st.session_state.get("_suppress_backnav_once"):
             st.session_state["_suppress_backnav_once"] = False
         else:
-            _last_idx = int(st.session_state.get("_last_sidebar_idx", active_idx))
+            _last_idx_raw = st.session_state.get("_last_sidebar_idx", active_idx)
+            if _last_idx_raw is None:
+                _last_idx_raw = active_idx
+            _last_idx = int(_last_idx_raw)
             _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
             _user_changed_sidebar = (active_idx != _last_idx) and (not _has_pending_nav)
             _target_completed = active_section_id in st.session_state.get("player_completed", set())
