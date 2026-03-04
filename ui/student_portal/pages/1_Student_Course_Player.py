@@ -427,18 +427,7 @@ with st.sidebar:
     # (Setting _section_radio after the widget exists raises a Streamlit error.)
     if "_section_radio_pending" in st.session_state:
         _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
-        _frontier = _unlocked_frontier_idx(
-            st.session_state.get("player_completed", set()),
-            st.session_state.get("player_status"),
-        )
-        # Apply the pending selection, but never beyond the unlocked frontier.
-        # IMPORTANT: also advance "_section_radio_confirmed" ONLY after the radio value
-        # is actually applied (i.e., on real navigation), not when a section is merely completed.
-        st.session_state["_section_radio"] = min(_pend, int(_frontier))
-        st.session_state["_section_radio_confirmed"] = max(
-            int(st.session_state.get("_section_radio_confirmed", 0)),
-            int(st.session_state["_section_radio"]),
-        )
+        st.session_state["_section_radio"] = _pend
         del st.session_state["_section_radio_pending"]
 
     # Sections + progress only render once lead is entered AND course has started.
@@ -473,13 +462,22 @@ with st.sidebar:
         )
         active_section_id, active_title = SECTIONS[active_idx]
 
+        # Keep "confirmed" aligned with where the UI has actually landed.
+        # This prevents false back-nav warnings during forward navigation/reruns.
+        _prev_confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
+        if active_idx > _prev_confirmed_idx:
+            st.session_state["_section_radio_confirmed"] = int(active_idx)
+
         # Back-nav confirmation intercept:
-        # If student clicks a previously completed section, stash the intent and bounce
-        # the radio back — confirmation UI will be rendered in the main area.
+        # Only trigger when the student selects an earlier section they've already
+        # completed — not during forward navigation or reruns.
         _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
-        if active_idx < _confirmed_idx:
+        if (
+            active_idx < _prev_confirmed_idx
+            and SECTIONS[active_idx][0] in st.session_state.get("player_completed", set())
+        ):
             st.session_state["_backnav_pending_idx"] = int(active_idx)
-            st.session_state["_section_radio_pending"] = _confirmed_idx
+            st.session_state["_section_radio_pending"] = int(_prev_confirmed_idx)
             st.rerun()
 
         # Enforce lock: redirect back to the furthest allowed section.
