@@ -82,92 +82,106 @@ def _clamp_section_idx(idx: int) -> int:
 
 
 # ── DB reset helpers ───────────────────────────────────────────────────────────
-def _db_table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    """Return column names for *table*, or empty set if table doesn't exist."""
-    try:
-        cur = conn.execute(f"PRAGMA table_info({table})")
-        return {row[1] for row in cur.fetchall()}
-    except Exception:
-        return set()
+
+_BACKNAV_AUDIT_DDL = """
+CREATE TABLE IF NOT EXISTS backnav_audit (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id         TEXT    NOT NULL,
+    from_section_id TEXT,
+    to_section_id   TEXT,
+    from_idx        INTEGER,
+    to_idx          INTEGER,
+    occurred_at     TEXT    NOT NULL,
+    metadata_json   TEXT
+)"""
 
 
-def _try_insert_backnav_audit(conn: sqlite3.Connection, lead_id: str, target_idx: int) -> None:
-    """Append a row to backnav_audit if that table exists and has the expected columns."""
-    try:
-        cols = _db_table_columns(conn, "backnav_audit")
-        if not cols:
-            return
-        row: dict = {
-            "lead_id": lead_id,
-            "target_idx": target_idx,
-            "target_section_id": SECTIONS[target_idx][0] if 0 <= target_idx < len(SECTIONS) else None,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        }
-        row = {k: v for k, v in row.items() if k in cols}
-        if not row:
-            return
-        placeholders = ", ".join("?" for _ in row)
-        col_names = ", ".join(row.keys())
-        conn.execute(
-            f"INSERT INTO backnav_audit ({col_names}) VALUES ({placeholders})",
-            list(row.values()),
-        )
-        conn.commit()
-    except Exception:
-        pass
+def _reset_db_progress_from_idx(lead_id: str, from_idx: int, to_idx: int) -> None:
+    """Reset DB progress for a back-navigation confirm.
 
+    Deletes progress_events and reflection_responses for sections at to_idx and
+    beyond (the student will redo those), then directly updates course_state so
+    current_section points to the target and completion_pct reflects the
+    remaining prefix. Creates backnav_audit if missing and logs one row.
 
-def _reset_db_progress_from_idx(lead_id: str, target_idx: int) -> None:
-    """Schema-agnostic DB reset: delete per-section rows beyond target_idx,
-    update course_state JSON, and log a backnav_audit row (best-effort)."""
+    Schema note (actual DB):
+      progress_events  — column is "section"  (not section_id)
+      reflection_responses — column is "section_id"
+      course_state     — separate table (not a JSON blob in leads)
+
+    Args:
+        lead_id:  Lead whose progress is being reset.
+        from_idx: Furthest confirmed section index before the reset (for audit).
+        to_idx:   Target section index the student is jumping back to.
+    """
     if not lead_id:
         return
-    sections_to_reset = [sid for sid, _t in SECTIONS[target_idx:]]
-    if not sections_to_reset:
-        return
+    sections_to_delete = [sid for sid, _t in SECTIONS[to_idx:]]
+    target_sid = SECTIONS[to_idx][0] if to_idx < len(SECTIONS) else None
+    from_sid   = SECTIONS[from_idx][0] if 0 <= from_idx < len(SECTIONS) else None
+    now_iso    = datetime.now(timezone.utc).isoformat()
     try:
         conn = sqlite3.connect(DB_PATH)
-        # ── Delete per-section rows in any table that has section_id + lead_id ──
-        for table in ["progress_events", "quiz_attempts", "reflection_responses"]:
-            cols = _db_table_columns(conn, table)
-            if "lead_id" in cols and "section_id" in cols:
-                placeholders = ", ".join("?" for _ in sections_to_reset)
-                conn.execute(
-                    f"DELETE FROM {table} WHERE lead_id = ? AND section_id IN ({placeholders})",
-                    [lead_id, *sections_to_reset],
-                )
-        # ── Patch course_state JSON on the leads/course_enrollments row ──
-        for table in ["course_enrollments", "leads"]:
-            cols = _db_table_columns(conn, table)
-            if "lead_id" in cols and "course_state" in cols:
-                row = conn.execute(
-                    f"SELECT course_state FROM {table} WHERE lead_id = ?", [lead_id]
-                ).fetchone()
-                if row:
-                    try:
-                        cs = json.loads(row[0] or "{}")
-                    except Exception:
-                        cs = {}
-                    # Remove reset sections from completed lists.
-                    for key in ["completed_sections", "completed"]:
-                        if isinstance(cs.get(key), list):
-                            cs[key] = [s for s in cs[key] if s not in sections_to_reset]
-                    # Roll back current_section to target.
-                    target_sid = SECTIONS[target_idx][0] if target_idx < len(SECTIONS) else None
-                    if target_sid:
-                        cs["current_section"] = target_sid
-                    conn.execute(
-                        f"UPDATE {table} SET course_state = ? WHERE lead_id = ?",
-                        [json.dumps(cs), lead_id],
-                    )
-                break  # only patch the first matching table
-        # ── Recompute canonical course_state via compute_course_state ──
-        try:
-            compute_course_state(lead_id=lead_id, db_path=DB_PATH)
-        except Exception:
-            pass
-        # ── Audit log ──
-        _try_insert_backnav_audit(conn, lead_id, target_idx)
+
+        if sections_to_delete:
+            ph = ", ".join("?" for _ in sections_to_delete)
+            # progress_events uses column "section" (singular, no _id suffix)
+            conn.execute(
+                f"DELETE FROM progress_events WHERE lead_id = ? AND section IN ({ph})",
+                [lead_id, *sections_to_delete],
+            )
+            # reflection_responses uses column "section_id"
+            conn.execute(
+                f"DELETE FROM reflection_responses WHERE lead_id = ? AND section_id IN ({ph})",
+                [lead_id, *sections_to_delete],
+            )
+
+        # Recompute completion from whatever events remain.
+        remaining = conn.execute(
+            "SELECT section, occurred_at FROM progress_events "
+            "WHERE lead_id = ? ORDER BY occurred_at ASC",
+            [lead_id],
+        ).fetchall()
+        total = max(1, len(SECTIONS))
+        if remaining:
+            distinct_count = len({row[0] for row in remaining})
+            last_activity  = remaining[-1][1]
+            completion_pct = (distinct_count / total) * 100.0
+        else:
+            distinct_count = 0
+            last_activity  = None
+            completion_pct = 0.0
+
+        # course_state is a real table — update or insert directly.
+        existing = conn.execute(
+            "SELECT lead_id FROM course_state WHERE lead_id = ?", [lead_id]
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE course_state "
+                "SET current_section=?, completion_pct=?, last_activity_at=?, updated_at=? "
+                "WHERE lead_id=?",
+                [target_sid, completion_pct, last_activity, now_iso, lead_id],
+            )
+        else:
+            conn.execute(
+                "INSERT INTO course_state "
+                "(lead_id, current_section, completion_pct, last_activity_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [lead_id, target_sid, completion_pct, last_activity, now_iso],
+            )
+
+        # Ensure audit table exists, then log the reset.
+        conn.execute(_BACKNAV_AUDIT_DDL)
+        conn.execute(
+            "INSERT INTO backnav_audit "
+            "(lead_id, from_section_id, to_section_id, from_idx, to_idx, occurred_at, metadata_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                lead_id, from_sid, target_sid, from_idx, to_idx, now_iso,
+                json.dumps({"reason": "user_backnav_confirm", "ui": "student_course_player"}),
+            ],
+        )
         conn.commit()
         conn.close()
     except Exception:
@@ -547,7 +561,23 @@ if st.session_state.get("_backnav_pending_idx") is not None:
                     and sid in st.session_state.get("player_completed", set())
                 }
                 st.session_state["player_completed"] = set(_keep)
-                _reset_db_progress_from_idx(lead_id, _target_idx)
+                # Clear per-section animation + quiz-choice keys for reset sections.
+                _sids_reset = {sid for sid, _t in SECTIONS[_target_idx:]}
+                st.session_state["quiz_submitted"] = {
+                    k for k in st.session_state.get("quiz_submitted", set())
+                    if k.split(":")[0] not in _sids_reset
+                }
+                for _sk in [k for k in list(st.session_state.keys())
+                             if any(k.startswith(f"chunk_typed_{s}") or
+                                    k.startswith(f"welcome_typed_{s}") or
+                                    k.startswith(f"reflection_txt_{s}")
+                                    for s in _sids_reset)]:
+                    del st.session_state[_sk]
+                _reset_db_progress_from_idx(
+                    lead_id,
+                    from_idx=int(st.session_state.get("_section_radio_confirmed", _target_idx)),
+                    to_idx=_target_idx,
+                )
                 try:
                     st.session_state["player_status"] = get_lead_status(lead_id, db_path=DB_PATH)
                     _hydrate_completed_from_status(st.session_state.get("player_status"))
