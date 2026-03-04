@@ -434,21 +434,6 @@ with st.sidebar:
         st.session_state["player_lead_id"] = lead_id
         st.session_state["player_course_started"] = False
 
-    # Apply deferred section navigation BEFORE the radio is instantiated.
-    # (Setting _section_radio after the widget exists raises a Streamlit error.)
-    if "_section_radio_pending" in st.session_state:
-        _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
-        st.session_state["_section_radio"] = _pend
-        del st.session_state["_section_radio_pending"]
-        # PLAYER_DEBUG: pending-apply log
-        _dbg_log(
-            "pending_applied",
-            applied_section=int(st.session_state.get("_section_radio", -1)),
-            pending_was=int(_pend),
-            frontier=int(_frontier) if "_frontier" in dir() else None,
-            state=_dbg_snap(st.session_state),
-        )
-
     # Sections + progress only render once lead is entered AND course has started.
     if lead_id and st.session_state.get("player_course_started"):
         # Load status once per session (or after a lead change).
@@ -466,6 +451,20 @@ with st.sidebar:
             completed_count=len(completed),
             state=_dbg_snap(st.session_state),
         )
+
+        # Apply deferred section navigation BEFORE the radio is instantiated.
+        # (Setting _section_radio after the widget exists raises a Streamlit error.)
+        if "_section_radio_pending" in st.session_state:
+            _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
+            st.session_state["_section_radio"] = _pend
+            del st.session_state["_section_radio_pending"]
+            # PLAYER_DEBUG: pending-apply log
+            _dbg_log(
+                "pending_applied",
+                applied_section=int(st.session_state.get("_section_radio", -1)),
+                pending_was=int(_pend),
+                state=_dbg_snap(st.session_state),
+            )
 
         active_idx: int = st.radio(
             "Select a section",
@@ -488,52 +487,35 @@ with st.sidebar:
         )
         active_section_id, active_title = SECTIONS[active_idx]
 
-        # Keep "confirmed" aligned with where the UI has actually landed.
-        # This prevents false back-nav warnings during forward navigation/reruns.
-        _prev_confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
-        if active_idx > _prev_confirmed_idx:
-            st.session_state["_section_radio_confirmed"] = int(active_idx)
+        # Back-nav confirmation intercept:
+        # Only trigger on a REAL user click to a previously completed earlier section.
+        # Never trigger during internal reruns (pending nav) or one-shot suppression.
+        _has_pending_nav = "_section_radio_pending" in st.session_state
+        if _has_pending_nav:
+            # If an internal navigation is in-flight, kill any stale back-nav intent.
+            st.session_state["_backnav_pending_idx"] = None
 
-        # Back-nav confirmation intercept (user-driven only):
-        # Only trigger when the student *clicks* a previously completed section in the sidebar.
-        # Prevents false warnings during internal reruns / pending navigation.
-        _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
-        _last_idx      = st.session_state.get("_last_sidebar_idx")
-        _has_pending   = "_section_radio_pending" in st.session_state
-
-        # One-shot suppression: forward nav and Mark Complete set this flag before rerun.
+        # One-shot suppression for internal reruns (e.g., Mark Complete / Go to next section).
         if st.session_state.get("_suppress_backnav_once"):
-            _dbg_log(
-                "backnav_intercept_SUPPRESSED",
-                active_idx=int(active_idx),
-                confirmed_idx=int(_confirmed_idx),
-                state=_dbg_snap(st.session_state),
-            )
             st.session_state["_suppress_backnav_once"] = False
         else:
-            # Only treat it as a sidebar click when the index actually changed AND
-            # there is no internal pending navigation in flight.
-            _user_changed_sidebar = (_last_idx is not None) and (active_idx != _last_idx) and (not _has_pending)
-            _target_completed     = SECTIONS[active_idx][0] in st.session_state.get("player_completed", set())
+            _last_idx = int(st.session_state.get("_last_sidebar_idx", active_idx))
+            _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
+            _user_changed_sidebar = (active_idx != _last_idx) and (not _has_pending_nav)
+            _target_completed = active_section_id in st.session_state.get("player_completed", set())
 
-            if _user_changed_sidebar and _target_completed and active_idx < _confirmed_idx:
-                _dbg_log(
-                    "backnav_intercept_TRIPPED",
-                    active_idx=int(active_idx),
-                    confirmed_idx=int(_confirmed_idx),
-                    last_sidebar_idx=int(_last_idx),
-                    state=_dbg_snap(st.session_state, {"allowed_max_idx": int(allowed_max_idx)}),
-                )
+            if _user_changed_sidebar and _target_completed and (active_idx < _confirmed_idx):
                 st.session_state["_backnav_pending_idx"] = int(active_idx)
-                st.session_state["_section_radio_pending"] = int(_last_idx)
+                st.session_state["_section_radio_pending"] = _confirmed_idx
                 st.rerun()
 
-        # Track last rendered sidebar selection (stabilises click detection).
+        # Update last rendered sidebar idx at the end of sidebar logic (not a user action).
         st.session_state["_last_sidebar_idx"] = int(active_idx)
 
         # Enforce lock: redirect back to the furthest allowed section.
         if active_idx > allowed_max_idx:
             st.session_state["_section_radio_pending"] = allowed_max_idx
+            st.session_state["_suppress_backnav_once"] = True
             st.session_state["player_flash"] = (
                 "info",
                 "Complete the current section to unlock the next one.",
