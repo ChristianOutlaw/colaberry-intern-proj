@@ -342,6 +342,8 @@ st.markdown(
     }
     .cb-topbar-caption { font-size: 0.75rem; color: #5B5A59; margin: 0 0 2px; }
     .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
+    .cb-card-inner { max-width: 880px; margin: 0 auto; }
+    .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1260,6 +1262,7 @@ if step == "welcome":
 # ── LESSON ────────────────────────────────────────────────────────────────────
 elif step == "lesson":
     with st.container(border=True):
+        st.markdown('<div class="cb-card-inner">', unsafe_allow_html=True)
         st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
         _chunk_key = f"chunk_typed_{active_section_id}_{chunk_idx}"
         _chunk_ph = st.empty()
@@ -1298,14 +1301,9 @@ elif step == "lesson":
             fwd_label = "Continue →"
 
         st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
-        col_back, col_gap, col_fwd = st.columns([1, 1, 6])
-        with col_back:
-            if chunk_idx > 0:
-                if st.button("← Back", use_container_width=True):
-                    st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
-                    st.rerun()
-        with col_fwd:
-            if st.button(fwd_label, type="primary", use_container_width=True):
+        c_left, c_mid, c_right = st.columns([1, 6, 1])
+        with c_left:
+            if st.button(fwd_label, type="primary"):
                 if is_last_chunk:
                     if section_quiz_ids:
                         st.session_state["player_flow_step"] = "quiz"
@@ -1317,6 +1315,12 @@ elif step == "lesson":
                 else:
                     st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
                 st.rerun()
+        with c_right:
+            if chunk_idx > 0:
+                if st.button("← Back"):
+                    st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
+                    st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     _render_tutor_expander()
 
