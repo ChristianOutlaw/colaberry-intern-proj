@@ -1532,7 +1532,11 @@ elif step == "complete":
                 has_next=_has_next,
                 next_idx=int(_next_idx),
             )
-            _clicked_next = st.button("Go to next section \u2192", type="primary") if _has_next else False
+            if _has_next:
+                with st.form(key=f"next_section_form_{st.session_state.get('_section_radio_confirmed', active_idx)}"):
+                    _clicked_next = st.form_submit_button("Go to next section \u2192", type="primary")
+            else:
+                _clicked_next = False
             _dbg_log(
                 "next_section_clicked",
                 run_id=_RUN_ID,
