@@ -1187,7 +1187,7 @@ def _render_tutor_expander() -> None:
         )
         messages.append({"role": "assistant", "content": reply})
 
-    with st.expander("AI Tutor"):
+    with st.expander("AI Tutor", expanded=True):
         st.subheader("AI Tutor")
 
         # Quick-action buttons — 2 × 2 grid.
@@ -1260,7 +1260,7 @@ if step == "welcome":
 
 # ── LESSON ────────────────────────────────────────────────────────────────────
 elif step == "lesson":
-    _col_main, _col_tutor = st.columns([3, 2], gap="large")
+    _col_main, _col_tutor = st.columns([5, 3], gap="large")
     with _col_main:
         with st.container(border=True):
             st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
@@ -1321,11 +1321,12 @@ elif step == "lesson":
                         st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
                     st.rerun()
     with _col_tutor:
-        _render_tutor_expander()
+        with st.container(border=True):
+            _render_tutor_expander()
 
 # ── QUIZ ──────────────────────────────────────────────────────────────────────
 elif step == "quiz":
-    _col_main, _col_tutor = st.columns([3, 2], gap="large")
+    _col_main, _col_tutor = st.columns([5, 3], gap="large")
     with _col_main:
         with st.container(border=True):
             if not section_quiz_ids:
@@ -1426,11 +1427,12 @@ elif step == "quiz":
                                         st.session_state["player_quiz_q_idx"] = 0
                                     st.rerun()
     with _col_tutor:
-        _render_tutor_expander()
+        with st.container(border=True):
+            _render_tutor_expander()
 
 # ── REFLECTION ────────────────────────────────────────────────────────────────
 elif step == "reflection":
-    _col_main, _col_tutor = st.columns([3, 2], gap="large")
+    _col_main, _col_tutor = st.columns([5, 3], gap="large")
     with _col_main:
         with st.container(border=True):
             if not section_prompt_ids:
@@ -1492,7 +1494,8 @@ elif step == "reflection":
                         else:
                             st.warning("Please write something before continuing.")
     with _col_tutor:
-        _render_tutor_expander()
+        with st.container(border=True):
+            _render_tutor_expander()
 
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
