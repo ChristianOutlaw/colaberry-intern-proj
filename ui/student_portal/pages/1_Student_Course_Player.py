@@ -344,6 +344,12 @@ st.markdown(
     .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
     .cb-card-inner { max-width: 640px; margin: 0 auto; }
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    section.main > div {
+        max-width: 1100px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .cb-card-inner p { line-height: 1.7; }
     </style>
     """,
     unsafe_allow_html=True,
