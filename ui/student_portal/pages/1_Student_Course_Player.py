@@ -342,8 +342,6 @@ st.markdown(
     }
     .cb-topbar-caption { font-size: 0.75rem; color: #5B5A59; margin: 0 0 2px; }
     .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
-    .cb-tutor-messages { max-height: 420px; overflow-y: auto; padding-right: 8px; }
-    .cb-tutor-input   { margin-top: 8px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1190,68 +1188,39 @@ def _render_tutor_expander() -> None:
             )
         messages.append({"role": "assistant", "content": reply})
 
-    with st.container(border=True):
-        # Header row: "AI Tutor (On/Off)" label + collapse toggle.
-        _hdr_left, _hdr_right = st.columns([3, 1])
-        with _hdr_left:
-            _open_now = st.session_state.get(f"tutor_open_{active_section_id}", True)
-            st.markdown(f"**AI Tutor** ({'On' if _open_now else 'Off'})")
-        with _hdr_right:
-            _tutor_open = st.toggle(
-                "Tutor",
-                value=True,
-                key=f"tutor_open_{active_section_id}",
-                label_visibility="collapsed",
-            )
+    with st.expander("AI Tutor", expanded=False):
+        # Quick-action buttons — 2 × 2 grid.
+        # Each button directly calls the tutor in-place; the implicit Streamlit
+        # rerun from the button click re-renders the updated chat history.
+        # No tutor_pending / extra st.rerun() needed here.
+        b_left, b_right = st.columns(2)
+        with b_left:
+            if st.button("Summarize", use_container_width=True, key="btn_summarize"):
+                _call_tutor("Summarize this section for me.")
+            if st.button("Give me an example", use_container_width=True, key="btn_example"):
+                _call_tutor("Give me a concrete example of the key ideas in this section.")
+        with b_right:
+            if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
+                _call_tutor("Explain this section like I'm completely new to the topic.")
+            if st.button(
+                "Quiz me (2 questions)", use_container_width=True, key="btn_quiz"
+            ):
+                _call_tutor("Quiz me with 2 questions about this section.")
 
-        if _tutor_open:
-            # Context caption: Section • Part (lesson only) • step
-            _ctx = f"Section {active_idx + 1}"
-            if step == "lesson" and n_chunks > 1:
-                _ctx += f" • Part {chunk_idx + 1}/{n_chunks}"
-            _ctx += f" • {step}"
-            st.caption(_ctx)
+        st.divider()
 
-            # Quick-action chips — single compact row.
-            # Each button calls the tutor in-place; the button-click rerun
-            # re-renders updated history. No extra st.rerun() needed here.
-            _c1, _c2, _c3, _c4 = st.columns(4)
-            with _c1:
-                if st.button("Summarize", use_container_width=True, key="btn_summarize"):
-                    _call_tutor("Summarize this section for me.")
-            with _c2:
-                if st.button("Explain", use_container_width=True, key="btn_explain"):
-                    _call_tutor("Explain this section like I'm completely new to the topic.")
-            with _c3:
-                if st.button("Example", use_container_width=True, key="btn_example"):
-                    _call_tutor("Give me a concrete example of the key ideas in this section.")
-            with _c4:
-                if st.button("Quiz", use_container_width=True, key="btn_quiz"):
-                    _call_tutor("Quiz me with 2 questions about this section.")
+        # Chat history — rendered top-to-bottom.
+        for msg in messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
-            # Utility row: clear chat (only shown when there is history).
-            if messages:
-                if st.button("Clear chat", key="btn_clear_chat"):
-                    messages.clear()
-
-            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-
-            # Chat history — rendered inside scrollable div.
-            st.markdown('<div class="cb-tutor-messages">', unsafe_allow_html=True)
-            for msg in messages:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Free-form chat input — st.chat_input triggers its own rerun on submit;
-            # the explicit st.rerun() below ensures a clean second pass that clears
-            # the widget state and renders the updated history at the top.
-            st.markdown('<div class="cb-tutor-input">', unsafe_allow_html=True)
-            user_input = st.chat_input("Ask about this section…")
-            st.markdown('</div>', unsafe_allow_html=True)
-            if user_input:
-                _call_tutor(user_input)
-                st.rerun()
+        # Free-form chat input — st.chat_input triggers its own rerun on submit;
+        # the explicit st.rerun() below ensures a clean second pass that clears
+        # the widget state and renders the updated history at the top.
+        user_input = st.chat_input("Ask about this section…")
+        if user_input:
+            _call_tutor(user_input)
+            st.rerun()
 
 
 # ── WELCOME ───────────────────────────────────────────────────────────────────
