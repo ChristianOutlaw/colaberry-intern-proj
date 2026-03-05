@@ -657,8 +657,17 @@ with st.sidebar:
                 to_idx=_confirmed_for_clamp,
                 radio_raw=st.session_state.get("_section_radio"),
             )
-            # Skip the rerun on the complete screen — the form submit would be lost.
-            if st.session_state.get("player_flow_step") != "complete":
+            if st.session_state.get("player_flow_step") == "complete":
+                # Soft clamp: fix active_idx locally so downstream sees the right section,
+                # but do NOT set pending state or rerun (that would swallow the form submit).
+                _dbg_log(
+                    "sidebar_drift_soft_clamped_complete",
+                    run_id=_RUN_ID,
+                    from_idx=active_idx,
+                    to_idx=_confirmed_for_clamp,
+                )
+                active_idx = _confirmed_for_clamp
+            else:
                 # Use pending-nav mechanism — never write _section_radio post-widget.
                 # Do NOT clear _backnav_pending_idx here: a legitimate intercept may already be set.
                 st.session_state["_section_radio_pending"] = _confirmed_for_clamp
