@@ -1178,51 +1178,64 @@ def _render_tutor_expander() -> None:
     def _call_tutor(user_msg: str) -> None:
         """Append user message, generate tutor reply, append assistant message."""
         messages.append({"role": "user", "content": user_msg})
-        reply = generate_tutor_reply(
-            section_title=active_title,
-            section_markdown=section_markdown or "",
-            user_message=user_msg,
-            section_idx=active_idx,
-            total_sections=len(SECTIONS),
-            chunk_idx=chunk_idx,
-            total_chunks=n_chunks,
-            flow_step=step,
-        )
+        with st.spinner("Thinking…"):
+            reply = generate_tutor_reply(
+                section_title=active_title,
+                section_markdown=section_markdown or "",
+                user_message=user_msg,
+                section_idx=active_idx,
+                total_sections=len(SECTIONS),
+                chunk_idx=chunk_idx,
+                total_chunks=n_chunks,
+                flow_step=step,
+            )
         messages.append({"role": "assistant", "content": reply})
 
     with st.container(border=True):
-        # Header row: title + collapse toggle.
-        _hdr_left, _hdr_right = st.columns([4, 1])
+        # Header row: "AI Tutor (On/Off)" label + collapse toggle.
+        _hdr_left, _hdr_right = st.columns([3, 1])
         with _hdr_left:
-            st.markdown("**AI Tutor**")
+            _open_now = st.session_state.get(f"tutor_open_{active_section_id}", True)
+            st.markdown(f"**AI Tutor** ({'On' if _open_now else 'Off'})")
         with _hdr_right:
             _tutor_open = st.toggle(
-                "Show",
+                "Tutor",
                 value=True,
                 key=f"tutor_open_{active_section_id}",
                 label_visibility="collapsed",
             )
 
         if _tutor_open:
-            # Quick-action buttons — 2 × 2 grid.
-            # Each button directly calls the tutor in-place; the implicit Streamlit
-            # rerun from the button click re-renders the updated chat history.
-            # No tutor_pending / extra st.rerun() needed here.
-            b_left, b_right = st.columns(2)
-            with b_left:
+            # Context caption: Section • Part (lesson only) • step
+            _ctx = f"Section {active_idx + 1}"
+            if step == "lesson" and n_chunks > 1:
+                _ctx += f" • Part {chunk_idx + 1}/{n_chunks}"
+            _ctx += f" • {step}"
+            st.caption(_ctx)
+
+            # Quick-action chips — single compact row.
+            # Each button calls the tutor in-place; the button-click rerun
+            # re-renders updated history. No extra st.rerun() needed here.
+            _c1, _c2, _c3, _c4 = st.columns(4)
+            with _c1:
                 if st.button("Summarize", use_container_width=True, key="btn_summarize"):
                     _call_tutor("Summarize this section for me.")
-                if st.button("Give me an example", use_container_width=True, key="btn_example"):
-                    _call_tutor("Give me a concrete example of the key ideas in this section.")
-            with b_right:
-                if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
+            with _c2:
+                if st.button("Explain", use_container_width=True, key="btn_explain"):
                     _call_tutor("Explain this section like I'm completely new to the topic.")
-                if st.button(
-                    "Quiz me (2 questions)", use_container_width=True, key="btn_quiz"
-                ):
+            with _c3:
+                if st.button("Example", use_container_width=True, key="btn_example"):
+                    _call_tutor("Give me a concrete example of the key ideas in this section.")
+            with _c4:
+                if st.button("Quiz", use_container_width=True, key="btn_quiz"):
                     _call_tutor("Quiz me with 2 questions about this section.")
 
-            st.divider()
+            # Utility row: clear chat (only shown when there is history).
+            if messages:
+                if st.button("Clear chat", key="btn_clear_chat"):
+                    messages.clear()
+
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
             # Chat history — rendered inside scrollable div.
             st.markdown('<div class="cb-tutor-messages">', unsafe_allow_html=True)
