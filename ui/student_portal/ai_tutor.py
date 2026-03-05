@@ -157,6 +157,11 @@ def generate_tutor_reply(
     section_title: str,
     section_markdown: str,
     user_message: str,
+    section_idx: int | None = None,
+    total_sections: int | None = None,
+    chunk_idx: int | None = None,
+    total_chunks: int | None = None,
+    flow_step: str | None = None,
 ) -> str:
     """Generate an AI tutor reply for the given section and user message.
 
@@ -167,6 +172,11 @@ def generate_tutor_reply(
         section_title:    Display title of the current section.
         section_markdown: Raw markdown content of the current section.
         user_message:     The student's message or quick-action prompt text.
+        section_idx:      0-based section index (optional, enriches system prompt).
+        total_sections:   Total number of sections (optional).
+        chunk_idx:        0-based lesson chunk index within the section (optional).
+        total_chunks:     Total chunks in the current section (optional).
+        flow_step:        Current player step — lesson|quiz|reflection|complete (optional).
 
     Returns:
         A markdown-formatted reply string.
@@ -178,10 +188,22 @@ def generate_tutor_reply(
             import openai  # noqa: PLC0415 — intentional late import
 
             client = openai.OpenAI(api_key=api_key)
+
+            # Build a concise context line from optional progress params.
+            _ctx_parts: list[str] = []
+            if section_idx is not None and total_sections is not None:
+                _ctx_parts.append(f"Section {section_idx + 1} of {total_sections}")
+            if chunk_idx is not None and total_chunks is not None:
+                _ctx_parts.append(f"Part {chunk_idx + 1} of {total_chunks}")
+            if flow_step:
+                _ctx_parts.append(f"Step: {flow_step}")
+            _ctx_line = " | ".join(_ctx_parts)
+
             system_prompt = (
                 "You are a helpful AI tutor for a course called \"Free Intro to AI\".\n"
-                f"The student is currently reading the section titled: \"{section_title}\".\n\n"
-                f"Section content:\n{section_markdown}\n\n"
+                f"The student is currently reading the section titled: \"{section_title}\".\n"
+                + (f"Progress: {_ctx_line}\n" if _ctx_line else "")
+                + f"\nSection content:\n{section_markdown}\n\n"
                 "Answer the student's question concisely and helpfully, "
                 "referencing the section content where relevant. "
                 "Use markdown formatting in your reply."
@@ -201,6 +223,7 @@ def generate_tutor_reply(
         except Exception:
             pass  # Fall through to deterministic reply
 
+    # Deterministic fallback ignores progress context (pure markdown parsing).
     return _deterministic_reply(
         section_title=section_title,
         section_markdown=section_markdown,

@@ -363,12 +363,12 @@ if "player_status" not in st.session_state:
     st.session_state["player_status"] = None
 if "player_flash" not in st.session_state:
     st.session_state["player_flash"] = None  # (level, message) or None
-if "tutor_messages" not in st.session_state:
-    st.session_state["tutor_messages"] = []  # list[{"role": str, "content": str}]
-if "tutor_pending" not in st.session_state:
-    st.session_state["tutor_pending"] = None  # prompt enqueued by quick-action button
+if "tutor_history" not in st.session_state:
+    st.session_state["tutor_history"] = {}    # dict[lead_id -> list[{"role": str, "content": str}]]
+if "tutor_lead_id" not in st.session_state:
+    st.session_state["tutor_lead_id"] = None  # active lead for history routing
 if "tutor_section_id" not in st.session_state:
-    st.session_state["tutor_section_id"] = None  # tracks section for history reset
+    st.session_state["tutor_section_id"] = None  # tracks section for per-lead history reset
 if "quiz_submitted" not in st.session_state:
     st.session_state["quiz_submitted"] = set()  # set of "{section_id}:{quiz_id}"
 # Flow Engine v1 — guided sequential step state.
@@ -791,10 +791,11 @@ with st.sidebar:
             )
             st.rerun()
 
-        # Reset tutor history when the student navigates to a new section.
+        # Reset tutor history (per-lead) when the student navigates to a new section.
         if active_section_id != st.session_state["tutor_section_id"]:
-            st.session_state["tutor_messages"] = []
-            st.session_state["tutor_pending"] = None
+            _tutor_lid = lead_id or "unknown"
+            st.session_state["tutor_history"][_tutor_lid] = []
+            st.session_state["tutor_lead_id"] = _tutor_lid
             st.session_state["tutor_section_id"] = active_section_id
 
         # Reset guided flow when the student navigates to a new section.
@@ -1083,71 +1084,61 @@ st.markdown(
 st.progress(_bar_val)
 
 
-# ── Tutor expander — closure over active_title / section_markdown ─────────────
+# ── Tutor expander — closure over active_title / section_markdown / step ───────
 def _render_tutor_expander() -> None:
-    with st.expander("Tutor"):
+    # Per-lead message list: switching lead preserves each lead's history.
+    _active_lid = lead_id or "unknown"
+    messages = st.session_state["tutor_history"].setdefault(_active_lid, [])
+
+    def _call_tutor(user_msg: str) -> None:
+        """Append user message, generate tutor reply, append assistant message."""
+        messages.append({"role": "user", "content": user_msg})
+        reply = generate_tutor_reply(
+            section_title=active_title,
+            section_markdown=section_markdown or "",
+            user_message=user_msg,
+            section_idx=active_idx,
+            total_sections=len(SECTIONS),
+            chunk_idx=chunk_idx,
+            total_chunks=n_chunks,
+            flow_step=step,
+        )
+        messages.append({"role": "assistant", "content": reply})
+
+    with st.expander("AI Tutor"):
         st.subheader("AI Tutor")
 
-        # Process any prompt enqueued by a quick-action button click.
-        if st.session_state["tutor_pending"] is not None:
-            pending = st.session_state["tutor_pending"]
-            st.session_state["tutor_pending"] = None
-            st.session_state["tutor_messages"].append({"role": "user", "content": pending})
-            tutor_reply = generate_tutor_reply(
-                section_title=active_title,
-                section_markdown=section_markdown or "",
-                user_message=pending,
-            )
-            st.session_state["tutor_messages"].append(
-                {"role": "assistant", "content": tutor_reply}
-            )
-
         # Quick-action buttons — 2 × 2 grid.
+        # Each button directly calls the tutor in-place; the implicit Streamlit
+        # rerun from the button click re-renders the updated chat history.
+        # No tutor_pending / extra st.rerun() needed here.
         b_left, b_right = st.columns(2)
         with b_left:
             if st.button("Summarize", use_container_width=True, key="btn_summarize"):
-                st.session_state["tutor_pending"] = "Summarize this section for me."
-                st.rerun()
+                _call_tutor("Summarize this section for me.")
             if st.button("Give me an example", use_container_width=True, key="btn_example"):
-                st.session_state["tutor_pending"] = (
-                    "Give me a concrete example of the key ideas in this section."
-                )
-                st.rerun()
+                _call_tutor("Give me a concrete example of the key ideas in this section.")
         with b_right:
             if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
-                st.session_state["tutor_pending"] = (
-                    "Explain this section like I'm completely new to the topic."
-                )
-                st.rerun()
+                _call_tutor("Explain this section like I'm completely new to the topic.")
             if st.button(
                 "Quiz me (2 questions)", use_container_width=True, key="btn_quiz"
             ):
-                st.session_state["tutor_pending"] = (
-                    "Quiz me with 2 questions about this section."
-                )
-                st.rerun()
+                _call_tutor("Quiz me with 2 questions about this section.")
 
         st.divider()
 
         # Chat history — rendered top-to-bottom.
-        for msg in st.session_state["tutor_messages"]:
+        for msg in messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-        # Free-form input.
+        # Free-form chat input — st.chat_input triggers its own rerun on submit;
+        # the explicit st.rerun() below ensures a clean second pass that clears
+        # the widget state and renders the updated history at the top.
         user_input = st.chat_input("Ask about this section…")
         if user_input:
-            st.session_state["tutor_messages"].append(
-                {"role": "user", "content": user_input}
-            )
-            tutor_reply = generate_tutor_reply(
-                section_title=active_title,
-                section_markdown=section_markdown or "",
-                user_message=user_input,
-            )
-            st.session_state["tutor_messages"].append(
-                {"role": "assistant", "content": tutor_reply}
-            )
+            _call_tutor(user_input)
             st.rerun()
 
 
@@ -1417,6 +1408,8 @@ elif step == "reflection":
                             st.error("Could not save. Please try again.")
                     else:
                         st.warning("Please write something before continuing.")
+
+    _render_tutor_expander()
 
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
