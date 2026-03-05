@@ -604,22 +604,25 @@ with st.sidebar:
             )
 
         _radio_options = range(len(SECTIONS))
+        _cur_radio_idx = st.session_state.get("_section_radio", 0)
+
+        def _section_label(i: int) -> str:
+            sid, title = SECTIONS[i][0], SECTIONS[i][1]
+            is_done   = sid in completed
+            is_locked = i > allowed_max_idx
+            is_cur    = i == _cur_radio_idx
+            if is_done:
+                return f"\u2705 {title} (Completed)"
+            if is_locked:
+                return f"\U0001f512 {title} (Not started)"
+            if is_cur:
+                return f"\u25b6 {title} (In progress)"
+            return f"{title} (Not started)"
+
         _radio_raw = st.radio(
             "Select a section",
             options=_radio_options,
-            format_func=lambda i: (
-                f"\u2705 {SECTIONS[i][1]}"
-                if SECTIONS[i][0] in completed
-                else (
-                    f"\U0001f512 {SECTIONS[i][1]}"
-                    if i > allowed_max_idx
-                    else (
-                        f"\u25b6 {SECTIONS[i][1]}"
-                        if i == st.session_state.get("_section_radio", 0)
-                        else SECTIONS[i][1]
-                    )
-                )
-            ),
+            format_func=_section_label,
             key="_section_radio",
             label_visibility="collapsed",
             on_change=_on_section_radio_change,
