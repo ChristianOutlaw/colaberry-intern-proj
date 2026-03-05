@@ -13,6 +13,7 @@ import logging
 import re
 import sqlite3
 import time
+import uuid
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -347,6 +348,11 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
+# Per-rerun correlation ID — new value on every Streamlit rerun.
+# ---------------------------------------------------------------------------
+_RUN_ID: str = uuid.uuid4().hex[:8]
+
+# ---------------------------------------------------------------------------
 # Session state initialisation
 # ---------------------------------------------------------------------------
 if "player_completed" not in st.session_state:
@@ -389,12 +395,99 @@ if "player_refl_idx" not in st.session_state:
 if "_section_radio_confirmed" not in st.session_state:
     st.session_state["_section_radio_confirmed"] = 0
 if "_backnav_pending_idx" not in st.session_state:
+    _dbg_log(
+        "backnav_pending_set",
+        reason="init", new_value=None, active_idx=None,
+        confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+        section_radio=st.session_state.get("_section_radio"),
+        section_radio_pending=st.session_state.get("_section_radio_pending"),
+        section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+        suppress_once=st.session_state.get("_suppress_backnav_once"),
+        last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+    )
     st.session_state["_backnav_pending_idx"] = None
 # Suppress false back-nav intercept on internal forward navigation reruns.
 if "_suppress_backnav_once" not in st.session_state:
     st.session_state["_suppress_backnav_once"] = False
 if "_last_sidebar_idx" not in st.session_state:
     st.session_state["_last_sidebar_idx"] = 0
+if "_section_radio_user_changed" not in st.session_state:
+    st.session_state["_section_radio_user_changed"] = False
+
+# ---------------------------------------------------------------------------
+# Back-nav diagnostic trace helper (temporary instrumentation)
+# ---------------------------------------------------------------------------
+def _trace_backnav(tag: str) -> None:
+    _dbg_log(
+        "backnav_trace",
+        tag=tag,
+        backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
+        section_radio=st.session_state.get("_section_radio"),
+        section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+        section_radio_pending=st.session_state.get("_section_radio_pending"),
+        last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+        suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+        state=_dbg_snap(st.session_state),
+    )
+
+
+def _on_section_radio_change():
+    # Guard: programmatic rerun / pending-apply in progress — ignore callback.
+    if bool(st.session_state.get("_suppress_backnav_once", False)):
+        st.session_state["_section_radio_user_changed"] = False
+        _dbg_log(
+            "section_radio_on_change_ignored",
+            reason="suppress_backnav_once",
+            raw_value=st.session_state.get("_section_radio"),
+            pending=st.session_state.get("_section_radio_pending"),
+            confirmed=st.session_state.get("_section_radio_confirmed"),
+            last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+        )
+        return
+
+    # Streamlit may store an int index OR a formatted string label (e.g. "▶ How Machines Learn").
+    # Robustly convert whichever form is present back to an integer index.
+    _LABEL_PREFIXES = ("\u2705 ", "\U0001f512 ", "\u25b6 ")  # ✅  🔒  ▶
+
+    raw_value = st.session_state.get("_section_radio")
+    if isinstance(raw_value, int):
+        new_idx = raw_value
+    elif isinstance(raw_value, str):
+        # Strip leading emoji prefix added by format_func, then match section title.
+        title = raw_value
+        for _pfx in _LABEL_PREFIXES:
+            if raw_value.startswith(_pfx):
+                title = raw_value[len(_pfx):]
+                break
+        _title_map = {SECTIONS[i][1]: i for i in range(len(SECTIONS))}
+        mapped = _title_map.get(title)
+        if mapped is not None:
+            new_idx = mapped
+        else:
+            # Unrecognised label — treat as no movement
+            new_idx = int(st.session_state.get("_last_sidebar_idx", 0))
+            _dbg_log(
+                "section_radio_on_change_unrecognised",
+                raw_value=raw_value,
+                stripped_title=title,
+                fallback_idx=new_idx,
+            )
+    else:
+        new_idx = int(st.session_state.get("_last_sidebar_idx", 0))
+
+    last_idx = int(st.session_state.get("_last_sidebar_idx", new_idx))
+    moved = (new_idx != last_idx)
+    st.session_state["_section_radio_user_changed"] = bool(moved)
+    # PLAYER_DEBUG: record on_change outcome
+    _dbg_log(
+        "section_radio_on_change",
+        raw_value=raw_value,
+        new_idx=new_idx,
+        last_idx=last_idx,
+        moved=moved,
+        flag_set=bool(moved),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Helper — fetch lead status
@@ -414,6 +507,7 @@ def _fetch_status(lid: str) -> dict | None:
 # ---------------------------------------------------------------------------
 # Sidebar — Lead ID + Sections + Progress
 # ---------------------------------------------------------------------------
+_trace_backnav("TOP_OF_RUN")
 with st.sidebar:
     # PLAYER_DEBUG: sidebar expander
     if _dbg_enabled():
@@ -452,30 +546,67 @@ with st.sidebar:
             state=_dbg_snap(st.session_state),
         )
 
+        # Guard: skip all programmatic nav mutations while confirm UI is active.
+        in_confirm = st.session_state.get("_backnav_pending_idx") is not None
+        _dbg_log(
+            "confirm_mode_eval",
+            in_confirm=in_confirm,
+            backnav_pending=st.session_state.get("_backnav_pending_idx"),
+            section_radio=st.session_state.get("_section_radio"),
+            pending=st.session_state.get("_section_radio_pending"),
+            confirmed=st.session_state.get("_section_radio_confirmed"),
+        )
+
         # Apply deferred section navigation BEFORE the radio is instantiated.
         # (Setting _section_radio after the widget exists raises a Streamlit error.)
         _pending_applied_this_run = False
-        if "_section_radio_pending" in st.session_state:
+        if (
+            "_section_radio_pending" in st.session_state
+            and st.session_state.get("_backnav_pending_idx") is None
+            and not st.session_state.get("_section_radio_user_changed", False)
+        ):
             _pend = max(0, min(len(SECTIONS) - 1, int(st.session_state["_section_radio_pending"])))
             _applied = min(_pend, int(allowed_max_idx))
             st.session_state["_section_radio"] = _applied
             _pending_applied_this_run = True
             del st.session_state["_section_radio_pending"]
             # IMPORTANT: this change was internal, not a user click.
+            _trace_backnav("CLEAR_SITE_PENDING_APPLIER_BEFORE")
+            _dbg_log(
+                "backnav_pending_set",
+                reason="apply_pending", new_value=None, active_idx=None,
+                confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+                section_radio=st.session_state.get("_section_radio"),
+                section_radio_pending=st.session_state.get("_section_radio_pending"),
+                section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                suppress_once=st.session_state.get("_suppress_backnav_once"),
+                last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+            )
             st.session_state["_backnav_pending_idx"] = None
+            _trace_backnav("CLEAR_SITE_PENDING_APPLIER_AFTER")
             st.session_state["_suppress_backnav_once"] = True
             st.session_state["_last_sidebar_idx"] = int(_applied)
             # PLAYER_DEBUG: pending-apply log
             _dbg_log(
                 "pending_applied",
-                applied_section=int(_applied),
-                pending_was=int(_pend),
-                state=_dbg_snap(st.session_state),
+                run_id=_RUN_ID,
+                time=time.monotonic(),
+                applied_idx=_applied,
+                _section_radio=st.session_state.get("_section_radio"),
+                _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+                _section_radio_pending=st.session_state.get("_section_radio_pending"),
+                _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+                _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                player_flow_step=st.session_state.get("player_flow_step"),
+                player_completed=sorted(list(st.session_state.get("player_completed", []))),
+                _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
             )
 
-        active_idx: int = st.radio(
+        _radio_options = range(len(SECTIONS))
+        _radio_raw = st.radio(
             "Select a section",
-            options=range(len(SECTIONS)),
+            options=_radio_options,
             format_func=lambda i: (
                 f"\u2705 {SECTIONS[i][1]}"
                 if SECTIONS[i][0] in completed
@@ -491,8 +622,64 @@ with st.sidebar:
             ),
             key="_section_radio",
             label_visibility="collapsed",
+            on_change=_on_section_radio_change,
         )
+        active_idx: int = _radio_raw
+        # PLAYER_DEBUG: forensic log — captures raw radio return value and state before any nav logic.
+        _dbg_log(
+            "radio_forensics",
+            run_id=_RUN_ID,
+            time=time.monotonic(),
+            _section_radio=st.session_state.get("_section_radio"),
+            _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+            _section_radio_pending=st.session_state.get("_section_radio_pending"),
+            _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+            _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+            _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+            player_flow_step=st.session_state.get("player_flow_step"),
+            player_completed=sorted(list(st.session_state.get("player_completed", []))),
+            _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
+            radio_raw=_radio_raw,
+            radio_raw_type=str(type(_radio_raw)),
+            derived_active_idx=active_idx,
+            raw_in_options=(_radio_raw in _radio_options),
+        )
+        # Drift clamp — must sit AFTER radio_forensics (to log the raw drift) and BEFORE
+        # active_section_id assignment (so all downstream logic uses the corrected idx).
+        # If the user did NOT click the sidebar and the radio drifted away from confirmed
+        # (e.g. Streamlit resets the widget to 0 on rerun), silently restore confirmed.
+        _confirmed_for_clamp = int(st.session_state.get("_section_radio_confirmed", active_idx))
+        _user_changed_for_clamp = bool(st.session_state.get("_section_radio_user_changed", False))
+        if (not in_confirm) and (not _user_changed_for_clamp) and (active_idx != _confirmed_for_clamp):
+            _dbg_log(
+                "sidebar_drift_clamped",
+                from_idx=active_idx,
+                to_idx=_confirmed_for_clamp,
+                radio_raw=st.session_state.get("_section_radio"),
+            )
+            # Use pending-nav mechanism — never write _section_radio post-widget.
+            # Do NOT clear _backnav_pending_idx here: a legitimate intercept may already be set.
+            st.session_state["_section_radio_pending"] = _confirmed_for_clamp
+            st.session_state["_suppress_backnav_once"] = True
+            st.rerun()
+        elif _user_changed_for_clamp and (active_idx != _confirmed_for_clamp):
+            _dbg_log(
+                "sidebar_drift_clamp_skipped",
+                reason="user_changed",
+                active_idx=active_idx,
+                confirmed=st.session_state.get("_section_radio_confirmed"),
+                backnav_pending=st.session_state.get("_backnav_pending_idx"),
+            )
+
         active_section_id, active_title = SECTIONS[active_idx]
+        _trace_backnav("AFTER_SIDEBAR_RADIO")
+
+        # Snapshot and consume one-shot suppression flag before any intercept logic.
+        # Capturing it here ensures the intercept condition sees the correct value
+        # even if the flag would otherwise be cleared inside the if/else below.
+        _suppress_once = bool(st.session_state.get("_suppress_backnav_once"))
+        if _suppress_once:
+            st.session_state["_suppress_backnav_once"] = False
 
         # Back-nav confirmation intercept:
         # Only trigger on a REAL user click to a previously completed earlier section.
@@ -500,7 +687,21 @@ with st.sidebar:
         _has_pending_nav = "_section_radio_pending" in st.session_state
         if _has_pending_nav:
             # If an internal navigation is in-flight, kill any stale back-nav intent.
-            st.session_state["_backnav_pending_idx"] = None
+            # Skip if a back-nav confirmation is already pending — preserve confirm state.
+            if st.session_state.get("_backnav_pending_idx") is None:
+                _trace_backnav("CLEAR_SITE_HAS_PENDING_NAV_BEFORE")
+                _dbg_log(
+                    "backnav_pending_set",
+                    reason="has_pending_nav", new_value=None, active_idx=active_idx,
+                    confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+                    section_radio=st.session_state.get("_section_radio"),
+                    section_radio_pending=st.session_state.get("_section_radio_pending"),
+                    section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                    suppress_once=st.session_state.get("_suppress_backnav_once"),
+                    last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                )
+                st.session_state["_backnav_pending_idx"] = None
+                _trace_backnav("CLEAR_SITE_HAS_PENDING_NAV_AFTER")
 
         # One-shot suppression for internal reruns (e.g., Mark Complete / Go to next section).
         if st.session_state.get("_suppress_backnav_once"):
@@ -511,19 +712,60 @@ with st.sidebar:
                 _last_idx_raw = active_idx
             _last_idx = int(_last_idx_raw)
             _confirmed_idx = int(st.session_state.get("_section_radio_confirmed", 0))
-            _user_changed_sidebar = (active_idx != _last_idx) and (not _has_pending_nav)
+            _sidebar_moved = (active_idx != _last_idx)
+            _user_changed_sidebar = _sidebar_moved and (not _has_pending_nav)
             _target_completed = active_section_id in st.session_state.get("player_completed", set())
 
-            if (not _pending_applied_this_run) and _user_changed_sidebar and _target_completed and (active_idx < _confirmed_idx):
+            # PLAYER_DEBUG: sidebar movement gate evaluation
+            _dbg_log(
+                "sidebar_moved_eval",
+                active_idx=active_idx,
+                last_idx=_last_idx,
+                sidebar_moved=_sidebar_moved,
+                confirmed_idx=_confirmed_idx,
+                section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+            )
+            # PLAYER_DEBUG: log flag value during backnav intercept evaluation
+            _dbg_log(
+                "backnav_intercept_eval",
+                section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                active_idx=active_idx,
+                confirmed_idx=_confirmed_idx,
+                target_completed=_target_completed,
+                has_pending_nav=_has_pending_nav,
+                pending_applied_this_run=_pending_applied_this_run,
+                suppress_once=_suppress_once,
+            )
+            if (not _pending_applied_this_run) and (not _has_pending_nav) and _target_completed and (active_idx < _confirmed_idx) and _sidebar_moved and (not _suppress_once) and st.session_state.get("_section_radio_user_changed"):
+                _trace_backnav("INTERCEPT_BEFORE_SET")
+                _dbg_log(
+                    "backnav_pending_set",
+                    reason="intercept", new_value=int(active_idx), active_idx=active_idx,
+                    confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+                    section_radio=st.session_state.get("_section_radio"),
+                    section_radio_pending=st.session_state.get("_section_radio_pending"),
+                    section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                    suppress_once=st.session_state.get("_suppress_backnav_once"),
+                    last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                )
                 st.session_state["_backnav_pending_idx"] = int(active_idx)
                 st.session_state["_section_radio_pending"] = _confirmed_idx
+                _trace_backnav("INTERCEPT_AFTER_SET")
+                # Reset flag here so it is False on the very next rerun — not left
+                # lingering across the confirm-UI rerun (st.rerun() below stops
+                # execution before the unconditional reset at the end of sidebar).
+                st.session_state["_section_radio_user_changed"] = False
+                _trace_backnav("INTERCEPT_BEFORE_RERUN")
                 st.rerun()
+
+        # Reset user-changed flag — one-shot, consumed for this run.
+        st.session_state["_section_radio_user_changed"] = False
 
         # Update last rendered sidebar idx at the end of sidebar logic (not a user action).
         st.session_state["_last_sidebar_idx"] = int(active_idx)
 
         # Enforce lock: redirect back to the furthest allowed section.
-        if active_idx > allowed_max_idx:
+        if (not in_confirm) and active_idx > allowed_max_idx:
             st.session_state["_section_radio_pending"] = allowed_max_idx
             st.session_state["_suppress_backnav_once"] = True
             st.session_state["player_flash"] = (
@@ -591,6 +833,18 @@ if st.session_state.get("_backnav_pending_idx") is not None:
     _target_idx = int(st.session_state["_backnav_pending_idx"])
     _target_sid, _target_title = SECTIONS[_target_idx]
 
+    _trace_backnav("CONFIRM_BLOCK_ENTER")
+    st.error("CONFIRM BLOCK ENTERED (diagnostic)")
+    # PLAYER_DEBUG: confirm-screen render log
+    _dbg_log(
+        "backnav_confirm_rendered",
+        backnav_pending_idx=int(st.session_state["_backnav_pending_idx"]),
+        section_radio=st.session_state.get("_section_radio"),
+        section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+        state=_dbg_snap(st.session_state),
+    )
+    st.warning("BACKNAV CONFIRM ACTIVE — if you see this, the confirm screen block is executing.")
+
     with st.container(border=True):
         st.warning(
             f"### Jump back to **{_target_title}**?\n"
@@ -640,13 +894,38 @@ if st.session_state.get("_backnav_pending_idx") is not None:
                 st.session_state["player_quiz_attempts"] = {}
                 st.session_state["player_quiz_correct"] = set()
                 st.session_state["player_refl_idx"] = 0
+                _trace_backnav("CLEAR_SITE_CONFIRM_BTN_BEFORE")
+                _dbg_log(
+                    "backnav_pending_set",
+                    reason="confirm_btn", new_value=None, active_idx=active_idx,
+                    confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+                    section_radio=st.session_state.get("_section_radio"),
+                    section_radio_pending=st.session_state.get("_section_radio_pending"),
+                    section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                    suppress_once=st.session_state.get("_suppress_backnav_once"),
+                    last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                )
                 st.session_state["_backnav_pending_idx"] = None
+                _trace_backnav("CLEAR_SITE_CONFIRM_BTN_AFTER")
                 st.rerun()
         with _c2:
             if st.button("Cancel", key="btn_backnav_cancel"):
+                _trace_backnav("CLEAR_SITE_CANCEL_BTN_BEFORE")
+                _dbg_log(
+                    "backnav_pending_set",
+                    reason="cancel_btn", new_value=None, active_idx=active_idx,
+                    confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+                    section_radio=st.session_state.get("_section_radio"),
+                    section_radio_pending=st.session_state.get("_section_radio_pending"),
+                    section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                    suppress_once=st.session_state.get("_suppress_backnav_once"),
+                    last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                )
                 st.session_state["_backnav_pending_idx"] = None
+                _trace_backnav("CLEAR_SITE_CANCEL_BTN_AFTER")
                 st.rerun()
 
+    _trace_backnav("BEFORE_STOP_CONFIRM_BLOCK")
     st.stop()
 
 
@@ -715,6 +994,7 @@ if not st.session_state.get("player_course_started"):
                 st.session_state["_section_radio"] = resume_idx
                 st.session_state["_section_radio_confirmed"] = int(resume_idx)
                 st.rerun()
+    _trace_backnav("BEFORE_STOP_WELCOME")
     st.stop()
 
 # Load section markdown (shared across all steps).
@@ -1168,7 +1448,19 @@ elif step == "complete":
                 _hydrate_completed_from_status(updated_status)
                 st.session_state["player_completed"].add(active_section_id)
                 # Suppress intercept on the immediate Mark Complete rerun (student stays on same section).
+                _trace_backnav("CLEAR_SITE_MARK_COMPLETE_BEFORE")
+                _dbg_log(
+                    "backnav_pending_set",
+                    reason="mark_complete", new_value=None, active_idx=active_idx,
+                    confirmed_idx=st.session_state.get("_section_radio_confirmed"),
+                    section_radio=st.session_state.get("_section_radio"),
+                    section_radio_pending=st.session_state.get("_section_radio_pending"),
+                    section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                    suppress_once=st.session_state.get("_suppress_backnav_once"),
+                    last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                )
                 st.session_state["_backnav_pending_idx"] = None
+                _trace_backnav("CLEAR_SITE_MARK_COMPLETE_AFTER")
                 st.session_state["_suppress_backnav_once"] = True
                 # PLAYER_DEBUG: mark-complete log
                 _dbg_log(
@@ -1224,20 +1516,58 @@ elif step == "complete":
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.rerun()
         else:
-            if _has_next and st.button("Go to next section \u2192", type="primary"):
-                # PLAYER_DEBUG: next-section click log
-                _dbg_log(
-                    "next_section_clicked",
-                    from_active_idx=int(active_idx),
-                    to_next_idx=int(_next_idx),
-                    flow_step=st.session_state.get("player_flow_step"),
-                    state=_dbg_snap(st.session_state),
-                )
-                # Suppress intercept on the immediate rerun (internal forward navigation).
+            _dbg_log(
+                "next_section_gate",
+                run_id=_RUN_ID,
+                time=time.monotonic(),
+                _section_radio=st.session_state.get("_section_radio"),
+                _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+                _section_radio_pending=st.session_state.get("_section_radio_pending"),
+                _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+                _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                player_flow_step=st.session_state.get("player_flow_step"),
+                player_completed=sorted(list(st.session_state.get("player_completed", []))),
+                _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
+                has_next=_has_next,
+                next_idx=int(_next_idx),
+            )
+            _clicked_next = st.button("Go to next section \u2192", type="primary") if _has_next else False
+            _dbg_log(
+                "next_section_clicked",
+                run_id=_RUN_ID,
+                time=time.monotonic(),
+                clicked=_clicked_next,
+                _section_radio=st.session_state.get("_section_radio"),
+                _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+                _section_radio_pending=st.session_state.get("_section_radio_pending"),
+                _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+                _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                player_flow_step=st.session_state.get("player_flow_step"),
+                player_completed=sorted(list(st.session_state.get("player_completed", []))),
+                _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
+            )
+            if _has_next and _clicked_next:
                 st.session_state["_backnav_pending_idx"] = None
+                st.session_state["_section_radio_pending"] = int(_next_idx)
+                st.session_state["_section_radio_confirmed"] = int(_next_idx)
+                _dbg_log(
+                    "next_section_click",
+                    run_id=_RUN_ID,
+                    time=time.monotonic(),
+                    next_idx=int(_next_idx),
+                    _section_radio=st.session_state.get("_section_radio"),
+                    _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+                    _section_radio_pending=st.session_state.get("_section_radio_pending"),
+                    _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                    _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+                    _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                    player_flow_step=st.session_state.get("player_flow_step"),
+                    player_completed=sorted(list(st.session_state.get("player_completed", []))),
+                    _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
+                )
                 st.session_state["_suppress_backnav_once"] = True
-                # Defer navigation: pending key is resolved before the radio renders.
-                st.session_state["_section_radio_pending"] = _next_idx
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.session_state["player_quiz_idx"] = 0
