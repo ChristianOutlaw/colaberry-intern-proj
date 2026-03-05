@@ -344,6 +344,13 @@ st.markdown(
     .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
     .cb-card-inner { max-width: 880px; margin: 0 auto; }
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .cb-lesson-center h1,
+    .cb-lesson-center h2,
+    .cb-lesson-center h3,
+    .cb-lesson-center p { text-align: center; }
+    .cb-lesson-center ul,
+    .cb-lesson-center ol { display: inline-block; text-align: left; margin: 0 auto; }
+    .cb-lesson-center blockquote { margin: 0 auto; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1264,6 +1271,7 @@ elif step == "lesson":
     with st.container(border=True):
         st.markdown('<div class="cb-card-inner">', unsafe_allow_html=True)
         st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
+        st.markdown('<div class="cb-lesson-center">', unsafe_allow_html=True)
         _chunk_key = f"chunk_typed_{active_section_id}_{chunk_idx}"
         _chunk_ph = st.empty()
         if _chunk_key not in st.session_state:
@@ -1286,6 +1294,7 @@ elif step == "lesson":
             st.session_state[_chunk_key] = True
         else:
             _chunk_ph.markdown(chunks[chunk_idx])
+        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         st.divider()
 
