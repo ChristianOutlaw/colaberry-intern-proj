@@ -625,25 +625,31 @@ with st.sidebar:
             on_change=_on_section_radio_change,
         )
         active_idx: int = _radio_raw
-        # PLAYER_DEBUG: forensic log — captures raw radio return value and state before any nav logic.
-        _dbg_log(
-            "radio_forensics",
-            run_id=_RUN_ID,
-            time=time.monotonic(),
-            _section_radio=st.session_state.get("_section_radio"),
-            _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
-            _section_radio_pending=st.session_state.get("_section_radio_pending"),
-            _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
-            _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
-            _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
-            player_flow_step=st.session_state.get("player_flow_step"),
-            player_completed=sorted(list(st.session_state.get("player_completed", []))),
-            _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
-            radio_raw=_radio_raw,
-            radio_raw_type=str(type(_radio_raw)),
-            derived_active_idx=active_idx,
-            raw_in_options=(_radio_raw in _radio_options),
-        )
+        # PLAYER_DEBUG: forensic log — only when state has signal worth capturing.
+        if (
+            st.session_state.get("_section_radio") != st.session_state.get("_section_radio_confirmed")
+            or st.session_state.get("_section_radio_pending") is not None
+            or st.session_state.get("_backnav_pending_idx") is not None
+            or st.session_state.get("player_flow_step") == "complete"
+        ):
+            _dbg_log(
+                "radio_forensics",
+                run_id=_RUN_ID,
+                time=time.monotonic(),
+                _section_radio=st.session_state.get("_section_radio"),
+                _section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
+                _section_radio_pending=st.session_state.get("_section_radio_pending"),
+                _section_radio_user_changed=st.session_state.get("_section_radio_user_changed"),
+                _suppress_backnav_once=st.session_state.get("_suppress_backnav_once"),
+                _last_sidebar_idx=st.session_state.get("_last_sidebar_idx"),
+                player_flow_step=st.session_state.get("player_flow_step"),
+                player_completed=sorted(list(st.session_state.get("player_completed", []))),
+                _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
+                radio_raw=_radio_raw,
+                radio_raw_type=str(type(_radio_raw)),
+                derived_active_idx=active_idx,
+                raw_in_options=(_radio_raw in _radio_options),
+            )
         # Drift clamp — must sit AFTER radio_forensics (to log the raw drift) and BEFORE
         # active_section_id assignment (so all downstream logic uses the corrected idx).
         # If the user did NOT click the sidebar and the radio drifted away from confirmed
