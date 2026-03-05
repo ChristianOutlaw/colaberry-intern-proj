@@ -342,14 +342,19 @@ st.markdown(
     }
     .cb-topbar-caption { font-size: 0.75rem; color: #5B5A59; margin: 0 0 2px; }
     .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
-    .cb-card-inner { max-width: 640px; margin: 0 auto; }
-    .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    section.main > div {
-        max-width: 1100px;
-        margin-left: auto;
-        margin-right: auto;
+    /* Center the Streamlit main content container */
+    section.main .block-container {
+        max-width: 1100px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
     }
+    /* Ensure reading column remains centered */
+    .cb-card-inner { max-width: 640px; margin: 0 auto; }
+    /* Improve readability */
     .cb-card-inner p { line-height: 1.7; }
+    .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     </style>
     """,
     unsafe_allow_html=True,
