@@ -614,7 +614,7 @@ with st.sidebar:
             if is_done:
                 return f"\u2705 {title} (Completed)"
             if is_locked:
-                return f"\U0001f512 {title} (Not started)"
+                return f"\U0001f512 {title} (Locked)"
             if is_cur:
                 return f"\u25b6 {title} (In progress)"
             return f"{title} (Not started)"
@@ -1296,17 +1296,17 @@ elif step == "lesson":
             else:
                 fwd_label = "Continue to Complete →"
         else:
-            fwd_label = f"Continue → Part {chunk_idx + 2} of {n_chunks}"
+            fwd_label = "Continue →"
 
         st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
-        col_back, col_fwd = st.columns([1, 3])
+        col_back, col_gap, col_fwd = st.columns([1, 1, 6])
         with col_back:
             if chunk_idx > 0:
-                if st.button("← Back"):
+                if st.button("← Back", use_container_width=True):
                     st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
                     st.rerun()
         with col_fwd:
-            if st.button(fwd_label, type="primary"):
+            if st.button(fwd_label, type="primary", use_container_width=True):
                 if is_last_chunk:
                     if section_quiz_ids:
                         st.session_state["player_flow_step"] = "quiz"
