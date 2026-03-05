@@ -342,15 +342,8 @@ st.markdown(
     }
     .cb-topbar-caption { font-size: 0.75rem; color: #5B5A59; margin: 0 0 2px; }
     .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
-    .cb-card-inner { max-width: 880px; margin: 0 auto; }
+    .cb-card-inner { max-width: 640px; margin: 0 auto; }
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    .cb-lesson-center h1,
-    .cb-lesson-center h2,
-    .cb-lesson-center h3,
-    .cb-lesson-center p { text-align: center; }
-    .cb-lesson-center ul,
-    .cb-lesson-center ol { display: inline-block; text-align: left; margin: 0 auto; }
-    .cb-lesson-center blockquote { margin: 0 auto; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1271,7 +1264,6 @@ elif step == "lesson":
     with st.container(border=True):
         st.markdown('<div class="cb-card-inner">', unsafe_allow_html=True)
         st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
-        st.markdown('<div class="cb-lesson-center">', unsafe_allow_html=True)
         _chunk_key = f"chunk_typed_{active_section_id}_{chunk_idx}"
         _chunk_ph = st.empty()
         if _chunk_key not in st.session_state:
@@ -1294,7 +1286,6 @@ elif step == "lesson":
             st.session_state[_chunk_key] = True
         else:
             _chunk_ph.markdown(chunks[chunk_idx])
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         st.divider()
 
@@ -1336,6 +1327,7 @@ elif step == "lesson":
 # ── QUIZ ──────────────────────────────────────────────────────────────────────
 elif step == "quiz":
     with st.container(border=True):
+        st.markdown('<div class="cb-card-inner">', unsafe_allow_html=True)
         if not section_quiz_ids:
             st.info("No quiz for this section.")
             if st.button(
@@ -1434,11 +1426,14 @@ elif step == "quiz":
                                     st.session_state["player_quiz_q_idx"] = 0
                                 st.rerun()
 
+        st.markdown('</div>', unsafe_allow_html=True)
+
     _render_tutor_expander()
 
 # ── REFLECTION ────────────────────────────────────────────────────────────────
 elif step == "reflection":
     with st.container(border=True):
+        st.markdown('<div class="cb-card-inner">', unsafe_allow_html=True)
         if not section_prompt_ids:
             st.info("No reflection prompts for this section.")
             if st.button("Continue to Complete →", type="primary"):
@@ -1497,6 +1492,8 @@ elif step == "reflection":
                             st.error("Could not save. Please try again.")
                     else:
                         st.warning("Please write something before continuing.")
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     _render_tutor_expander()
 
