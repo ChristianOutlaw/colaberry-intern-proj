@@ -657,11 +657,13 @@ with st.sidebar:
                 to_idx=_confirmed_for_clamp,
                 radio_raw=st.session_state.get("_section_radio"),
             )
-            # Use pending-nav mechanism — never write _section_radio post-widget.
-            # Do NOT clear _backnav_pending_idx here: a legitimate intercept may already be set.
-            st.session_state["_section_radio_pending"] = _confirmed_for_clamp
-            st.session_state["_suppress_backnav_once"] = True
-            st.rerun()
+            # Skip the rerun on the complete screen — the form submit would be lost.
+            if st.session_state.get("player_flow_step") != "complete":
+                # Use pending-nav mechanism — never write _section_radio post-widget.
+                # Do NOT clear _backnav_pending_idx here: a legitimate intercept may already be set.
+                st.session_state["_section_radio_pending"] = _confirmed_for_clamp
+                st.session_state["_suppress_backnav_once"] = True
+                st.rerun()
         elif _user_changed_for_clamp and (active_idx != _confirmed_for_clamp):
             _dbg_log(
                 "sidebar_drift_clamp_skipped",
