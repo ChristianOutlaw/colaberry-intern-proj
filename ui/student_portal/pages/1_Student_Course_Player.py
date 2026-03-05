@@ -948,8 +948,52 @@ if st.session_state.get("_backnav_pending_idx") is not None:
 
 
 # ── Course-level welcome screen ────────────────────────────────────────────────
-# Portal gate: always shown until the student clicks "Begin Course →".
+# Portal gate: always shown until the student clicks a begin/resume CTA.
 if not st.session_state.get("player_course_started"):
+    # Proactively fetch status (once per session) so we can choose the right CTA
+    # before any button is clicked.  Reuses the same player_status key used
+    # everywhere else — no new DB path, no extra queries on repeated reruns.
+    if lead_id and st.session_state.get("player_status") is None:
+        try:
+            st.session_state["player_status"] = _fetch_status(lead_id)
+            _hydrate_completed_from_status(st.session_state.get("player_status"))
+        except Exception:
+            pass
+
+    _wc_status = st.session_state.get("player_status") if lead_id else None
+    _wc_has_progress = bool(
+        _wc_status
+        and _wc_status.get("lead_exists")
+        and float((_wc_status.get("course_state") or {}).get("completion_pct") or 0) > 0
+    )
+
+    # Shared helper: compute resume section index from status.
+    def _wc_compute_resume_idx(status: dict | None) -> int:
+        idx = _unlocked_frontier_idx(st.session_state.get("player_completed", set()), status)
+        try:
+            cs = (status or {}).get("course_state") or {}
+            cur = cs.get("current_section")
+            if cur:
+                _imap = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
+                idx = max(idx, _imap.get(cur, 0))
+        except Exception:
+            pass
+        return max(0, min(len(SECTIONS) - 1, int(idx)))
+
+    # Shared helper: apply all flow-start state and rerun.
+    def _wc_start(resume_idx: int) -> None:
+        st.session_state["player_course_started"] = True
+        st.session_state["player_flow_step"] = "lesson"
+        st.session_state["player_flow_chunk_idx"] = 0
+        st.session_state["player_quiz_idx"] = 0
+        st.session_state["player_quiz_q_idx"] = 0
+        st.session_state["player_quiz_attempts"] = {}
+        st.session_state["player_quiz_correct"] = set()
+        st.session_state["player_refl_idx"] = 0
+        st.session_state["_section_radio"] = resume_idx
+        st.session_state["_section_radio_confirmed"] = int(resume_idx)
+        st.rerun()
+
     _cw_lines = [
         "This course guides you through the fundamentals of AI in 9 short sections.",
         "Each section follows the same pattern: read a guided lesson, test your "
@@ -959,6 +1003,8 @@ if not st.session_state.get("player_course_started"):
     _cw_key = "course_welcome_typed"
     with st.container(border=True):
         st.markdown("## Welcome to **Intro to AI**")
+
+        # Typewriter intro (runs once per session, then renders static).
         _cw_ph = st.empty()
         if _cw_key not in st.session_state:
             st.session_state[_cw_key] = False
@@ -973,45 +1019,75 @@ if not st.session_state.get("player_course_started"):
             st.session_state[_cw_key] = True
         else:
             _cw_ph.markdown("\n\n".join(_cw_lines))
+
+        # ── Course outline preview card ────────────────────────────────────────
+        st.markdown("---")
+        _sid_to_title_wc = {sid: title for sid, title in SECTIONS}
+        st.markdown(
+            f"**{len(SECTIONS)} sections** &nbsp;·&nbsp; "
+            "Each section: **Lesson → Quiz → Reflection**",
+            unsafe_allow_html=True,
+        )
+        with st.expander("View course outline"):
+            for _wc_i, (_wc_sid, _wc_stitle) in enumerate(SECTIONS):
+                st.markdown(f"{_wc_i + 1}. {_wc_stitle}")
+
         st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
-        if st.button("Begin Course →", type="primary", key="btn_begin_course"):
-            if not lead_id:
-                st.info("Enter your Lead ID in the sidebar to begin.")
-            else:
-                # Resume: pick up at the last recorded section when available.
-                status = st.session_state.get("player_status")
-                if status is None:
-                    try:
-                        st.session_state["player_status"] = _fetch_status(lead_id)
-                        status = st.session_state["player_status"]
-                    except Exception:
-                        status = None
 
-                _hydrate_completed_from_status(status)
-                resume_idx = _unlocked_frontier_idx(st.session_state.get("player_completed", set()), status)
-                # If DB current_section points further ahead, prefer it.
-                try:
-                    cs = (status or {}).get("course_state") or {}
-                    current_section = cs.get("current_section")
-                    if current_section:
-                        _idx_map = {sid: i for i, (sid, _t) in enumerate(SECTIONS)}
-                        resume_idx = max(resume_idx, _idx_map.get(current_section, 0))
-                except Exception:
-                    pass
-                resume_idx = max(0, min(len(SECTIONS) - 1, int(resume_idx)))
+        # ── CTA: Resume / Restart vs Begin ────────────────────────────────────
+        if not lead_id:
+            # No lead entered yet — show a disabled Begin button with guidance.
+            st.button("Begin Course →", type="primary", key="btn_begin_course", disabled=True)
+            st.caption("Enter your Lead ID in the sidebar to continue.")
 
-                st.session_state["player_course_started"] = True
-                st.session_state["player_flow_step"] = "lesson"
-                st.session_state["player_flow_chunk_idx"] = 0
-                st.session_state["player_quiz_idx"] = 0
-                st.session_state["player_quiz_q_idx"] = 0
-                st.session_state["player_quiz_attempts"] = {}
-                st.session_state["player_quiz_correct"] = set()
-                st.session_state["player_refl_idx"] = 0
-                # Write before rerun so the radio picks it up on the next render.
-                st.session_state["_section_radio"] = resume_idx
-                st.session_state["_section_radio_confirmed"] = int(resume_idx)
-                st.rerun()
+        elif _wc_has_progress:
+            # Progress exists — show Resume (primary) + Restart (secondary).
+            _wc_cs = _wc_status["course_state"]                             # type: ignore[index]
+            _wc_pct = float(_wc_cs.get("completion_pct") or 0)
+            _wc_cur_sid = _wc_cs.get("current_section") or ""
+            _wc_cur_title = _sid_to_title_wc.get(_wc_cur_sid, "") if _wc_cur_sid else ""
+            _wc_summary = f"{_wc_pct:.0f}% complete"
+            if _wc_cur_title:
+                _wc_summary += f" · last section: **{_wc_cur_title}**"
+            st.info(f"Saved progress found — {_wc_summary}")
+
+            _rb_col, _rs_col = st.columns([2, 1])
+            with _rb_col:
+                if st.button(
+                    "Resume →", type="primary",
+                    key="btn_resume_course", use_container_width=True,
+                ):
+                    _wc_start(_wc_compute_resume_idx(_wc_status))
+            with _rs_col:
+                if st.button(
+                    "Restart course",
+                    key="btn_restart_course", use_container_width=True,
+                ):
+                    # Clear DB progress so the next login also starts from scratch.
+                    _wc_frontier = _unlocked_frontier_idx(
+                        st.session_state.get("player_completed", set()), _wc_status
+                    )
+                    _reset_db_progress_from_idx(
+                        lead_id,
+                        from_idx=int(_wc_frontier),
+                        to_idx=0,
+                    )
+                    # Reset in-session state.
+                    st.session_state["player_completed"] = set()
+                    st.session_state["player_status"] = None
+                    _tutor_lid_wc = lead_id or "unknown"
+                    st.session_state["tutor_history"][_tutor_lid_wc] = []
+                    st.session_state["_backnav_pending_idx"] = None
+                    st.session_state["_last_sidebar_idx"] = 0
+                    st.session_state["_suppress_backnav_once"] = True
+                    _wc_start(0)
+
+        else:
+            # No progress — standard Begin Course CTA.
+            if st.button("Begin Course →", type="primary", key="btn_begin_course"):
+                _hydrate_completed_from_status(_wc_status)
+                _wc_start(_wc_compute_resume_idx(_wc_status))
+
     _trace_backnav("BEFORE_STOP_WELCOME")
     st.stop()
 
