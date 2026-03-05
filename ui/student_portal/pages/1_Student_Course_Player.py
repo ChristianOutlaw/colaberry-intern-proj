@@ -1150,9 +1150,12 @@ else:  # complete
     _bar_val = 1.0
 _bar_val = max(0.0, min(1.0, _bar_val))
 
+_topbar_caption = f"Section {active_idx + 1} of {len(SECTIONS)}"
+if step == "lesson" and n_chunks > 1:
+    _topbar_caption += f" • Part {chunk_idx + 1} of {n_chunks}"
 st.markdown(
     f"""<div class="cb-topbar">
-      <p class="cb-topbar-caption">Section {active_idx + 1} of {len(SECTIONS)}</p>
+      <p class="cb-topbar-caption">{_topbar_caption}</p>
       <p class="cb-topbar-title">{active_title}</p>
     </div>""",
     unsafe_allow_html=True,
@@ -1256,11 +1259,6 @@ if step == "welcome":
 elif step == "lesson":
     with st.container(border=True):
         st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div style='font-size:0.8rem;color:#6B7280;margin-bottom:6px;'>"
-            f"Chunk {chunk_idx + 1} of {n_chunks}</div>",
-            unsafe_allow_html=True,
-        )
         _chunk_key = f"chunk_typed_{active_section_id}_{chunk_idx}"
         _chunk_ph = st.empty()
         if _chunk_key not in st.session_state:
@@ -1295,7 +1293,7 @@ elif step == "lesson":
             else:
                 fwd_label = "Continue to Complete →"
         else:
-            fwd_label = f"Continue → (Part {chunk_idx + 2} of {n_chunks})"
+            fwd_label = f"Continue → Part {chunk_idx + 2} of {n_chunks}"
 
         st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
         col_back, col_fwd = st.columns([1, 3])
