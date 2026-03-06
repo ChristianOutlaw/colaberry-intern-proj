@@ -153,7 +153,8 @@ _card_defs = [
     ("INVITED",   "Invited",      lambda rows: sum(1 for r in rows if r["invited_sent_at"] is not None)),
     ("COMPLETED", "Completed",    lambda rows: sum(1 for r in rows if r["completion_pct"] == 100.0)),
 ]
-_active_pre: str = st.session_state["lead_filter"]
+def _set_lead_filter(value: str) -> None:
+    st.session_state["lead_filter"] = value
 
 with left_col:
     if not load_error:
@@ -162,16 +163,16 @@ with left_col:
             [fc1, fc2, fc3, fc4], _card_defs
         ):
             _count = _count_fn(all_rows)
-            _btn_type = "primary" if _active_pre == _key else "secondary"
-            if _col.button(
+            _btn_type = "primary" if st.session_state["lead_filter"] == _key else "secondary"
+            _col.button(
                 f"{_label} ({_count})",
                 key=f"filter_{_key}",
                 use_container_width=True,
                 type=_btn_type,
-            ):
-                st.session_state["lead_filter"] = _key
+                on_click=_set_lead_filter,
+                args=(_key,),
+            )
 
-# Re-read after buttons — captures any click from this render pass
 selected_filter: str = st.session_state["lead_filter"]
 
 # Detect filter change → reset table row selection so detail panel clears cleanly
