@@ -49,8 +49,9 @@ def compute_course_state(
         if not rows:
             return  # no events — nothing to compute or persist
 
-        current_section = rows[-1]["section"]
+        current_section  = rows[-1]["section"]
         last_activity_at = rows[-1]["occurred_at"]
+        first_activity_at = rows[0]["occurred_at"]
 
         distinct_sections = conn.execute(
             """
@@ -75,19 +76,20 @@ def compute_course_state(
                 SET current_section  = ?,
                     completion_pct   = ?,
                     last_activity_at = ?,
+                    started_at       = COALESCE(started_at, ?),
                     updated_at       = ?
                 WHERE lead_id = ?
                 """,
-                (current_section, completion_pct, last_activity_at, now, lead_id),
+                (current_section, completion_pct, last_activity_at, first_activity_at, now, lead_id),
             )
         else:
             conn.execute(
                 """
                 INSERT INTO course_state
-                    (lead_id, current_section, completion_pct, last_activity_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                    (lead_id, current_section, completion_pct, last_activity_at, started_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (lead_id, current_section, completion_pct, last_activity_at, now),
+                (lead_id, current_section, completion_pct, last_activity_at, first_activity_at, now),
             )
 
         conn.commit()
