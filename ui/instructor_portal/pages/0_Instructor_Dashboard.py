@@ -179,6 +179,19 @@ if st.session_state["prev_dashboard_filter"] != active_filter:
     st.session_state["selection_reset_pending"] = True
 st.session_state["prev_dashboard_filter"] = active_filter
 
+# Temperature selectbox — rendered in left column, below stat-card buttons.
+# Value is read before the temperature filter is applied below.
+with left_col:
+    if not load_error:
+        temp_filter: str = st.selectbox(
+            "Temperature filter",
+            options=["ALL", "HOT", "WARM", "COLD"],
+            index=0,
+            key="temp_filter",
+        )
+    else:
+        temp_filter = "ALL"
+
 # ---------------------------------------------------------------------------
 # Client-side filters — search first, card filter second (order matters)
 # ---------------------------------------------------------------------------
@@ -200,6 +213,48 @@ if not load_error:
         filtered_rows = [r for r in filtered_rows if r["invited_sent_at"] is not None]
     elif active_filter == "COMPLETED":
         filtered_rows = [r for r in filtered_rows if r["completion_pct"] == 100.0]
+
+# ---------------------------------------------------------------------------
+# Pre-compute temperature for each row in the current view.
+# Done once here — reused for temperature filtering, score-based sort, and the
+# table display columns. Quiz/reflection inputs are not yet wired (partial signal).
+# ---------------------------------------------------------------------------
+_temp_map: dict[str, dict] = {}  # lead_id → {signal, label, score}
+if not load_error:
+    _icons = {"HOT": "🔥 HOT", "WARM": "🌡️ WARM", "COLD": "❄️ COLD"}
+    for _r in filtered_rows:
+        try:
+            _res = compute_lead_temperature(
+                now=now_utc,
+                invited_sent=_r["invited_sent_at"] is not None,
+                completion_percent=_r["completion_pct"],
+                last_activity_at=_r["last_activity_at"],
+                avg_quiz_score=None,
+                avg_quiz_attempts=None,
+                reflection_confidence=None,
+                current_section=_r["current_section"],
+            )
+            _temp_map[_r["lead_id"]] = {
+                "signal": _res["signal"],
+                "label":  _icons.get(_res["signal"], _res["signal"]),
+                "score":  _res["score"],
+            }
+        except Exception:
+            logging.exception("Error pre-computing temperature for %s", _r.get("lead_id"))
+            _temp_map[_r["lead_id"]] = {"signal": "", "label": "—", "score": 0}
+
+    if temp_filter != "ALL":
+        filtered_rows = [
+            r for r in filtered_rows
+            if _temp_map.get(r["lead_id"], {}).get("signal") == temp_filter
+        ]
+
+    # Default sort: higher temperature score first so hotter leads are easy to spot
+    filtered_rows = sorted(
+        filtered_rows,
+        key=lambda r: _temp_map.get(r["lead_id"], {}).get("score", 0),
+        reverse=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Safety guard — clear selection if the selected lead left the filtered view
@@ -257,32 +312,6 @@ def _fmt_activity(raw: str | None, now: datetime) -> str:
         return raw[:10] if raw else "—"
 
 
-_TEMP_ICONS: dict[str, str] = {"HOT": "🔥 HOT", "WARM": "🌡️ WARM", "COLD": "❄️ COLD"}
-
-
-def _compute_temp_row(r: dict, now: datetime) -> tuple[str, int]:
-    """Return (signal_label, score) from compute_lead_temperature for one overview row.
-
-    Passes None for quiz/reflection — consistent with the detail-panel integration.
-    Falls back to ('—', 0) on any error so the table still renders.
-    """
-    try:
-        result = compute_lead_temperature(
-            now=now,
-            invited_sent=r["invited_sent_at"] is not None,
-            completion_percent=r["completion_pct"],
-            last_activity_at=r["last_activity_at"],
-            avg_quiz_score=None,
-            avg_quiz_attempts=None,
-            reflection_confidence=None,
-            current_section=r["current_section"],
-        )
-        return _TEMP_ICONS.get(result["signal"], result["signal"]), result["score"]
-    except Exception:
-        logging.exception("Error computing temperature for row %s", r.get("lead_id"))
-        return "—", 0
-
-
 with left_col:
     st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
@@ -290,7 +319,7 @@ with left_col:
         if filtered_rows:
             display_rows = []
             for r in filtered_rows:
-                _t_label, _t_score = _compute_temp_row(r, now_utc)
+                _t = _temp_map.get(r["lead_id"], {"label": "—", "score": 0})
                 display_rows.append({
                     "lead_id":    r["lead_id"],
                     "Status":     _lifecycle_status(r),
@@ -299,8 +328,8 @@ with left_col:
                     "Completion": r["completion_pct"],           # float | None → ProgressColumn
                     "Section":    r["current_section"] or "—",
                     "Activity":   _fmt_activity(r["last_activity_at"], now_utc),
-                    "Temp":       _t_label,
-                    "Score":      _t_score,
+                    "Temp":       _t["label"],
+                    "Score":      _t["score"],
                 })
             display_df = pd.DataFrame(display_rows)
             tbl = st.dataframe(
