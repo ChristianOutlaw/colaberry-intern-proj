@@ -257,13 +257,41 @@ def _fmt_activity(raw: str | None, now: datetime) -> str:
         return raw[:10] if raw else "—"
 
 
+_TEMP_ICONS: dict[str, str] = {"HOT": "🔥 HOT", "WARM": "🌡️ WARM", "COLD": "❄️ COLD"}
+
+
+def _compute_temp_row(r: dict, now: datetime) -> tuple[str, int]:
+    """Return (signal_label, score) from compute_lead_temperature for one overview row.
+
+    Passes None for quiz/reflection — consistent with the detail-panel integration.
+    Falls back to ('—', 0) on any error so the table still renders.
+    """
+    try:
+        result = compute_lead_temperature(
+            now=now,
+            invited_sent=r["invited_sent_at"] is not None,
+            completion_percent=r["completion_pct"],
+            last_activity_at=r["last_activity_at"],
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=r["current_section"],
+        )
+        return _TEMP_ICONS.get(result["signal"], result["signal"]), result["score"]
+    except Exception:
+        logging.exception("Error computing temperature for row %s", r.get("lead_id"))
+        return "—", 0
+
+
 with left_col:
     st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
     if not load_error:
         if filtered_rows:
-            display_rows = [
-                {
+            display_rows = []
+            for r in filtered_rows:
+                _t_label, _t_score = _compute_temp_row(r, now_utc)
+                display_rows.append({
                     "lead_id":    r["lead_id"],
                     "Status":     _lifecycle_status(r),
                     "Name":       r["name"] or "—",
@@ -271,9 +299,9 @@ with left_col:
                     "Completion": r["completion_pct"],           # float | None → ProgressColumn
                     "Section":    r["current_section"] or "—",
                     "Activity":   _fmt_activity(r["last_activity_at"], now_utc),
-                }
-                for r in filtered_rows
-            ]
+                    "Temp":       _t_label,
+                    "Score":      _t_score,
+                })
             display_df = pd.DataFrame(display_rows)
             tbl = st.dataframe(
                 display_df,
@@ -287,6 +315,12 @@ with left_col:
                         min_value=0,
                         max_value=100,
                         format="%.0f%%",
+                        width="small",
+                    ),
+                    "Score": st.column_config.NumberColumn(
+                        "Score",
+                        min_value=0,
+                        max_value=100,
                         width="small",
                     ),
                 },
