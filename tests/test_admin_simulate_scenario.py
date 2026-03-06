@@ -220,7 +220,7 @@ class TestSimulateScenario(unittest.TestCase):
         """HOT_READY must result in get_lead_status reporting hot signal = 'HOT'."""
         self._run("HOT_READY")
 
-        status = get_lead_status(LEAD_ID, db_path=TEST_DB_PATH)
+        status = get_lead_status(LEAD_ID, db_path=TEST_DB_PATH, now_utc=NOW)
 
         self.assertTrue(
             status["lead_exists"],
@@ -245,7 +245,7 @@ class TestSimulateScenario(unittest.TestCase):
         """STALE_ACTIVITY must result in hot=False with reason ACTIVITY_STALE."""
         self._run("STALE_ACTIVITY")
 
-        status = get_lead_status(LEAD_ID, db_path=TEST_DB_PATH)
+        status = get_lead_status(LEAD_ID, db_path=TEST_DB_PATH, now_utc=NOW)
 
         self.assertEqual(
             status["hot_lead"]["signal"], "NOT_HOT",
