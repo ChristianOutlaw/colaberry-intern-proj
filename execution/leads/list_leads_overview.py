@@ -38,6 +38,7 @@ _SQL = """
         cs.completion_pct,
         cs.current_section,
         cs.last_activity_at,
+        cs.started_at,
         CASE WHEN
             ci.sent_at IS NOT NULL
             AND cs.completion_pct >= ?
@@ -84,7 +85,7 @@ def list_leads_overview(
         List of dicts with keys:
             lead_id, name, email, phone,
             invited_sent_at, completion_pct, current_section, last_activity_at,
-            is_hot  (int: 1 = HOT, 0 = not HOT)
+            started_at, is_hot  (int: 1 = HOT, 0 = not HOT)
         Ordered by last_activity_at DESC NULLS LAST, then lead_id ASC.
         Returns an empty list when no leads exist.
 

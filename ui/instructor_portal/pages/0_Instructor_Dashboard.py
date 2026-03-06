@@ -327,6 +327,7 @@ with left_col:
                     "Name":       r["name"] or "—",
                     "ID":         r["lead_id"],
                     "Completion": r["completion_pct"],           # float | None → ProgressColumn
+                    "Started":    _fmt_activity(r.get("started_at"), now_utc),
                     "Section":    r["current_section"] or "—",
                     "Activity":   _fmt_activity(r["last_activity_at"], now_utc),
                     "Temp":       _t["label"],
