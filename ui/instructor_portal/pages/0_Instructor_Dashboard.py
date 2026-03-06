@@ -335,7 +335,6 @@ with left_col:
                 _t = _temp_map.get(r["lead_id"], {"label": "—", "score": 0})
                 display_rows.append({
                     "lead_id":    r["lead_id"],
-                    "Status":     _lifecycle_status(r),
                     "Name":       r["name"] or "—",
                     "ID":         r["lead_id"],
                     "Completion": r["completion_pct"],           # float | None → ProgressColumn
