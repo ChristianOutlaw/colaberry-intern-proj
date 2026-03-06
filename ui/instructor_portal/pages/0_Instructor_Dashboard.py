@@ -56,12 +56,14 @@ st.set_page_config(
 apply_colaberry_theme("Instructor Portal", "Lead progress & next actions")
 
 # ---------------------------------------------------------------------------
-# Session state — persists selected lead across reruns
+# Session state — persists selected lead and active dashboard filter across reruns
 # ---------------------------------------------------------------------------
 if "selected_lead_id" not in st.session_state:
     st.session_state["selected_lead_id"] = None
-if "prev_show_hot_only" not in st.session_state:
-    st.session_state["prev_show_hot_only"] = False
+if "dashboard_filter" not in st.session_state:
+    st.session_state["dashboard_filter"] = "ALL"
+if "prev_dashboard_filter" not in st.session_state:
+    st.session_state["prev_dashboard_filter"] = "ALL"
 if "leads_table_key_version" not in st.session_state:
     st.session_state["leads_table_key_version"] = 0
 if "selection_reset_pending" not in st.session_state:
@@ -87,7 +89,7 @@ left_col, right_col = st.columns([2, 1])
 # LEFT — controls
 # ---------------------------------------------------------------------------
 with left_col:
-    col_search, col_limit, col_hot = st.columns([3, 1, 1])
+    col_search, col_limit = st.columns([4, 1])
 
     with col_search:
         search = st.text_input(
@@ -103,20 +105,6 @@ with left_col:
             value=200,
             step=1,
         )
-
-    with col_hot:
-        show_hot_only = st.checkbox(
-            "HOT leads only",
-            value=False,
-            help="Show only leads with invite sent, ≥25% completion, and activity within the last 7 days.",
-        )
-
-# HOT filter transition True → False: clear selection so the right panel hides
-if st.session_state["prev_show_hot_only"] and not show_hot_only:
-    st.session_state["selected_lead_id"] = None
-    st.session_state["leads_table_key_version"] += 1
-    st.session_state["selection_reset_pending"] = True
-st.session_state["prev_show_hot_only"] = show_hot_only
 
 # ---------------------------------------------------------------------------
 # Load overview — auto-loads on every page render (read-only, fast).
@@ -142,7 +130,46 @@ except Exception:
     load_error = True
 
 # ---------------------------------------------------------------------------
-# Client-side filters — search then HOT-only (order matters: search first)
+# Clickable filter cards — counts always reflect unfiltered all_rows totals.
+# Read current filter before rendering buttons (for type="primary" styling),
+# then re-read after to capture any click that fired this render.
+# ---------------------------------------------------------------------------
+_card_defs = [
+    ("ALL",       "Total Leads",  lambda rows: len(rows)),
+    ("HOT",       "HOT Leads",    lambda rows: sum(1 for r in rows if r["is_hot"] == 1)),
+    ("INVITED",   "Invited",      lambda rows: sum(1 for r in rows if r["invited_sent_at"] is not None)),
+    ("COMPLETED", "Completed",    lambda rows: sum(1 for r in rows if r["completion_pct"] == 100.0)),
+]
+_active_pre: str = st.session_state["dashboard_filter"]
+
+with left_col:
+    if not load_error:
+        fc1, fc2, fc3, fc4 = st.columns(4)
+        for _col, (_key, _label, _count_fn) in zip(
+            [fc1, fc2, fc3, fc4], _card_defs
+        ):
+            _count = _count_fn(all_rows)
+            _btn_type = "primary" if _active_pre == _key else "secondary"
+            if _col.button(
+                f"{_label} ({_count})",
+                key=f"filter_{_key}",
+                use_container_width=True,
+                type=_btn_type,
+            ):
+                st.session_state["dashboard_filter"] = _key
+
+# Re-read after buttons — captures any click from this render pass
+active_filter: str = st.session_state["dashboard_filter"]
+
+# Detect filter change → reset table row selection so detail panel clears cleanly
+if st.session_state["prev_dashboard_filter"] != active_filter:
+    st.session_state["selected_lead_id"] = None
+    st.session_state["leads_table_key_version"] += 1
+    st.session_state["selection_reset_pending"] = True
+st.session_state["prev_dashboard_filter"] = active_filter
+
+# ---------------------------------------------------------------------------
+# Client-side filters — search first, card filter second (order matters)
 # ---------------------------------------------------------------------------
 filtered_rows: list[dict] = all_rows
 q = search.strip().lower()
@@ -155,8 +182,13 @@ if q and not load_error:
         or q in (r["phone"]    or "").lower()
     ]
 
-if show_hot_only and not load_error:
-    filtered_rows = [r for r in filtered_rows if r["is_hot"]]
+if not load_error:
+    if active_filter == "HOT":
+        filtered_rows = [r for r in filtered_rows if r["is_hot"] == 1]
+    elif active_filter == "INVITED":
+        filtered_rows = [r for r in filtered_rows if r["invited_sent_at"] is not None]
+    elif active_filter == "COMPLETED":
+        filtered_rows = [r for r in filtered_rows if r["completion_pct"] == 100.0]
 
 # ---------------------------------------------------------------------------
 # Safety guard — clear selection if the selected lead left the filtered view
@@ -166,7 +198,7 @@ if st.session_state["selected_lead_id"] not in _filtered_ids:
     st.session_state["selected_lead_id"] = None
 
 # ---------------------------------------------------------------------------
-# LEFT — summary metrics row (unfiltered totals) + table
+# LEFT — table
 # ---------------------------------------------------------------------------
 def _lifecycle_status(r: dict) -> str:
     """Derive a single display label from a lead overview row. UI-only helper."""
@@ -182,13 +214,6 @@ def _lifecycle_status(r: dict) -> str:
 
 
 with left_col:
-    if not load_error:
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Leads",  len(all_rows))
-        m2.metric("HOT Leads",    sum(1 for r in all_rows if r["is_hot"] == 1))
-        m3.metric("Invited",      sum(1 for r in all_rows if r["invited_sent_at"] is not None))
-        m4.metric("Completed",    sum(1 for r in all_rows if r["completion_pct"] == 100.0))
-
     st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
     if not load_error:
