@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from execution.leads.list_leads_overview import list_leads_overview          # noqa: E402
 from execution.leads.get_lead_status import get_lead_status                  # noqa: E402
+from execution.leads.compute_lead_temperature import compute_lead_temperature # noqa: E402
 from execution.decision.decide_next_cold_lead_action import (                # noqa: E402
     decide_next_cold_lead_action,
 )
@@ -386,6 +387,40 @@ with right_col:
                         st.success(_reason_text)
                     else:
                         st.caption(_reason_text)
+
+                st.divider()
+
+                # Lead Temperature Score v1 — additive signal, separate from binary HOT.
+                # Quiz scores, avg attempts, and reflection confidence are not yet
+                # available in the current data flow; passed as None (partial signal).
+                st.markdown("**Lead Temperature v1**")
+                st.caption("_Partial signal — quiz scores and reflection not yet connected._")
+                try:
+                    _temp = compute_lead_temperature(
+                        now=now_utc,
+                        invited_sent=status["invite_sent"],
+                        completion_percent=cs["completion_pct"],
+                        last_activity_at=cs["last_activity_at"],
+                        avg_quiz_score=None,
+                        avg_quiz_attempts=None,
+                        reflection_confidence=None,
+                        current_section=cs["current_section"],
+                    )
+                    _ts = _temp["signal"]
+                    _sc = _temp["score"]
+                    _su = _temp["reason_summary"]
+                    if _ts == "HOT":
+                        st.success(f"🔥 HOT — score {_sc}/100")
+                    elif _ts == "WARM":
+                        st.warning(f"🌡️ WARM — score {_sc}/100")
+                    else:
+                        st.info(f"❄️ COLD — score {_sc}/100")
+                    st.caption(_su)
+                except Exception:
+                    logging.exception(
+                        "Error computing lead temperature for %s", selected_lead_id
+                    )
+                    st.caption("Temperature score unavailable.")
 
         st.divider()
 
