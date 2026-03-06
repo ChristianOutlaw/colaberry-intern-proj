@@ -334,8 +334,18 @@ with left_col:
                     "Score":      _t["score"],
                 })
             display_df = pd.DataFrame(display_rows)
+
+            def _row_style(row):
+                temp = row.get("Temp", "")
+                if temp and "HOT" in temp:
+                    return ["background-color: #ffe6e6"] * len(row)
+                if temp and "WARM" in temp:
+                    return ["background-color: #fff4e0"] * len(row)
+                return [""] * len(row)
+
+            styled_df = display_df.style.apply(_row_style, axis=1)
             tbl = st.dataframe(
-                display_df,
+                styled_df,
                 use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row",
