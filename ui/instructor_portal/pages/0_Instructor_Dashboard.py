@@ -213,6 +213,39 @@ def _lifecycle_status(r: dict) -> str:
     return "❄️ Cold"
 
 
+def _fmt_activity(raw: str | None, now: datetime) -> str:
+    """Convert a stored ISO timestamp to a compact relative label (e.g. '2d ago').
+
+    Args:
+        raw: ISO-8601 string from the database, or None.
+        now: Reference datetime injected by the caller (must be timezone-aware).
+
+    Returns:
+        Human-readable relative label, or '—' when raw is None or unparseable.
+    """
+    if raw is None:
+        return "—"
+    try:
+        ts = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        total_seconds = int((now.astimezone(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds())
+        if total_seconds < 60:
+            return "just now"
+        if total_seconds < 3600:
+            return f"{total_seconds // 60}m ago"
+        if total_seconds < 86400:
+            return f"{total_seconds // 3600}h ago"
+        days = total_seconds // 86400
+        if days <= 60:
+            return f"{days}d ago"
+        if days <= 365:
+            return f"{days // 7}w ago"
+        return f"{days // 365}y ago"
+    except (ValueError, TypeError):
+        return raw[:10] if raw else "—"
+
+
 with left_col:
     st.subheader(f"Leads ({len(filtered_rows)} shown)")
 
@@ -220,18 +253,13 @@ with left_col:
         if filtered_rows:
             display_rows = [
                 {
-                    "lead_id":       r["lead_id"],
-                    "Status":        _lifecycle_status(r),
-                    "Lead ID":       r["lead_id"],
-                    "Invited":       "Yes" if r["invited_sent_at"] else "No",
-                    "Completion":    (
-                        f"{r['completion_pct']:.1f} %"
-                        if r["completion_pct"] is not None
-                        else "—"
-                    ),
-                    "Section":       r["current_section"] or "—",
-                    "Last Activity": r["last_activity_at"] or "—",
-                    "Hot":           "🔥 HOT" if r["is_hot"] == 1 else "Cold",
+                    "lead_id":    r["lead_id"],
+                    "Status":     _lifecycle_status(r),
+                    "Name":       r["name"] or "—",
+                    "ID":         r["lead_id"],
+                    "Completion": r["completion_pct"],           # float | None → ProgressColumn
+                    "Section":    r["current_section"] or "—",
+                    "Activity":   _fmt_activity(r["last_activity_at"], now_utc),
                 }
                 for r in filtered_rows
             ]
@@ -241,7 +269,16 @@ with left_col:
                 use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row",
-                column_config={"lead_id": None},  # hide key column from display
+                column_config={
+                    "lead_id":    None,  # hidden key column for row selection
+                    "Completion": st.column_config.ProgressColumn(
+                        "Completion",
+                        min_value=0,
+                        max_value=100,
+                        format="%.0f%%",
+                        width="small",
+                    ),
+                },
                 key=f"leads_table_{st.session_state['leads_table_key_version']}",
             )
             _sel_rows = tbl.selection.rows
