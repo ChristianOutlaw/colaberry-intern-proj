@@ -84,10 +84,10 @@ apply_colaberry_theme("Instructor Portal", "Lead progress & next actions")
 # ---------------------------------------------------------------------------
 if "selected_lead_id" not in st.session_state:
     st.session_state["selected_lead_id"] = None
-if "dashboard_filter" not in st.session_state:
-    st.session_state["dashboard_filter"] = "ALL"
-if "prev_dashboard_filter" not in st.session_state:
-    st.session_state["prev_dashboard_filter"] = "ALL"
+if "lead_filter" not in st.session_state:
+    st.session_state["lead_filter"] = "TOTAL"
+if "prev_lead_filter" not in st.session_state:
+    st.session_state["prev_lead_filter"] = "TOTAL"
 if "leads_table_key_version" not in st.session_state:
     st.session_state["leads_table_key_version"] = 0
 if "selection_reset_pending" not in st.session_state:
@@ -159,12 +159,12 @@ except Exception:
 # then re-read after to capture any click that fired this render.
 # ---------------------------------------------------------------------------
 _card_defs = [
-    ("ALL",       "Total Leads",  lambda rows: len(rows)),
+    ("TOTAL",     "Total Leads",  lambda rows: len(rows)),
     ("HOT",       "HOT Leads",    lambda rows: sum(1 for r in rows if r["is_hot"] == 1)),
     ("INVITED",   "Invited",      lambda rows: sum(1 for r in rows if r["invited_sent_at"] is not None)),
     ("COMPLETED", "Completed",    lambda rows: sum(1 for r in rows if r["completion_pct"] == 100.0)),
 ]
-_active_pre: str = st.session_state["dashboard_filter"]
+_active_pre: str = st.session_state["lead_filter"]
 
 with left_col:
     if not load_error:
@@ -180,17 +180,17 @@ with left_col:
                 use_container_width=True,
                 type=_btn_type,
             ):
-                st.session_state["dashboard_filter"] = _key
+                st.session_state["lead_filter"] = _key
 
 # Re-read after buttons — captures any click from this render pass
-active_filter: str = st.session_state["dashboard_filter"]
+selected_filter: str = st.session_state["lead_filter"]
 
 # Detect filter change → reset table row selection so detail panel clears cleanly
-if st.session_state["prev_dashboard_filter"] != active_filter:
+if st.session_state["prev_lead_filter"] != selected_filter:
     st.session_state["selected_lead_id"] = None
     st.session_state["leads_table_key_version"] += 1
     st.session_state["selection_reset_pending"] = True
-st.session_state["prev_dashboard_filter"] = active_filter
+st.session_state["prev_lead_filter"] = selected_filter
 
 # Temperature selectbox — rendered in left column, below stat-card buttons.
 # Value is read before the temperature filter is applied below.
@@ -220,11 +220,11 @@ if q and not load_error:
     ]
 
 if not load_error:
-    if active_filter == "HOT":
+    if selected_filter == "HOT":
         filtered_rows = [r for r in filtered_rows if r["is_hot"] == 1]
-    elif active_filter == "INVITED":
+    elif selected_filter == "INVITED":
         filtered_rows = [r for r in filtered_rows if r["invited_sent_at"] is not None]
-    elif active_filter == "COMPLETED":
+    elif selected_filter == "COMPLETED":
         filtered_rows = [r for r in filtered_rows if r["completion_pct"] == 100.0]
 
 # ---------------------------------------------------------------------------
