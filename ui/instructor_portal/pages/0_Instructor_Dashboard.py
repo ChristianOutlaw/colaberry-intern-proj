@@ -45,6 +45,16 @@ _ACTION_LABELS: dict[str, str] = {
     "READY_FOR_BOOKING": "Course complete — lead is ready for a booking call.",
 }
 
+# Human-readable explanations for HOT signal reason codes (see directives/HOT_LEAD_SIGNAL.md).
+_REASON_LABELS: dict[str, str] = {
+    "HOT_ENGAGED":                "All gates passed — invite sent, ≥25% complete, active within 7 days.",
+    "NOT_INVITED":                "No course invite has been sent yet.",
+    "COMPLETION_UNKNOWN":         "No progress events have been recorded.",
+    "COMPLETION_BELOW_THRESHOLD": "Course completion is below the 25% threshold.",
+    "NO_ACTIVITY_RECORDED":       "No activity recorded since the invite was sent.",
+    "ACTIVITY_STALE":             "Last activity was more than 7 days ago.",
+}
+
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call in the file.
 # ---------------------------------------------------------------------------
@@ -307,7 +317,16 @@ with right_col:
 
     # ---- details panel — only when a lead_id is resolved ----------------
     if selected_lead_id:
-        st.markdown(f"#### Details — `{selected_lead_id}`")
+
+        # Identity — show name when available from the already-loaded overview
+        # rows (no extra DB call). Falls back to the raw ID.
+        _lead_row = next((r for r in all_rows if r["lead_id"] == selected_lead_id), None)
+        _display_name = _lead_row["name"] if (_lead_row and _lead_row["name"]) else None
+        if _display_name:
+            st.markdown(f"### {_display_name}")
+            st.caption(f"ID: `{selected_lead_id}`")
+        else:
+            st.markdown(f"### `{selected_lead_id}`")
 
         # ---- get_lead_status --------------------------------------------
         status: dict | None = None
@@ -326,21 +345,51 @@ with right_col:
                 cs = status["course_state"]
                 hl = status["hot_lead"]
 
-                col_a, col_b, col_c = st.columns(3)
-                col_a.metric("Invite Sent",      "Yes" if status["invite_sent"] else "No")
-                col_b.metric("Completion",       f"{cs['completion_pct']:.1f} %" if cs["completion_pct"] is not None else "—")
-                col_c.metric("Hot Lead Signal",  hl["signal"] or "—")
+                # Lifecycle badge — one-line status at a glance
+                if hl["signal"] == "HOT":
+                    _badge = "🔥 **HOT** — Actively engaged"
+                elif cs["completion_pct"] == 100.0:
+                    _badge = "✅ **Completed** — Course finished"
+                elif cs["completion_pct"] is not None and cs["completion_pct"] > 0:
+                    _badge = "📚 **In Progress**"
+                elif status["invite_sent"]:
+                    _badge = "📩 **Invited** — Not yet started"
+                else:
+                    _badge = "❄️ **Cold** — No invite sent"
+                st.markdown(_badge)
 
-                col_d, col_e = st.columns(2)
-                col_d.markdown(f"**Current Section:** {cs['current_section'] or '—'}")
-                col_e.markdown(f"**Last Activity:** {cs['last_activity_at'] or '—'}")
+                st.divider()
 
+                # Progress & activity — 2×2 metric grid
+                col_a, col_b = st.columns(2)
+                col_a.metric(
+                    "Completion",
+                    f"{cs['completion_pct']:.0f}%" if cs["completion_pct"] is not None else "—",
+                )
+                col_b.metric(
+                    "Last Activity",
+                    _fmt_activity(cs["last_activity_at"], now_utc),
+                )
+                col_c, col_d = st.columns(2)
+                col_c.metric("Invite Sent", "Yes" if status["invite_sent"] else "No")
+                col_d.metric("Section", cs["current_section"] or "—")
+
+                st.divider()
+
+                # Engagement signal with human-readable reason
+                st.markdown("**Engagement Signal**")
+                _signal_str = "🔥 HOT" if hl["signal"] == "HOT" else "❄️ Not Hot"
+                st.markdown(_signal_str)
                 if hl["reason"]:
-                    st.caption(f"Signal reason: {hl['reason']}")
+                    _reason_text = _REASON_LABELS.get(hl["reason"], hl["reason"])
+                    if hl["signal"] == "HOT":
+                        st.success(_reason_text)
+                    else:
+                        st.caption(_reason_text)
 
         st.divider()
 
-        # ---- decide_next_cold_lead_action --------------------------------
+        # ---- decide_next_cold_lead_action — primary callout --------------
         st.markdown("**Recommended Next Action**")
 
         action: str | None = None
@@ -354,7 +403,14 @@ with right_col:
 
         if action is not None:
             label = _ACTION_LABELS.get(action, action)
-            st.write(label)
+            if action == "READY_FOR_BOOKING":
+                st.success(label)
+            elif action in ("NUDGE_PROGRESS", "NUDGE_START_CLASS"):
+                st.warning(label)
+            elif action == "SEND_INVITE":
+                st.info(label)
+            else:
+                st.error(label)
 
     else:
-        st.info("Select a lead from the table to view details.")
+        st.info("Select a lead from the table, or type a Lead ID above.")
