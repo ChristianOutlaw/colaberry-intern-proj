@@ -28,9 +28,6 @@ if str(REPO_ROOT) not in sys.path:
 from execution.leads.list_leads_overview import list_leads_overview          # noqa: E402
 from execution.leads.get_lead_status import get_lead_status                  # noqa: E402
 from execution.leads.compute_lead_temperature import compute_lead_temperature # noqa: E402
-from execution.decision.decide_next_cold_lead_action import (                # noqa: E402
-    decide_next_cold_lead_action,
-)
 from execution.decision.build_cora_recommendation import (                   # noqa: E402
     build_cora_recommendation,
 )
@@ -40,14 +37,6 @@ from ui.theme import apply_colaberry_theme                                   # n
 # Constants
 # ---------------------------------------------------------------------------
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
-
-_ACTION_LABELS: dict[str, str] = {
-    "NO_LEAD":           "Lead not found in database.",
-    "SEND_INVITE":       "Lead exists but has not received a course invite yet.",
-    "NUDGE_START_CLASS": "Invite sent — lead has not started the course.",
-    "NUDGE_PROGRESS":    "Course started — lead has not yet completed it.",
-    "READY_FOR_BOOKING": "Course complete — lead is ready for a booking call.",
-}
 
 # Human-readable labels for Cora recommendation event types (see directives/CORA_RECOMMENDATION_EVENTS.md).
 _CORA_EVENT_LABELS: dict[str, str] = {
@@ -423,21 +412,6 @@ with right_col:
                 cs = status["course_state"]
                 hl = status["hot_lead"]
 
-                # Lifecycle badge — one-line status at a glance
-                if hl["signal"] == "HOT":
-                    _badge = "🔥 **HOT** — Actively engaged"
-                elif cs["completion_pct"] == 100.0:
-                    _badge = "✅ **Completed** — Course finished"
-                elif cs["completion_pct"] is not None and cs["completion_pct"] > 0:
-                    _badge = "📚 **In Progress**"
-                elif status["invite_sent"]:
-                    _badge = "📩 **Invited** — Not yet started"
-                else:
-                    _badge = "❄️ **Cold** — No invite sent"
-                st.markdown(_badge)
-
-                st.divider()
-
                 # Progress & activity — 2×2 metric grid
                 col_a, col_b = st.columns(2)
                 col_a.metric(
@@ -451,19 +425,6 @@ with right_col:
                 col_c, col_d = st.columns(2)
                 col_c.metric("Invite Sent", "Yes" if status["invite_sent"] else "No")
                 col_d.metric("Section", cs["current_section"] or "—")
-
-                st.divider()
-
-                # Engagement signal with human-readable reason
-                st.markdown("**Engagement Signal**")
-                _signal_str = "🔥 HOT" if hl["signal"] == "HOT" else "❄️ Not Hot"
-                st.markdown(_signal_str)
-                if hl["reason"]:
-                    _reason_text = _REASON_LABELS.get(hl["reason"], hl["reason"])
-                    if hl["signal"] == "HOT":
-                        st.success(_reason_text)
-                    else:
-                        st.caption(_reason_text)
 
                 st.divider()
 
@@ -544,30 +505,6 @@ with right_col:
                     )
                     st.caption("Cora recommendation unavailable.")
 
-        st.divider()
-
-        # ---- decide_next_cold_lead_action — primary callout --------------
-        st.markdown("**Recommended Next Action**")
-
-        action: str | None = None
-        try:
-            action = decide_next_cold_lead_action(selected_lead_id, db_path=DB_PATH)
-        except sqlite3.OperationalError:
-            st.error("Database unavailable when computing recommended action.")
-        except Exception:
-            logging.exception("Unexpected error in decide_next_cold_lead_action for %s", selected_lead_id)
-            st.error("An unexpected error occurred computing the recommended action.")
-
-        if action is not None:
-            label = _ACTION_LABELS.get(action, action)
-            if action == "READY_FOR_BOOKING":
-                st.success(label)
-            elif action in ("NUDGE_PROGRESS", "NUDGE_START_CLASS"):
-                st.warning(label)
-            elif action == "SEND_INVITE":
-                st.info(label)
-            else:
-                st.error(label)
 
     else:
         st.info("Select a lead from the table, or type a Lead ID above.")
