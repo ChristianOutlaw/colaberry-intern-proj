@@ -372,6 +372,8 @@ with left_col:
                 st.session_state["selection_reset_pending"] = False
             elif _sel_rows:
                 st.session_state["selected_lead_id"] = display_df.iloc[_sel_rows[0]]["lead_id"]
+            else:
+                st.session_state["selected_lead_id"] = None
         else:
             st.info("No leads match your search. Try a different term or clear the search box.")
 
