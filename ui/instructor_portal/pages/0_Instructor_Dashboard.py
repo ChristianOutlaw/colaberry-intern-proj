@@ -31,6 +31,9 @@ from execution.leads.compute_lead_temperature import compute_lead_temperature # 
 from execution.decision.decide_next_cold_lead_action import (                # noqa: E402
     decide_next_cold_lead_action,
 )
+from execution.decision.build_cora_recommendation import (                   # noqa: E402
+    build_cora_recommendation,
+)
 from ui.theme import apply_colaberry_theme                                   # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -44,6 +47,16 @@ _ACTION_LABELS: dict[str, str] = {
     "NUDGE_START_CLASS": "Invite sent — lead has not started the course.",
     "NUDGE_PROGRESS":    "Course started — lead has not yet completed it.",
     "READY_FOR_BOOKING": "Course complete — lead is ready for a booking call.",
+}
+
+# Human-readable labels for Cora recommendation event types (see directives/CORA_RECOMMENDATION_EVENTS.md).
+_CORA_EVENT_LABELS: dict[str, str] = {
+    "SEND_INVITE":           "Send course invite",
+    "NUDGE_START_CLASS":     "Nudge to start class",
+    "HOT_LEAD_BOOKING":      "Schedule booking call",
+    "REENGAGE_STALLED_LEAD": "Re-engage stalled lead",
+    "NUDGE_PROGRESS":        "Nudge to continue progress",
+    "NO_ACTION":             "No action needed",
 }
 
 # Human-readable explanations for HOT signal reason codes (see directives/HOT_LEAD_SIGNAL.md).
@@ -456,6 +469,10 @@ with right_col:
                 # Lead Temperature Score v1 — additive signal, separate from binary HOT.
                 # Quiz scores, avg attempts, and reflection confidence are not yet
                 # available in the current data flow; passed as None (partial signal).
+                # Pre-declared so Cora section below can always read them safely.
+                _ts: str | None = None
+                _sc: int | None = None
+                _temp_codes: list[str] = []
                 st.markdown("**Lead Temperature v1**")
                 st.caption("_Partial signal — quiz scores and reflection not yet connected._")
                 try:
@@ -472,6 +489,7 @@ with right_col:
                     _ts = _temp["signal"]
                     _sc = _temp["score"]
                     _su = _temp["reason_summary"]
+                    _temp_codes = _temp["reason_codes"]
                     if _ts == "HOT":
                         st.success(f"🔥 HOT — score {_sc}/100")
                     elif _ts == "WARM":
@@ -484,6 +502,46 @@ with right_col:
                         "Error computing lead temperature for %s", selected_lead_id
                     )
                     st.caption("Temperature score unavailable.")
+
+                st.divider()
+
+                # Cora Recommendation v1 — maps current lead state to a structured
+                # outreach event. Preparation only; no outreach is sent here.
+                st.markdown("**Cora Recommendation**")
+                try:
+                    _cora = build_cora_recommendation(
+                        now=now_utc,
+                        lead_id=selected_lead_id,
+                        invite_sent=status["invite_sent"],
+                        completion_percent=cs["completion_pct"],
+                        current_section=cs["current_section"],
+                        last_activity_at=cs["last_activity_at"],
+                        hot_signal=hl["signal"],
+                        temperature_signal=_ts,
+                        temperature_score=_sc,
+                        reason_codes=_temp_codes,
+                    )
+                    _ce = _cora["event_type"]
+                    _cp = _cora["priority"]
+                    _cc = _cora["recommended_channel"]
+                    _cr = _cora["reason_codes"]
+                    _ce_label  = _CORA_EVENT_LABELS.get(_ce, _ce)
+                    _cc_str    = f"via {_cc}" if _cc else "no outreach"
+                    _cora_line = f"{_ce_label} · {_cp} · {_cc_str}"
+                    if _ce in ("HOT_LEAD_BOOKING", "NO_ACTION"):
+                        st.success(_cora_line)
+                    elif _ce == "REENGAGE_STALLED_LEAD":
+                        st.error(_cora_line)
+                    elif _ce in ("NUDGE_PROGRESS", "NUDGE_START_CLASS"):
+                        st.warning(_cora_line)
+                    else:
+                        st.info(_cora_line)
+                    st.caption(", ".join(_cr))
+                except Exception:
+                    logging.exception(
+                        "Error building cora recommendation for %s", selected_lead_id
+                    )
+                    st.caption("Cora recommendation unavailable.")
 
         st.divider()
 
