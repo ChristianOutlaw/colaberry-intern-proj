@@ -94,6 +94,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             current_section  TEXT,
             completion_pct   REAL,
             last_activity_at TEXT,
+            started_at       TEXT,
             updated_at       TEXT,
             FOREIGN KEY (lead_id) REFERENCES leads (id)
         );
