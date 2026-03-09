@@ -471,7 +471,12 @@ with right_col:
                         st.warning(f"🌡️ WARM — score {_sc}/100")
                     else:
                         st.info(f"❄️ COLD — score {_sc}/100")
-                    st.caption(_su)
+                    # Split "SIGNAL (score N): phrase one; phrase two." into bullet lines.
+                    _phrase_block = _su.split(": ", 1)[-1].rstrip(".")
+                    _bullets = "\n".join(
+                        f"- {p.strip()}" for p in _phrase_block.split("; ") if p.strip()
+                    )
+                    st.markdown(_bullets)
                 except Exception:
                     logging.exception(
                         "Error computing lead temperature for %s", selected_lead_id
