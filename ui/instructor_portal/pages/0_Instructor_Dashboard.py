@@ -516,7 +516,9 @@ with right_col:
                         st.warning(_cora_line)
                     else:
                         st.info(_cora_line)
-                    st.caption(", ".join(_cr))
+                    _days_inactive = _cora["payload"]["days_inactive"]
+                    _days_str = f"{_days_inactive}d inactive" if _days_inactive is not None else "activity unknown"
+                    st.caption(f"{', '.join(_cr)} · {_days_str}")
                 except Exception:
                     logging.exception(
                         "Error building cora recommendation for %s", selected_lead_id
