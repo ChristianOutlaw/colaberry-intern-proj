@@ -119,6 +119,79 @@ class TestResolveInviteToken(unittest.TestCase):
         self.assertIsInstance(result["lead_id"],   str)
         self.assertIsInstance(result["token"],     str)
 
+    # ------------------------------------------------------------------
+    # T6 — first_used_at is recorded on the first successful resolve
+    # ------------------------------------------------------------------
+    def test_first_used_at_set_on_first_resolve(self):
+        """first_used_at must be NULL before resolve and non-NULL after."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            stored_token = conn.execute(
+                "SELECT token FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["token"]
+            pre_use = conn.execute(
+                "SELECT first_used_at FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["first_used_at"]
+        finally:
+            conn.close()
+
+        self.assertIsNone(pre_use, "first_used_at must be NULL before first resolve")
+
+        resolve_invite_token(stored_token, db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            post_use = conn.execute(
+                "SELECT first_used_at FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["first_used_at"]
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(post_use, "first_used_at must be set after first resolve")
+        self.assertIsInstance(post_use, str)
+        self.assertGreater(len(post_use), 10, "first_used_at must be a non-trivially short string")
+
+    # ------------------------------------------------------------------
+    # T7 — first_used_at is not overwritten on a second resolve
+    # ------------------------------------------------------------------
+    def test_first_used_at_not_overwritten_on_second_resolve(self):
+        """Resolving the same token twice must not change first_used_at."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            stored_token = conn.execute(
+                "SELECT token FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["token"]
+        finally:
+            conn.close()
+
+        resolve_invite_token(stored_token, db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            first_ts = conn.execute(
+                "SELECT first_used_at FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["first_used_at"]
+        finally:
+            conn.close()
+
+        resolve_invite_token(stored_token, db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            second_ts = conn.execute(
+                "SELECT first_used_at FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["first_used_at"]
+        finally:
+            conn.close()
+
+        self.assertEqual(first_ts, second_ts, "first_used_at must not change after the first resolve")
+
 
 if __name__ == "__main__":
     unittest.main()
