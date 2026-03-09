@@ -190,6 +190,28 @@ def _reset_db_progress_from_idx(lead_id: str, from_idx: int, to_idx: int) -> Non
         pass
 
 
+def _lead_has_invite(lead_id: str) -> bool:
+    """Return True when lead_id has at least one course invite on record.
+
+    Used to gate manual-entry access: students without an invite cannot
+    record progress.  Token-resolved users always have an invite (their
+    lead_id comes directly from course_invites), so this check passes
+    transparently for them.
+    """
+    if not lead_id:
+        return False
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute(
+            "SELECT id FROM course_invites WHERE lead_id = ? LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return False
+
+
 # ── Progress helpers ──────────────────────────────────────────────────────────
 def _status_completed_sections(status: dict | None) -> set[str]:
     """Extract completed section IDs from a get_lead_status payload (best-effort)."""
@@ -539,6 +561,14 @@ with st.sidebar:
             value="",
             placeholder="e.g. lead-123",
         ).strip()
+        # Require an existing course invite for manual-entry users.
+        # Token-resolved users never reach this branch — they are handled above.
+        if lead_id and not _lead_has_invite(lead_id):
+            st.error(
+                "This Lead ID has no course invite on record. "
+                "Please use the link sent to you by your instructor."
+            )
+            lead_id = ""  # block all downstream rendering
 
     # Reset per-session tracking whenever the lead changes.
     if lead_id != st.session_state["player_lead_id"]:
