@@ -48,6 +48,17 @@ _CORA_EVENT_LABELS: dict[str, str] = {
     "NO_ACTION":             "No action needed",
 }
 
+# Human-readable labels for Cora event-level reason codes (see directives/CORA_RECOMMENDATION_EVENTS.md).
+_CORA_REASON_LABELS: dict[str, str] = {
+    "NOT_INVITED":       "course invite not yet sent",
+    "INVITED_NO_START":  "invited but has not started",
+    "HOT_SIGNAL_ACTIVE": "lead is actively hot",
+    "ACTIVITY_STALLED":  "learner activity has stalled",
+    "ACTIVE_LEARNER":    "learner actively progressing",
+    "COURSE_COMPLETE":   "course fully completed",
+    "NO_QUALIFYING_STATE": "no qualifying state detected",
+}
+
 # Human-readable explanations for HOT signal reason codes (see directives/HOT_LEAD_SIGNAL.md).
 _REASON_LABELS: dict[str, str] = {
     "HOT_ENGAGED":                "All gates passed — invite sent, ≥25% complete, active within 7 days.",
@@ -518,7 +529,8 @@ with right_col:
                         st.info(_cora_line)
                     _days_inactive = _cora["payload"]["days_inactive"]
                     _days_str = f"{_days_inactive}d inactive" if _days_inactive is not None else "activity unknown"
-                    st.caption(f"{', '.join(_cr)} · {_days_str}")
+                    _cr_readable = ", ".join(_CORA_REASON_LABELS.get(c, c) for c in _cr)
+                    st.caption(f"{_cr_readable} · {_days_str}")
                 except Exception:
                     logging.exception(
                         "Error building cora recommendation for %s", selected_lead_id
