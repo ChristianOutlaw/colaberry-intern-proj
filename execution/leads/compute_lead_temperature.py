@@ -210,54 +210,59 @@ def _build_summary(signal: str, score: int, codes: list[str]) -> str:
 
     # Completion
     if "COMPLETION_STRONG" in codes:
-        positives.append("strong course completion")
+        positives.append("has completed a strong portion of the course")
     elif "COMPLETION_MODERATE" in codes:
-        positives.append("partial course completion")
-    # COMPLETION_LOW / COMPLETION_NONE → no positive contribution phrased
+        positives.append("is making steady progress through the course")
+    elif "COMPLETION_LOW" in codes:
+        negatives.append("has only completed a small portion of the course")
+    elif "COMPLETION_NONE" in codes:
+        negatives.append("has not started the course yet")
 
     # Recency
     if "RECENTLY_ACTIVE" in codes:
-        positives.append("recently active")
+        positives.append("learner has been active recently")
     elif "ACTIVITY_MODERATE" in codes:
-        positives.append("active within 2 weeks")
+        positives.append("was active within the last two weeks")
     elif "ACTIVITY_DORMANT" in codes or "ACTIVITY_VERY_STALE" in codes:
-        negatives.append("inactive for over 3 weeks")
+        negatives.append("has not engaged in over three weeks")
     elif "ACTIVITY_STALE" in codes:
-        negatives.append("limited recent activity")
+        negatives.append("activity has slowed over the past few weeks")
     elif "NO_ACTIVITY" in codes:
-        negatives.append("no activity recorded")
+        negatives.append("no course activity has been recorded")
 
     # Quiz
     if "QUIZ_STRONG" in codes:
-        positives.append("strong quiz performance")
+        positives.append("scoring well on quizzes")
     elif "QUIZ_WEAK" in codes:
-        negatives.append("low quiz scores")
+        negatives.append("struggling with quiz performance")
 
     # Reflection
     if "REFLECTION_HIGH" in codes:
-        positives.append("high reflection confidence")
+        positives.append("demonstrates high engagement in reflections")
     elif "REFLECTION_LOW" in codes:
-        negatives.append("low reflection confidence")
+        negatives.append("low engagement in reflection exercises")
 
     # Retry friction
     if "RETRY_HIGH" in codes:
-        negatives.append("high quiz retry friction")
+        negatives.append("requiring many attempts to pass quizzes")
     elif "RETRY_MODERATE" in codes:
-        negatives.append("moderate retry friction")
+        negatives.append("needing multiple quiz attempts")
     elif "RETRY_MILD" in codes:
-        negatives.append("mild retry friction")
+        negatives.append("occasionally retrying quizzes")
 
     # Velocity
     if "VELOCITY_FAST" in codes:
-        positives.append("fast learning pace")
+        positives.append("moving quickly through the course")
     elif "VELOCITY_MODERATE" in codes:
-        positives.append("steady learning pace")
-    elif "VELOCITY_SLOW" in codes or "VELOCITY_NONE" in codes:
-        negatives.append("slow learning pace")
+        positives.append("progressing at a healthy pace")
+    elif "VELOCITY_SLOW" in codes:
+        negatives.append("progress is slower than typical")
+    elif "VELOCITY_NONE" in codes:
+        negatives.append("enrolled but has not advanced")
 
     # Invite gate
     if "NOT_INVITED" in codes:
-        negatives.append("no course invite sent")
+        negatives.append("course invite has not been sent")
 
     parts = positives + negatives
     detail = "; ".join(parts) if parts else "insufficient engagement data"
