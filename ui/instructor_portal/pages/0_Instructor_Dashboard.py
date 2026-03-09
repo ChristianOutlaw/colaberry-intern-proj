@@ -455,6 +455,7 @@ with right_col:
                         invited_sent=status["invite_sent"],
                         completion_percent=cs["completion_pct"],
                         last_activity_at=cs["last_activity_at"],
+                        started_at=cs["started_at"],
                         avg_quiz_score=None,
                         avg_quiz_attempts=None,
                         reflection_confidence=None,
