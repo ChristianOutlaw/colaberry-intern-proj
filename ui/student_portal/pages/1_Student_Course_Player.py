@@ -528,11 +528,17 @@ with st.sidebar:
             st.json(_dbg_snap(st.session_state))
 
     st.title("Course Player")
-    lead_id = st.text_input(
-        "Lead ID",
-        value=st.session_state["player_lead_id"],
-        placeholder="e.g. lead-123",
-    ).strip()
+
+    # Token-resolved users already have player_lead_id set by student_app.py.
+    # Skip the manual prompt and use the pre-resolved identity directly.
+    if st.session_state["player_lead_id"]:
+        lead_id = st.session_state["player_lead_id"]
+    else:
+        lead_id = st.text_input(
+            "Lead ID",
+            value="",
+            placeholder="e.g. lead-123",
+        ).strip()
 
     # Reset per-session tracking whenever the lead changes.
     if lead_id != st.session_state["player_lead_id"]:
