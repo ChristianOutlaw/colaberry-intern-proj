@@ -5,6 +5,7 @@ Records that a "Free Intro to AI Class" invite was sent to a lead.
 Idempotent on invite_id. No business logic lives here.
 """
 
+import secrets
 from datetime import datetime, timezone
 
 from execution.db.sqlite import connect, init_db
@@ -52,12 +53,14 @@ def mark_course_invite_sent(
         if sent_at is None:
             sent_at = _utc_now()
 
+        token = secrets.token_urlsafe(32)
+
         conn.execute(
             """
-            INSERT INTO course_invites (id, lead_id, sent_at, channel, metadata_json)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO course_invites (id, lead_id, sent_at, channel, token, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (invite_id, lead_id, sent_at, channel, metadata_json),
+            (invite_id, lead_id, sent_at, channel, token, metadata_json),
         )
         conn.commit()
     finally:

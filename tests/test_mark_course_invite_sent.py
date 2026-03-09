@@ -95,6 +95,46 @@ class TestMarkCourseInviteSent(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             mark_course_invite_sent("I1", "MISSING", db_path=TEST_DB_PATH)
 
+    # ------------------------------------------------------------------
+    # Test 4 — token is generated and persisted automatically
+    # ------------------------------------------------------------------
+    def test_token_is_generated_and_persisted(self):
+        """A non-empty token must be stored in course_invites.token on insert."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT token FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row["token"], "token must not be NULL after insert")
+        self.assertGreater(len(row["token"]), 10, "token must be a non-trivially short string")
+
+    # ------------------------------------------------------------------
+    # Test 5 — each invite gets a distinct token
+    # ------------------------------------------------------------------
+    def test_tokens_are_unique_per_invite(self):
+        """Two separate invites for different invite IDs must receive different tokens."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I2", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            rows = conn.execute(
+                "SELECT token FROM course_invites WHERE id IN ('I1', 'I2')"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        tokens = [r["token"] for r in rows]
+        self.assertEqual(len(tokens), 2, "Expected two invite rows")
+        self.assertNotEqual(tokens[0], tokens[1], "Each invite must have a unique token")
+
 
 if __name__ == "__main__":
     unittest.main()
