@@ -76,6 +76,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             lead_id       TEXT NOT NULL,
             sent_at       TEXT,
             channel       TEXT,
+            token         TEXT,
             metadata_json TEXT,
             FOREIGN KEY (lead_id) REFERENCES leads (id)
         );
@@ -143,4 +144,27 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_reflection_lead_course
             ON reflection_responses (lead_id, course_id);
     """)
+    conn.commit()
+
+    # ---------------------------------------------------------------------------
+    # Idempotent column migration — add token to course_invites for existing DBs.
+    #
+    # CREATE TABLE IF NOT EXISTS only runs on brand-new databases; existing
+    # databases won't pick up new columns from it.  This block detects whether
+    # the token column is missing and adds it safely.  Running multiple times is
+    # harmless: the ADD COLUMN is inside an existence check and the index uses
+    # CREATE ... IF NOT EXISTS.
+    # ---------------------------------------------------------------------------
+    existing_columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(course_invites)").fetchall()
+    }
+    if "token" not in existing_columns:
+        conn.execute("ALTER TABLE course_invites ADD COLUMN token TEXT")
+        conn.commit()
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_course_invites_token "
+        "ON course_invites (token)"
+    )
     conn.commit()
