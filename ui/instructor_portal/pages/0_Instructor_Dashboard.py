@@ -472,7 +472,7 @@ with right_col:
                     else:
                         st.info(f"❄️ COLD — score {_sc}/100")
                     # Split "SIGNAL (score N): phrase one; phrase two." into bullet lines.
-                    _phrase_block = _su.split(": ", 1)[-1].rstrip(".")
+                    _phrase_block = (_su or "").split(": ", 1)[-1].rstrip(".")
                     _bullets = "\n".join(
                         f"- {p.strip()}" for p in _phrase_block.split("; ") if p.strip()
                     )
