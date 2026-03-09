@@ -26,6 +26,7 @@ Reference: `PROJECT_BLUEPRINT.md §3 O4`, `directives/HOT_LEAD_SIGNAL.md`.
 | `invited_sent`         | `bool`             | True if a CourseInvite record exists for this lead. |
 | `completion_percent`   | `float \| None`    | Course completion 0.0–100.0. `None` when no ProgressEvent rows exist. |
 | `last_activity_at`     | `str \| None`      | ISO-8601 UTC string of the most recent ProgressEvent. `None` if no events. |
+| `started_at`           | `str \| None`      | ISO-8601 UTC string of the first ProgressEvent (from `course_state.started_at`). `None` if no events. |
 | `avg_quiz_score`       | `float \| None`    | Mean quiz score across all completed quizzes (0–100). `None` if no quizzes. |
 | `avg_quiz_attempts`    | `float \| None`    | Mean number of attempts per quiz question. `None` if no quiz data. |
 | `reflection_confidence`| `str \| None`      | Qualitative engagement depth: `"HIGH"`, `"MEDIUM"`, `"LOW"`, or `None`. |
@@ -40,6 +41,7 @@ conservative neutral value when data is absent:
 |-----------|-------------|-----------|
 | `completion_percent` | 0 pts | No evidence of progress |
 | `last_activity_at` | 0 pts, code `NO_ACTIVITY` | No evidence of engagement |
+| `started_at` | 5 pts (half of W_VELOCITY=10), code `VELOCITY_UNKNOWN` | Absence ≠ slow learner |
 | `avg_quiz_score` | 10 pts (half of W_QUIZ=20) | Absence ≠ failure |
 | `avg_quiz_attempts` | 0 penalty | Absence ≠ friction |
 | `reflection_confidence` | 7 pts (near half of W_REFLECTION=15) | Absence ≠ low confidence |
@@ -48,7 +50,7 @@ conservative neutral value when data is absent:
 
 ## Scoring Model
 
-The score is the sum of four component scores minus an optional retry penalty,
+The score is the sum of five component scores minus an optional retry penalty,
 clamped to [0, 100]. If no invite has been sent, the final score is further
 capped at `INVITE_CAP = 15`.
 
@@ -60,7 +62,8 @@ capped at `INVITE_CAP = 15`.
 | Recency (days inactive) | 25 | `W_RECENCY = 25` |
 | Quiz performance | 20 | `W_QUIZ = 20` |
 | Reflection confidence | 15 | `W_REFLECTION = 15` |
-| **Maximum positive total** | **100** | |
+| Learning velocity | 10 | `W_VELOCITY = 10` |
+| **Maximum positive total** | **110** (clamped to 100) | |
 | Retry friction penalty | up to −15 | `MAX_RETRY_PENALTY = 15` |
 
 ### Completion component (0–40 pts)
@@ -106,6 +109,25 @@ code = QUIZ_STRONG   if avg_quiz_score >= 80
 | `"LOW"` | 3 | `REFLECTION_LOW` |
 | `None` / unknown | 7 | `REFLECTION_UNKNOWN` |
 
+### Velocity component (0–10 pts)
+
+Measures how quickly the lead is progressing through the course relative to
+how long they have been enrolled.
+
+```
+elapsed_days     = max(1, days_since(started_at, now))   # floor prevents division by zero
+velocity         = completion_percent / elapsed_days      # pct-points per day
+
+pts  = 10  if velocity > 5.0   →  VELOCITY_FAST
+     |  6  if velocity > 1.5   →  VELOCITY_MODERATE
+     |  3  if velocity > 0.0   →  VELOCITY_SLOW
+     |  0  if velocity == 0.0  →  VELOCITY_NONE        (enrolled but no progress)
+     |  5  if started_at None or completion_percent None  →  VELOCITY_UNKNOWN
+```
+
+Neutral half-credit (5 pts) is awarded when `started_at` or `completion_percent`
+is absent so leads who have not yet been given access are not penalised.
+
 ### Retry friction penalty (0 to −15 pts)
 
 | Avg attempts | Penalty | Reason code |
@@ -148,6 +170,7 @@ score <  SCORE_WARM (35)  →  "COLD"
 | `W_RECENCY` | `25` |
 | `W_QUIZ` | `20` |
 | `W_REFLECTION` | `15` |
+| `W_VELOCITY` | `10` |
 | `MAX_RETRY_PENALTY` | `15` |
 
 ---
@@ -195,6 +218,11 @@ codes. Order: [completion, recency, quiz, reflection, (retry?), (NOT_INVITED?)].
 | `RETRY_MILD` | 1.5 < avg_quiz_attempts ≤ 2.5 |
 | `RETRY_MODERATE` | 2.5 < avg_quiz_attempts ≤ 3.5 |
 | `RETRY_HIGH` | avg_quiz_attempts > 3.5 |
+| `VELOCITY_FAST` | completion_percent / elapsed_days > 5.0 |
+| `VELOCITY_MODERATE` | completion_percent / elapsed_days > 1.5 |
+| `VELOCITY_SLOW` | completion_percent / elapsed_days > 0.0 |
+| `VELOCITY_NONE` | completion_percent / elapsed_days == 0.0 (enrolled, no progress) |
+| `VELOCITY_UNKNOWN` | started_at or completion_percent is None |
 | `NOT_INVITED` | invited_sent is False — score capped at 15 |
 
 ---

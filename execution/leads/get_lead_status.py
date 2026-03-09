@@ -17,6 +17,7 @@ _EMPTY_STATUS = {
         "current_section": None,
         "completion_pct": None,
         "last_activity_at": None,
+        "started_at": None,
     },
     "hot_lead": {
         "signal": None,
@@ -62,7 +63,7 @@ def get_lead_status(
         ).fetchone()[0]
 
         cs = conn.execute(
-            "SELECT current_section, completion_pct, last_activity_at FROM course_state WHERE lead_id = ?",
+            "SELECT current_section, completion_pct, last_activity_at, started_at FROM course_state WHERE lead_id = ?",
             (lead_id,),
         ).fetchone()
 
@@ -93,6 +94,7 @@ def get_lead_status(
             "current_section": cs["current_section"] if cs else None,
             "completion_pct": cs["completion_pct"] if cs else None,
             "last_activity_at": cs["last_activity_at"] if cs else None,
+            "started_at": cs["started_at"] if cs else None,
         },
         "hot_lead": {
             "signal": hot_signal,

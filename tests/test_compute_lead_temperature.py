@@ -266,15 +266,16 @@ class TestComputeLeadTemperature(unittest.TestCase):
     # ------------------------------------------------------------------
     def test_t8_reflection_high_tips_to_hot(self):
         """T8: HIGH reflection scores 15 vs LOW scores 3 — 12-pt swing changes classification."""
-        # completion: int(65 * 40/100) = 26
+        # completion: int(55 * 40/100) = 22
         # recency:    4 days → 25
         # quiz:       int(70 * 20/100) = 14
-        # HIGH: 26+25+14+15 = 80 → HOT
-        # LOW:  26+25+14+3  = 68 → WARM
+        # velocity:   no started_at → 5 (VELOCITY_UNKNOWN)
+        # HIGH: 22+25+14+15+5 = 81 → HOT
+        # LOW:  22+25+14+3+5  = 69 → WARM
         shared = dict(
             now=_NOW,
             invited_sent=True,
-            completion_percent=65.0,
+            completion_percent=55.0,
             last_activity_at=_iso(4),
             avg_quiz_score=70.0,
             avg_quiz_attempts=1.0,
@@ -397,6 +398,162 @@ class TestComputeLeadTemperature(unittest.TestCase):
             current_section=None,
         )
         self.assertEqual(result["evaluated_at"], "2026-02-25T12:00:00Z")
+
+
+class TestVelocityScoring(unittest.TestCase):
+    """Focused tests for the velocity component added in v1.1."""
+
+    # ------------------------------------------------------------------
+    # TV1 — Fast learner (> 5 pct/day) earns VELOCITY_FAST (10 pts)
+    # ------------------------------------------------------------------
+    def test_tv1_fast_learner_earns_velocity_fast(self):
+        """TV1: 60% done in 5 days → 12 pct/day > 5.0 → VELOCITY_FAST (10 pts)."""
+        result = compute_lead_temperature(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=60.0,
+            last_activity_at=_iso(1),
+            started_at=_iso(5),        # 5 days elapsed
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=None,
+        )
+        self.assertIn("VELOCITY_FAST", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV2 — Moderate learner (> 1.5 pct/day) earns VELOCITY_MODERATE (6 pts)
+    # ------------------------------------------------------------------
+    def test_tv2_moderate_learner_earns_velocity_moderate(self):
+        """TV2: 30% done in 10 days → 3.0 pct/day → VELOCITY_MODERATE (6 pts)."""
+        result = compute_lead_temperature(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=30.0,
+            last_activity_at=_iso(1),
+            started_at=_iso(10),       # 10 days elapsed
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=None,
+        )
+        self.assertIn("VELOCITY_MODERATE", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV3 — Slow learner (> 0, ≤ 1.5 pct/day) earns VELOCITY_SLOW (3 pts)
+    # ------------------------------------------------------------------
+    def test_tv3_slow_learner_earns_velocity_slow(self):
+        """TV3: 10% done in 20 days → 0.5 pct/day → VELOCITY_SLOW (3 pts)."""
+        result = compute_lead_temperature(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=10.0,
+            last_activity_at=_iso(1),
+            started_at=_iso(20),       # 20 days elapsed
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=None,
+        )
+        self.assertIn("VELOCITY_SLOW", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV4 — No progress despite enrollment → VELOCITY_NONE (0 pts)
+    # ------------------------------------------------------------------
+    def test_tv4_zero_completion_earns_velocity_none(self):
+        """TV4: 0% done despite started_at being set → VELOCITY_NONE (0 pts)."""
+        result = compute_lead_temperature(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=0.0,
+            last_activity_at=None,
+            started_at=_iso(10),
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=None,
+        )
+        self.assertIn("VELOCITY_NONE", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV5 — started_at absent → VELOCITY_UNKNOWN (5 pts neutral)
+    # ------------------------------------------------------------------
+    def test_tv5_no_started_at_earns_velocity_unknown(self):
+        """TV5: started_at=None → VELOCITY_UNKNOWN (neutral half-credit)."""
+        result = compute_lead_temperature(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=50.0,
+            last_activity_at=_iso(3),
+            started_at=None,
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=None,
+        )
+        self.assertIn("VELOCITY_UNKNOWN", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV6 — velocity_fast adds pts: same inputs with fast vs slow pace
+    # ------------------------------------------------------------------
+    def test_tv6_fast_pace_scores_higher_than_slow_pace(self):
+        """TV6: same signals, fast pace (10 pts) scores higher than slow (3 pts)."""
+        shared = dict(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=30.0,
+            last_activity_at=_iso(2),
+            avg_quiz_score=70.0,
+            avg_quiz_attempts=1.0,
+            reflection_confidence="MEDIUM",
+            current_section="section-3",
+        )
+        fast = compute_lead_temperature(**shared, started_at=_iso(3))   # 10 pct/day → FAST
+        slow = compute_lead_temperature(**shared, started_at=_iso(100)) # 0.3 pct/day → SLOW
+        self.assertGreater(fast["score"], slow["score"])
+        self.assertIn("VELOCITY_FAST", fast["reason_codes"])
+        self.assertIn("VELOCITY_SLOW", slow["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV7 — determinism: same inputs always produce same score
+    # ------------------------------------------------------------------
+    def test_tv7_velocity_is_deterministic(self):
+        """TV7: calling the function twice with identical inputs yields identical output."""
+        kwargs = dict(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=45.0,
+            last_activity_at=_iso(4),
+            started_at=_iso(15),
+            avg_quiz_score=65.0,
+            avg_quiz_attempts=2.0,
+            reflection_confidence="MEDIUM",
+            current_section="section-4",
+        )
+        result_a = compute_lead_temperature(**kwargs)
+        result_b = compute_lead_temperature(**kwargs)
+        self.assertEqual(result_a["score"],        result_b["score"])
+        self.assertEqual(result_a["signal"],       result_b["signal"])
+        self.assertEqual(result_a["reason_codes"], result_b["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # TV8 — score is still clamped to [0, 100] even with velocity pts
+    # ------------------------------------------------------------------
+    def test_tv8_score_clamped_with_velocity(self):
+        """TV8: perfect signals + velocity cannot push score above 100."""
+        result = compute_lead_temperature(
+            now=_NOW,
+            invited_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(0),
+            started_at=_iso(1),        # 100 pct/day → FAST
+            avg_quiz_score=100.0,
+            avg_quiz_attempts=1.0,
+            reflection_confidence="HIGH",
+            current_section="section-10",
+        )
+        self.assertLessEqual(result["score"], 100)
+        self.assertGreaterEqual(result["score"], 0)
 
 
 if __name__ == "__main__":

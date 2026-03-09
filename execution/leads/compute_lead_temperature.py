@@ -22,11 +22,12 @@ from datetime import datetime, timezone
 # Locked constants — v1 (see directives/LEAD_TEMPERATURE_SCORING.md)
 # ---------------------------------------------------------------------------
 
-# Component weights — positive contributions (sum = 100 at perfect signals)
+# Component weights — positive contributions (sum = 110 at perfect signals, clamped to 100)
 W_COMPLETION: int = 40   # max pts for course completion
 W_RECENCY: int    = 25   # max pts for recent activity
 W_QUIZ: int       = 20   # max pts for avg quiz score
 W_REFLECTION: int = 15   # max pts for reflection confidence
+W_VELOCITY: int   = 10   # max pts for learning velocity
 
 # Penalty cap
 MAX_RETRY_PENALTY: int = 15  # maximum retry friction deduction
@@ -52,6 +53,11 @@ _RETRY_HIGH     = 3.5
 # Neutral half-credit values used when optional signal data is absent
 _QUIZ_UNKNOWN_PTS:       int = 10   # half of W_QUIZ
 _REFLECTION_UNKNOWN_PTS: int = 7    # near half of W_REFLECTION
+_VELOCITY_UNKNOWN_PTS:   int = 5    # half of W_VELOCITY
+
+# Velocity breakpoints (completion-pct-points per day)
+_VELOCITY_FAST     = 5.0
+_VELOCITY_MODERATE = 1.5
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +170,39 @@ def _retry_penalty(avg_attempts: float | None) -> tuple[int, str | None]:
     return -MAX_RETRY_PENALTY, "RETRY_HIGH"
 
 
+def _velocity_points(
+    started_at: str | None,
+    completion_percent: float | None,
+    now_utc: "datetime",
+) -> tuple[int, str]:
+    """Score learning velocity (completion rate since enrolment start).
+
+    velocity = completion_percent / max(1, elapsed_days)
+    where elapsed_days = days from started_at to now_utc.
+
+    Returns (points, reason_code).
+    Missing data earns a neutral half-credit so uninvited/unenrolled
+    leads are not unfairly penalised.
+    """
+    if started_at is None or completion_percent is None:
+        return _VELOCITY_UNKNOWN_PTS, "VELOCITY_UNKNOWN"
+
+    elapsed_days = _days_inactive(started_at, now_utc)
+    if elapsed_days is None:
+        return _VELOCITY_UNKNOWN_PTS, "VELOCITY_UNKNOWN"
+
+    elapsed_days = max(1, elapsed_days)
+    velocity = completion_percent / elapsed_days
+
+    if velocity > _VELOCITY_FAST:
+        return W_VELOCITY, "VELOCITY_FAST"
+    if velocity > _VELOCITY_MODERATE:
+        return 6, "VELOCITY_MODERATE"
+    if velocity > 0.0:
+        return 3, "VELOCITY_SLOW"
+    return 0, "VELOCITY_NONE"
+
+
 def _build_summary(signal: str, score: int, codes: list[str]) -> str:
     """Assemble a one-line human-readable explanation from reason codes."""
     positives: list[str] = []
@@ -208,6 +247,14 @@ def _build_summary(signal: str, score: int, codes: list[str]) -> str:
     elif "RETRY_MILD" in codes:
         negatives.append("mild retry friction")
 
+    # Velocity
+    if "VELOCITY_FAST" in codes:
+        positives.append("fast learning pace")
+    elif "VELOCITY_MODERATE" in codes:
+        positives.append("steady learning pace")
+    elif "VELOCITY_SLOW" in codes or "VELOCITY_NONE" in codes:
+        negatives.append("slow learning pace")
+
     # Invite gate
     if "NOT_INVITED" in codes:
         negatives.append("no course invite sent")
@@ -227,6 +274,7 @@ def compute_lead_temperature(
     invited_sent: bool,
     completion_percent: float | None,
     last_activity_at: str | None,
+    started_at: str | None = None,
     avg_quiz_score: float | None,
     avg_quiz_attempts: float | None,
     reflection_confidence: str | None,
@@ -243,6 +291,8 @@ def compute_lead_temperature(
         invited_sent:         True if a CourseInvite record exists.
         completion_percent:   0.0–100.0, or None if no ProgressEvents exist.
         last_activity_at:     ISO-8601 string of most recent activity, or None.
+        started_at:           ISO-8601 string of first activity (from
+                              course_state.started_at), or None.
         avg_quiz_score:       Mean quiz score 0–100, or None if no quiz data.
         avg_quiz_attempts:    Mean attempts per quiz, or None if no quiz data.
         reflection_confidence: "HIGH" | "MEDIUM" | "LOW" | None.
@@ -282,11 +332,12 @@ def compute_lead_temperature(
     quiz_pts,  quiz_code  = _quiz_points(avg_quiz_score)
     refl_pts,  refl_code  = _reflection_points(reflection_confidence)
     retry_pen, retry_code = _retry_penalty(avg_quiz_attempts)
+    vel_pts,   vel_code   = _velocity_points(started_at, completion_percent, now_utc)
 
     # ------------------------------------------------------------------
     # Sum and clamp to [0, 100]
     # ------------------------------------------------------------------
-    raw = comp_pts + rec_pts + quiz_pts + refl_pts + retry_pen
+    raw = comp_pts + rec_pts + quiz_pts + refl_pts + retry_pen + vel_pts
     raw_clamped = max(0, min(100, int(raw)))
 
     # ------------------------------------------------------------------
@@ -310,7 +361,7 @@ def compute_lead_temperature(
     # ------------------------------------------------------------------
     # Assemble reason codes (order: component codes, then penalty/gate)
     # ------------------------------------------------------------------
-    reason_codes: list[str] = [comp_code, rec_code, quiz_code, refl_code]
+    reason_codes: list[str] = [comp_code, rec_code, quiz_code, refl_code, vel_code]
     if retry_code:
         reason_codes.append(retry_code)
     if not invited_sent:
