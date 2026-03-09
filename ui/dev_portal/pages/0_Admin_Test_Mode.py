@@ -12,6 +12,7 @@ Run from the repository root:
 """
 
 import logging
+import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -31,8 +32,9 @@ from execution.admin.reset_progress import (          # noqa: E402
     OperationNotConfirmedError,
     reset_progress,
 )
-from execution.admin.seed_lead import seed_lead        # noqa: E402
-from execution.admin.simulate_scenario import simulate_scenario  # noqa: E402
+from execution.admin.seed_lead import seed_lead                               # noqa: E402
+from execution.admin.simulate_scenario import simulate_scenario               # noqa: E402
+from execution.leads.get_latest_invite_token import get_latest_invite_token  # noqa: E402
 from execution.leads.write_hot_lead_sync_record import (         # noqa: E402
     write_hot_lead_sync_record,
 )
@@ -42,6 +44,9 @@ from ui.theme import apply_colaberry_theme             # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
+STUDENT_PORTAL_BASE_URL = os.environ.get(
+    "STUDENT_PORTAL_BASE_URL", "http://localhost:8501"
+).rstrip("/")
 
 SCENARIO_IDS: list[str] = [
     "COLD_NO_INVITE",
@@ -120,6 +125,12 @@ if st.button("Seed Lead", key="btn_seed_lead"):
         )
         if result["ok"]:
             st.success(result["message"])
+            # Show the secure student link immediately after a seed-with-invite.
+            if s1_mark_invite:
+                _token = get_latest_invite_token(s1_lead_id, db_path=DB_PATH)
+                if _token:
+                    st.markdown("**Student invite link**")
+                    st.code(f"{STUDENT_PORTAL_BASE_URL}/?token={_token}", language=None)
         else:
             st.error(result["message"])
     except ValueError as exc:
