@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from execution.leads.list_leads_overview import list_leads_overview          # noqa: E402
 from execution.leads.get_lead_status import get_lead_status                  # noqa: E402
+from execution.leads.get_latest_invite_token import get_latest_invite_token  # noqa: E402
 from execution.leads.compute_lead_temperature import compute_lead_temperature # noqa: E402
 from execution.decision.build_cora_recommendation import (                   # noqa: E402
     build_cora_recommendation,
@@ -448,6 +449,14 @@ with right_col:
                 col_c, col_d = st.columns(2)
                 col_c.metric("Invite Sent", "Yes" if status["invite_sent"] else "No")
                 col_d.metric("Section", cs["current_section"] or "—")
+
+                # Student invite link — only shown when an invite has been sent and
+                # a token exists.  Instructor can copy this URL and send it manually.
+                if status["invite_sent"]:
+                    _token = get_latest_invite_token(selected_lead_id, db_path=DB_PATH)
+                    if _token:
+                        st.caption("Student invite link:")
+                        st.code(f"http://localhost:8501/?token={_token}", language=None)
 
                 st.divider()
 
