@@ -72,12 +72,13 @@ def init_db(conn: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS course_invites (
-            id            TEXT PRIMARY KEY,
-            lead_id       TEXT NOT NULL,
-            sent_at       TEXT,
-            channel       TEXT,
-            token         TEXT,
-            metadata_json TEXT,
+            id             TEXT PRIMARY KEY,
+            lead_id        TEXT NOT NULL,
+            sent_at        TEXT,
+            channel        TEXT,
+            token          TEXT,
+            first_used_at  TEXT,
+            metadata_json  TEXT,
             FOREIGN KEY (lead_id) REFERENCES leads (id)
         );
 
@@ -147,12 +148,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
     # ---------------------------------------------------------------------------
-    # Idempotent column migration — add token to course_invites for existing DBs.
+    # Idempotent column migrations — add new columns to course_invites for
+    # existing databases.
     #
     # CREATE TABLE IF NOT EXISTS only runs on brand-new databases; existing
-    # databases won't pick up new columns from it.  This block detects whether
-    # the token column is missing and adds it safely.  Running multiple times is
-    # harmless: the ADD COLUMN is inside an existence check and the index uses
+    # databases won't pick up new columns from it.  Each block below detects
+    # whether a column is missing and adds it safely.  Running multiple times is
+    # harmless: every ADD COLUMN is inside an existence check and the index uses
     # CREATE ... IF NOT EXISTS.
     # ---------------------------------------------------------------------------
     existing_columns = {
@@ -161,6 +163,10 @@ def init_db(conn: sqlite3.Connection) -> None:
     }
     if "token" not in existing_columns:
         conn.execute("ALTER TABLE course_invites ADD COLUMN token TEXT")
+        conn.commit()
+
+    if "first_used_at" not in existing_columns:
+        conn.execute("ALTER TABLE course_invites ADD COLUMN first_used_at TEXT")
         conn.commit()
 
     conn.execute(
