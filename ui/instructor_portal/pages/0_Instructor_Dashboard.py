@@ -9,6 +9,7 @@ Run from the repository root:
 """
 
 import logging
+import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -38,6 +39,9 @@ from ui.theme import apply_colaberry_theme                                   # n
 # Constants
 # ---------------------------------------------------------------------------
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
+STUDENT_PORTAL_BASE_URL = os.environ.get(
+    "STUDENT_PORTAL_BASE_URL", "http://localhost:8501"
+).rstrip("/")
 
 # Human-readable labels for Cora recommendation event types (see directives/CORA_RECOMMENDATION_EVENTS.md).
 _CORA_EVENT_LABELS: dict[str, str] = {
@@ -456,7 +460,7 @@ with right_col:
                     _token = get_latest_invite_token(selected_lead_id, db_path=DB_PATH)
                     if _token:
                         st.caption("Student invite link:")
-                        st.code(f"http://localhost:8501/?token={_token}", language=None)
+                        st.code(f"{STUDENT_PORTAL_BASE_URL}/?token={_token}", language=None)
 
                 st.divider()
 
