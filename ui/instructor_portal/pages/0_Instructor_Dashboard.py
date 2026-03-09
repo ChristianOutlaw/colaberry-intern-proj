@@ -459,7 +459,7 @@ with right_col:
                 if status["invite_sent"]:
                     _token = get_latest_invite_token(selected_lead_id, db_path=DB_PATH)
                     if _token:
-                        st.caption("Student invite link:")
+                        st.markdown("**Student invite link**")
                         st.code(f"{STUDENT_PORTAL_BASE_URL}/?token={_token}", language=None)
 
                 st.divider()
