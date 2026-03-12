@@ -1752,9 +1752,6 @@ elif step == "complete":
         if not _already_completed:
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
-            _cherry_path = REPO_ROOT / "ui" / "assets" / "colaberry_logo(cherries).png"
-            if _cherry_path.exists():
-                st.image(str(_cherry_path), width=64)
             st.markdown("## 🎓 Course complete!")
             st.markdown(
                 f"You've completed all **{len(SECTIONS)} sections** of this course. "
