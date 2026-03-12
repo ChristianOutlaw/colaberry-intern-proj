@@ -443,6 +443,60 @@ st.markdown(
     /* ── Nav row (back / forward buttons) ────────────────────────────────── */
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 
+    /* ── Course completion hero card ──────────────────────────────────────── */
+    .cb-complete-hero {
+        background: #f6faf7;
+        border: 1px solid #c3dfc9;
+        border-radius: 12px;
+        padding: 1.75rem 2rem;
+        margin: 0.5rem 0 1.5rem;
+    }
+    .cb-complete-eyebrow {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: #2e7d52;
+        margin: 0 0 0.45rem;
+    }
+    .cb-complete-title {
+        font-size: 1.65rem;
+        font-weight: 800;
+        color: #0D0D0D;
+        margin: 0 0 0.85rem;
+        line-height: 1.2;
+    }
+    .cb-complete-body {
+        font-size: 0.93rem;
+        color: #374151;
+        margin: 0 0 1.25rem;
+        line-height: 1.65;
+    }
+    .cb-complete-covered {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #5B5A59;
+        margin: 0 0 0.5rem;
+    }
+    .cb-complete-items {
+        margin: 0;
+        padding-left: 0;
+        list-style: none;
+    }
+    .cb-complete-items li {
+        font-size: 0.875rem;
+        color: #4B5563;
+        padding: 0.2rem 0;
+        line-height: 1.5;
+    }
+    .cb-complete-items li::before {
+        content: "\2713\00a0";
+        color: #2e7d52;
+        font-weight: 700;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1754,28 +1808,29 @@ elif step == "complete":
         if not _already_completed:
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
-            st.markdown("<div style='height: 16px'></div>", unsafe_allow_html=True)
-            st.markdown("## Course completed")
-            st.markdown("### Next Steps in AI")
             st.markdown(
-                f"You completed all **{len(SECTIONS)} lessons** in this course."
+                f"""<div class="cb-complete-hero">
+  <p class="cb-complete-eyebrow">Completed</p>
+  <h2 class="cb-complete-title">🎉 Course completed</h2>
+  <p class="cb-complete-body">
+    You finished all {len(SECTIONS)} lessons in Intro to AI and built a strong
+    foundation in the core ideas behind artificial intelligence.
+  </p>
+  <p class="cb-complete-covered">What you covered</p>
+  <ul class="cb-complete-items">
+    <li>What artificial intelligence is</li>
+    <li>How machines learn from data</li>
+    <li>How data is prepared for models</li>
+    <li>How model results are evaluated</li>
+  </ul>
+</div>""",
+                unsafe_allow_html=True,
             )
-            st.markdown(
-                """
-In this course you explored:
-
-• What artificial intelligence is
-• How machines learn from data
-• How data is prepared for models
-• How machine learning results are evaluated
-"""
-            )
-            st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
             st.markdown("---")
             st.markdown(
-                "_Take a moment to reflect on what you've learned before you continue your AI journey._"
+                "Take a moment to reflect on what you've learned before reviewing the course."
             )
-            st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
             if st.button("← Review this Section"):
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
