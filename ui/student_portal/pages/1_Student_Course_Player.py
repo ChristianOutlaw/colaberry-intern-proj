@@ -404,6 +404,27 @@ st.markdown(
     .cb-card-inner { max-width: 100%; margin: 0 auto; }
     .cb-card-inner p { line-height: 1.75; font-size: 1rem; }
 
+    /* ── Lesson content card ──────────────────────────────────────────────
+       .cb-content-card is the canonical class; the data-testid selector
+       applies it to Streamlit's st.container(border=True) wrapper so no
+       Python structure changes are needed.
+    ── */
+    .cb-content-card,
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: #ffffff !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06) !important;
+        padding: 1.5rem 1.75rem !important;
+    }
+    @media (max-width: 640px) {
+        .cb-content-card,
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 8px !important;
+            padding: 1rem 1rem !important;
+        }
+    }
+
     /* ── Nav row (back / forward buttons) ────────────────────────────────── */
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     </style>
