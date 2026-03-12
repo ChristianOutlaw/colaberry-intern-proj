@@ -351,31 +351,60 @@ apply_colaberry_theme("Student Portal", "Free Intro to AI")
 st.markdown(
     """
     <style>
-    .main .block-container { max-width: 980px; padding-top: 0.25rem; }
+    /* ── Main content container ───────────────────────────────────────────────
+       Single authoritative rule: 900 px cap, centered, responsive gutters.
+       No competing .main rule above it.
+    ── */
+    section.main .block-container {
+        max-width: 900px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-top: 0 !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+        padding-bottom: 3rem !important;
+    }
+    @media (max-width: 640px) {
+        section.main .block-container {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+    }
+
+    /* ── Sticky section header bar ────────────────────────────────────────── */
     .cb-topbar {
         position: sticky;
         top: 0;
         z-index: 100;
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(4px);
+        background: rgba(255, 255, 255, 0.97);
+        backdrop-filter: blur(6px);
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        padding: 0.5rem 0 0.4rem;
-        margin-bottom: 0.5rem;
+        padding: 0.6rem 0 0.5rem;
+        margin-bottom: 1rem;
     }
-    .cb-topbar-caption { font-size: 0.75rem; color: #5B5A59; margin: 0 0 2px; }
-    .cb-topbar-title   { font-size: 1.25rem; font-weight: 700; color: #0D0D0D; margin: 0; line-height: 1.3; }
-    /* Center the Streamlit main content container */
-    section.main .block-container {
-        max-width: 1100px !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+    .cb-topbar-caption {
+        font-size: 0.72rem;
+        color: #5B5A59;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0 0 3px;
     }
-    /* Ensure reading column remains centered */
-    .cb-card-inner { max-width: 640px; margin: 0 auto; }
-    /* Improve readability */
-    .cb-card-inner p { line-height: 1.7; }
+    .cb-topbar-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #0D0D0D;
+        margin: 0;
+        line-height: 1.3;
+    }
+
+    /* ── Section progress bar spacing ────────────────────────────────────── */
+    .stProgress { margin-top: 0.25rem; margin-bottom: 1.25rem; }
+
+    /* ── Reading column: full width of the 900 px shell ─────────────────── */
+    .cb-card-inner { max-width: 100%; margin: 0 auto; }
+    .cb-card-inner p { line-height: 1.75; font-size: 1rem; }
+
+    /* ── Nav row (back / forward buttons) ────────────────────────────────── */
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     </style>
     """,
