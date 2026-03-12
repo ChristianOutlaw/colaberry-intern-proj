@@ -1466,6 +1466,7 @@ elif step == "quiz":
             if st.button(
                 "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →",
                 type="primary",
+                use_container_width=True,
             ):
                 st.session_state["player_flow_step"] = (
                     "reflection" if section_prompt_ids else "complete"
@@ -1479,7 +1480,7 @@ elif step == "quiz":
                 next_label = (
                     "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →"
                 )
-                if st.button(next_label, type="primary"):
+                if st.button(next_label, type="primary", use_container_width=True):
                     st.session_state["player_flow_step"] = (
                         "reflection" if section_prompt_ids else "complete"
                     )
@@ -1509,13 +1510,19 @@ elif step == "quiz":
 
                         # Progress caption.
                         n_quizzes = len(section_quiz_ids)
+                        _q_meta = f"Question {q_idx + 1} of {len(questions)}"
                         if n_quizzes > 1:
-                            st.caption(f"Quiz {quiz_idx + 1} of {n_quizzes}")
+                            _q_meta = f"Quiz {quiz_idx + 1} of {n_quizzes}  ·  {_q_meta}"
+                        st.markdown(
+                            f'<p class="cb-progress-meta">{_q_meta}</p>',
+                            unsafe_allow_html=True,
+                        )
 
                         if quiz.get("title"):
                             st.subheader(quiz["title"])
 
                         st.markdown(f"**{q['question']}**")
+                        st.markdown("<div style='height: 10px'></div>", unsafe_allow_html=True)
 
                         radio_key = f"qsel_{active_section_id}_{quiz_id}_{q_idx}"
                         chosen = st.radio(
@@ -1525,6 +1532,7 @@ elif step == "quiz":
                             key=radio_key,
                             label_visibility="collapsed",
                         )
+                        st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
                         qk = f"{active_section_id}:{quiz_id}:{q_idx}"
                         attempts = st.session_state["player_quiz_attempts"].get(qk, 0)
@@ -1536,7 +1544,7 @@ elif step == "quiz":
                             correct_text = opts[q["correct_index"]]
                             st.info(f"Correct answer: **{correct_text}**")
                         else:
-                            if st.button("Submit Answer", key=f"submit_ans_{qk}"):
+                            if st.button("Submit Answer", type="primary", use_container_width=True, key=f"submit_ans_{qk}"):
                                 if chosen == q["correct_index"]:
                                     st.session_state["player_quiz_correct"].add(qk)
                                     st.rerun()
@@ -1550,7 +1558,7 @@ elif step == "quiz":
 
                         # Next → shown when correct or all attempts exhausted.
                         if already_correct or attempts >= 3:
-                            if st.button("Next →", type="primary", key=f"next_{qk}"):
+                            if st.button("Next →", type="primary", use_container_width=True, key=f"next_{qk}"):
                                 if q_idx < len(questions) - 1:
                                     st.session_state["player_quiz_q_idx"] = q_idx + 1
                                 else:
