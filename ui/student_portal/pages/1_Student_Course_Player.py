@@ -1288,19 +1288,10 @@ _bar_val = max(0.0, min(1.0, _bar_val))
 _topbar_caption = f"Section {active_idx + 1} of {len(SECTIONS)}"
 if step == "lesson" and n_chunks > 1:
     _topbar_caption += f" • Part {chunk_idx + 1} of {n_chunks}"
-_step_labels = {
-    "welcome": "Welcome",
-    "lesson": "Lesson",
-    "quiz": "Quiz",
-    "reflection": "Reflection",
-    "complete": "Section Complete",
-}
-_topbar_step = _step_labels.get(step, "")
 st.markdown(
     f"""<div class="cb-topbar">
       <p class="cb-topbar-caption">{_topbar_caption}</p>
       <p class="cb-topbar-title">{active_title}</p>
-      <p class="cb-topbar-step">{_topbar_step}</p>
     </div>""",
     unsafe_allow_html=True,
 )
