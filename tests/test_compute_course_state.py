@@ -10,6 +10,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+import unittest.mock
 from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
@@ -265,30 +266,39 @@ class TestComputeCourseStateWebhook(unittest.TestCase):
         mock_send.assert_not_called()
 
     # ------------------------------------------------------------------
-    # Test 7 — no webhook call when completion_pct < 100
+    # Test 7 — course_completed not emitted when completion_pct < 100
     # ------------------------------------------------------------------
     def test_no_webhook_call_when_not_complete(self):
-        """send_course_event must not be called when completion_pct < 100."""
+        """course_completed must not be emitted when completion_pct < 100.
+        (student_started_course may still fire on the first compute.)"""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         self._seed_events("L1", ["P1_S1"])  # 1 of 10 = 10%
 
         with patch(
             "execution.progress.compute_course_state.send_course_event"
         ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
             compute_course_state(
                 "L1", total_sections=10,
                 webhook_url="http://example.com/hook",
                 db_path=TEST_DB_PATH,
             )
 
-        mock_send.assert_not_called()
+        completed_calls = [
+            c for c in mock_send.call_args_list
+            if c.args and c.args[0] == "course_completed"
+        ]
+        self.assertEqual(len(completed_calls), 0,
+                         "course_completed must not fire when completion_pct < 100")
 
     # ------------------------------------------------------------------
-    # Test 8 — webhook fired with correct args when completion reaches 100
+    # Test 8 — course_completed fired with correct args when completion reaches 100
     # ------------------------------------------------------------------
     def test_webhook_called_on_completion(self):
-        """send_course_event must be called once with 'course_completed' and
-        correct payload when completion_pct first reaches 100 %."""
+        """send_course_event must be called with 'course_completed' and the
+        correct payload when completion_pct first reaches 100 %.
+        (student_started_course also fires on the same call; we check only
+        the course_completed invocation here.)"""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         self._seed_events("L1", ["P1_S1", "P1_S2"])  # 2 of 2 = 100%
 
@@ -303,18 +313,26 @@ class TestComputeCourseStateWebhook(unittest.TestCase):
                 db_path=TEST_DB_PATH,
             )
 
-        mock_send.assert_called_once_with(
-            "course_completed",
-            {"lead_id": "L1", "course_id": "FREE_INTRO_AI_V0", "completion_pct": 100.0},
-            webhook_url="http://example.com/hook",
+        completed_calls = [
+            c for c in mock_send.call_args_list
+            if c.args and c.args[0] == "course_completed"
+        ]
+        self.assertEqual(len(completed_calls), 1, "course_completed must fire exactly once")
+        self.assertEqual(
+            completed_calls[0],
+            unittest.mock.call(
+                "course_completed",
+                {"lead_id": "L1", "course_id": "FREE_INTRO_AI_V0", "completion_pct": 100.0},
+                webhook_url="http://example.com/hook",
+            ),
         )
 
     # ------------------------------------------------------------------
-    # Test 9 — transition guard: no re-fire on second call at 100 %
+    # Test 9 — transition guard: course_completed not re-fired on second call
     # ------------------------------------------------------------------
     def test_no_duplicate_webhook_on_recompute_of_completed_course(self):
         """A second compute_course_state call when the course is already at
-        100 % must not re-fire the webhook."""
+        100 % must not re-fire course_completed."""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         self._seed_events("L1", ["P1_S1", "P1_S2"])  # 2 of 2 = 100%
 
@@ -322,23 +340,25 @@ class TestComputeCourseStateWebhook(unittest.TestCase):
             "execution.progress.compute_course_state.send_course_event"
         ) as mock_send:
             mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
-            # First call — should fire.
+            # First call — fires student_started_course + course_completed.
             compute_course_state(
                 "L1", total_sections=2,
                 webhook_url="http://example.com/hook",
                 db_path=TEST_DB_PATH,
             )
-            # Second call — prev_completion_pct is now 100.0; must not fire again.
+            # Second call — existing row present; neither event should re-fire.
             compute_course_state(
                 "L1", total_sections=2,
                 webhook_url="http://example.com/hook",
                 db_path=TEST_DB_PATH,
             )
 
-        self.assertEqual(
-            mock_send.call_count, 1,
-            "send_course_event must fire exactly once, not on repeated recomputation",
-        )
+        completed_calls = [
+            c for c in mock_send.call_args_list
+            if c.args and c.args[0] == "course_completed"
+        ]
+        self.assertEqual(len(completed_calls), 1,
+                         "course_completed must fire exactly once across both calls")
 
     # ------------------------------------------------------------------
     # Test 10 — webhook failure does not break state write
@@ -381,6 +401,140 @@ class TestComputeCourseStateWebhook(unittest.TestCase):
             )
 
         mock_send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Test 12 — student_started_course not emitted when webhook_url absent
+    # ------------------------------------------------------------------
+    def test_started_no_webhook_call_when_url_absent(self):
+        """student_started_course must not be emitted when webhook_url is absent."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1"])
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            compute_course_state("L1", total_sections=10, db_path=TEST_DB_PATH)
+
+        mock_send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Test 13 — student_started_course fired on first compute with correct args
+    # ------------------------------------------------------------------
+    def test_started_webhook_called_on_first_compute(self):
+        """send_course_event must be called with 'student_started_course' and
+        the correct payload on the first compute (INSERT path)."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1"])  # started_at = 2026-01-01
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
+            compute_course_state(
+                "L1", total_sections=10,
+                course_id="FREE_INTRO_AI_V0",
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        mock_send.assert_called_once_with(
+            "student_started_course",
+            {
+                "lead_id": "L1",
+                "course_id": "FREE_INTRO_AI_V0",
+                "started_at": "2026-01-01T00:00:00+00:00",
+            },
+            webhook_url="http://example.com/hook",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 14 — transition guard: student_started_course not re-fired on
+    #           subsequent compute calls (UPDATE path)
+    # ------------------------------------------------------------------
+    def test_started_webhook_not_refired_on_subsequent_compute(self):
+        """A second compute_course_state call must not re-emit student_started_course
+        because the course_state row already exists (UPDATE path)."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1"])
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
+            compute_course_state(
+                "L1", total_sections=10,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+            # Second call — existing row is present (UPDATE path); must not fire again.
+            compute_course_state(
+                "L1", total_sections=10,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        # Only the first call fires student_started_course; second is silent.
+        started_calls = [
+            c for c in mock_send.call_args_list
+            if c.args and c.args[0] == "student_started_course"
+        ]
+        self.assertEqual(len(started_calls), 1,
+                         "student_started_course must fire exactly once")
+
+    # ------------------------------------------------------------------
+    # Test 15 — student_started_course failure does not break state write
+    # ------------------------------------------------------------------
+    def test_started_webhook_failure_does_not_break_state_write(self):
+        """A failed student_started_course webhook must not prevent the
+        course_state row from being written."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1"])
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "error", "http_status": None, "error": "refused"}
+            compute_course_state(
+                "L1", total_sections=10,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        row = _fetch_course_state("L1")
+        self.assertNotEqual(row, {}, "course_state row must exist despite webhook failure")
+
+    # ------------------------------------------------------------------
+    # Test 16 — both events can fire on the same call (1-section course)
+    # ------------------------------------------------------------------
+    def test_started_and_completed_both_fire_on_single_section_course(self):
+        """For a 1-section course, the first and only compute should fire both
+        student_started_course and course_completed in that order."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1"])  # 1 of 1 = 100%
+
+        emitted: list[str] = []
+
+        def capture(event_name, payload, webhook_url):
+            emitted.append(event_name)
+            return {"status": "success", "http_status": 200, "error": None}
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event",
+            side_effect=capture,
+        ):
+            compute_course_state(
+                "L1", total_sections=1,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        self.assertIn("student_started_course", emitted)
+        self.assertIn("course_completed", emitted)
+        # started fires before completed
+        self.assertLess(
+            emitted.index("student_started_course"),
+            emitted.index("course_completed"),
+        )
 
 
 if __name__ == "__main__":

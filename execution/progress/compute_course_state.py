@@ -29,11 +29,18 @@ def compute_course_state(
     section, completion percentage, and last activity timestamp, then writes
     the result into course_state. If the lead has no events, nothing is written.
 
-    After a successful write, emits a "course_completed" outbound webhook event
-    if completion_pct reaches 100 % for the first time (transition guard: previous
-    stored value was < 100 %).  Repeated recomputation of an already-completed
-    course does not re-fire the event.  Webhook failures are never propagated —
-    the course_state write is always authoritative.
+    After a successful write, emits up to two outbound webhook events:
+
+    - "student_started_course" — fires once, on the first INSERT into
+      course_state (transition guard: existing row was absent).  Payload
+      includes lead_id, course_id, started_at.
+
+    - "course_completed" — fires once, when completion_pct first reaches
+      100 % (transition guard: previous stored value was < 100 %).
+      Payload includes lead_id, course_id, completion_pct.
+
+    Repeated recomputation never re-fires either event.  Webhook failures
+    are never propagated — the course_state write is always authoritative.
 
     Args:
         lead_id:        ID of the lead to compute state for.
@@ -42,9 +49,8 @@ def compute_course_state(
         course_id:      Course whose events are used. Defaults to
                         'FREE_INTRO_AI_V0' for backward compatibility.
         db_path:        Path to the SQLite file; defaults to tmp/app.db.
-        webhook_url:    Optional URL to POST a "course_completed" event to
-                        when completion_pct first reaches 100 %.  Omit (or
-                        pass None) to skip.
+        webhook_url:    Optional URL to POST outbound events to.  Omit (or
+                        pass None) to skip all outbound emission.
     """
     conn = connect(db_path)
     try:
@@ -79,13 +85,16 @@ def compute_course_state(
         completion_pct = (distinct_sections / total_sections) * 100.0
         now = _utc_now()
 
-        # Capture previous completion_pct for the transition guard used after
-        # the write.  A missing row is treated as 0.0 (never been completed).
+        # Read the existing row for two transition guards used after the write:
+        #   _is_first_start    — True only when inserting the first-ever row.
+        #   prev_completion_pct — previous value for the completion guard.
+        # A missing row is treated as 0.0 for completion (never completed).
         existing = conn.execute(
             "SELECT completion_pct FROM course_state WHERE lead_id = ? AND course_id = ?",
             (lead_id, course_id),
         ).fetchone()
         prev_completion_pct: float = existing["completion_pct"] if existing is not None else 0.0
+        _is_first_start: bool = existing is None
 
         if existing is not None:
             conn.execute(
@@ -116,6 +125,16 @@ def compute_course_state(
         conn.commit()
     finally:
         conn.close()
+
+    # Emit "student_started_course" only when this is the first-ever course_state
+    # row for this lead+course (INSERT path).  Subsequent recomputations take the
+    # UPDATE path and never reach here.  send_course_event swallows all failures.
+    if webhook_url and _is_first_start:
+        send_course_event(
+            "student_started_course",
+            {"lead_id": lead_id, "course_id": course_id, "started_at": first_activity_at},
+            webhook_url=webhook_url,
+        )
 
     # Emit "course_completed" only when:
     #   1. A webhook URL was supplied.
