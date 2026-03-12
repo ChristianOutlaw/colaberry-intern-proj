@@ -1641,13 +1641,15 @@ elif step == "reflection":
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
     with st.container(border=True):
-        st.markdown("### \u2713 Section complete")
-        st.markdown(
-            f"You've finished **{active_title}**. "
-            "Keep going — your progress is saved automatically."
-        )
-
+        _has_next = active_idx < (len(SECTIONS) - 1)
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
+
+        if not (_already_completed and not _has_next):
+            st.markdown("### \u2713 Section complete")
+            st.markdown(
+                f"You've finished **{active_title}**. "
+                "Keep going — your progress is saved automatically."
+            )
 
         # Compact progress summary — prefer already-fetched player_status.
         _status = st.session_state.get("player_status")
@@ -1752,12 +1754,15 @@ elif step == "complete":
         if not _already_completed:
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
-            st.markdown("## 🎓 Course complete!")
+            st.markdown("<div style='height: 16px'></div>", unsafe_allow_html=True)
+            st.markdown("## 🎉 Congratulations!")
+            st.markdown("### 🎓 Course complete!")
             st.markdown(
                 f"You've completed all **{len(SECTIONS)} sections** of this course. "
                 "Great work — your progress has been saved."
             )
             st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
+            st.markdown("---")
             st.markdown(
                 "_Take a moment to reflect on what you've learned before you go._"
             )
