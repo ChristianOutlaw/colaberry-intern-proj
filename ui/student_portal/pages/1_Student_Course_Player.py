@@ -1739,7 +1739,16 @@ elif step == "complete":
         if not _already_completed:
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
-            st.success("🎉 Course complete! You've finished all sections.")
+            st.markdown("## 🎓 Course complete!")
+            st.markdown(
+                f"You've completed all **{len(SECTIONS)} sections** of this course. "
+                "Great work — your progress has been saved."
+            )
+            st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
+            st.markdown(
+                "_Take a moment to reflect on what you've learned before you go._"
+            )
+            st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True)
             if st.button("← Review this Section"):
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
