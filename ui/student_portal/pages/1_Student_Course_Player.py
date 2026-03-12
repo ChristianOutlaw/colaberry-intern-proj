@@ -1390,7 +1390,7 @@ if step == "welcome":
             _placeholder.markdown("\n\n".join(_welcome_lines))
 
         st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
-        if st.button("Begin Section →", type="primary"):
+        if st.button("Begin Section →", type="primary", use_container_width=True):
             st.session_state["player_flow_step"] = "lesson"
             st.session_state["player_flow_chunk_idx"] = 0
             st.rerun()
