@@ -10,6 +10,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # PYTHONPATH bootstrap — repo root must be importable from any test runner.
@@ -223,6 +224,163 @@ class TestComputeCourseState(unittest.TestCase):
         finally:
             conn.close()
         self.assertEqual(count, 2, "Expected exactly two course_state rows for lead L1")
+
+
+class TestComputeCourseStateWebhook(unittest.TestCase):
+    """Tests for the outbound course_completed webhook emission."""
+
+    def setUp(self):
+        (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+        conn = connect(TEST_DB_PATH)
+        init_db(conn)
+        conn.close()
+
+    def tearDown(self):
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
+
+    def _seed_events(self, lead_id, sections, course_id="FREE_INTRO_AI_V0"):
+        """Helper: seed one progress event per section for the given lead."""
+        for i, section in enumerate(sections):
+            record_progress_event(
+                f"E{i}", lead_id, section,
+                occurred_at=f"2026-01-0{i + 1}T00:00:00+00:00",
+                course_id=course_id,
+                db_path=TEST_DB_PATH,
+            )
+
+    # ------------------------------------------------------------------
+    # Test 6 — no webhook call when webhook_url is absent
+    # ------------------------------------------------------------------
+    def test_no_webhook_call_when_url_absent(self):
+        """send_course_event must not be called when webhook_url is not supplied."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1", "P1_S2"])
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            compute_course_state("L1", total_sections=2, db_path=TEST_DB_PATH)
+
+        mock_send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Test 7 — no webhook call when completion_pct < 100
+    # ------------------------------------------------------------------
+    def test_no_webhook_call_when_not_complete(self):
+        """send_course_event must not be called when completion_pct < 100."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1"])  # 1 of 10 = 10%
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            compute_course_state(
+                "L1", total_sections=10,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        mock_send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Test 8 — webhook fired with correct args when completion reaches 100
+    # ------------------------------------------------------------------
+    def test_webhook_called_on_completion(self):
+        """send_course_event must be called once with 'course_completed' and
+        correct payload when completion_pct first reaches 100 %."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1", "P1_S2"])  # 2 of 2 = 100%
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
+            compute_course_state(
+                "L1", total_sections=2,
+                course_id="FREE_INTRO_AI_V0",
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        mock_send.assert_called_once_with(
+            "course_completed",
+            {"lead_id": "L1", "course_id": "FREE_INTRO_AI_V0", "completion_pct": 100.0},
+            webhook_url="http://example.com/hook",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 9 — transition guard: no re-fire on second call at 100 %
+    # ------------------------------------------------------------------
+    def test_no_duplicate_webhook_on_recompute_of_completed_course(self):
+        """A second compute_course_state call when the course is already at
+        100 % must not re-fire the webhook."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1", "P1_S2"])  # 2 of 2 = 100%
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
+            # First call — should fire.
+            compute_course_state(
+                "L1", total_sections=2,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+            # Second call — prev_completion_pct is now 100.0; must not fire again.
+            compute_course_state(
+                "L1", total_sections=2,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        self.assertEqual(
+            mock_send.call_count, 1,
+            "send_course_event must fire exactly once, not on repeated recomputation",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 10 — webhook failure does not break state write
+    # ------------------------------------------------------------------
+    def test_webhook_failure_does_not_break_state_write(self):
+        """A failed outbound webhook must not prevent the course_state row
+        from being written or updated correctly."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        self._seed_events("L1", ["P1_S1", "P1_S2"])  # 100%
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "error", "http_status": None, "error": "refused"}
+            compute_course_state(
+                "L1", total_sections=2,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        row = _fetch_course_state("L1")
+        self.assertNotEqual(row, {}, "course_state row must exist despite webhook failure")
+        self.assertAlmostEqual(row["completion_pct"], 100.0, places=5)
+
+    # ------------------------------------------------------------------
+    # Test 11 — no webhook when lead has no events (early return path)
+    # ------------------------------------------------------------------
+    def test_no_webhook_when_no_events(self):
+        """compute_course_state must not call send_course_event when the
+        lead has no progress events (early-return path)."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        with patch(
+            "execution.progress.compute_course_state.send_course_event"
+        ) as mock_send:
+            compute_course_state(
+                "L1", total_sections=2,
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        mock_send.assert_not_called()
 
 
 if __name__ == "__main__":
