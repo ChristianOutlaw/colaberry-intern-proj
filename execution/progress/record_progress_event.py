@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from execution.course.course_registry import is_valid_section_id
 from execution.db.sqlite import connect, init_db
+from execution.leads.upsert_enrollment import upsert_enrollment
 
 
 def _utc_now() -> str:
@@ -48,6 +49,11 @@ def record_progress_event(
     """
     if not is_valid_section_id(section):
         raise ValueError(f"Invalid section_id: {section!r}")
+
+    # Ensure an enrollment row exists before inserting the event.  Called
+    # before opening the event connection to avoid concurrent write-lock
+    # contention.  upsert_enrollment is idempotent — safe to call every time.
+    upsert_enrollment(lead_id, course_id=course_id, db_path=db_path)
 
     conn = connect(db_path)
     try:

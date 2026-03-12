@@ -143,6 +143,73 @@ class TestRecordProgressEvent(unittest.TestCase):
 
         self.assertEqual(count, 0, "No row must be written for an invalid section_id")
 
+    # ------------------------------------------------------------------
+    # Test 7 — recording progress creates a matching enrollment row
+    # ------------------------------------------------------------------
+    def test_progress_event_creates_matching_enrollment(self):
+        """record_progress_event must ensure a course_enrollments row exists
+        for the same (lead_id, course_id) after the event is recorded."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        record_progress_event("E1", "L1", "P1_S1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT lead_id, course_id FROM course_enrollments "
+                "WHERE lead_id = ? AND course_id = ?",
+                ("L1", "FREE_INTRO_AI_V0"),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected a course_enrollments row after progress event")
+        self.assertEqual(row["lead_id"], "L1")
+        self.assertEqual(row["course_id"], "FREE_INTRO_AI_V0")
+
+    # ------------------------------------------------------------------
+    # Test 8 — explicit course_id produces enrollment for that course
+    # ------------------------------------------------------------------
+    def test_progress_event_creates_enrollment_for_explicit_course_id(self):
+        """An event with an explicit course_id must create an enrollment for that course."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        record_progress_event(
+            "E1", "L1", "P1_S1",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT course_id FROM course_enrollments "
+                "WHERE lead_id = ? AND course_id = ?",
+                ("L1", "OTHER_COURSE_V1"),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected enrollment for OTHER_COURSE_V1")
+        self.assertEqual(row["course_id"], "OTHER_COURSE_V1")
+
+    # ------------------------------------------------------------------
+    # Test 9 — invalid section does not create an enrollment row
+    # ------------------------------------------------------------------
+    def test_invalid_section_does_not_create_enrollment(self):
+        """A ValueError from section validation must not leave an enrollment row."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        with self.assertRaises(ValueError):
+            record_progress_event("E1", "L1", "PHASE_X_S99", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM course_enrollments WHERE lead_id = ?", ("L1",)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        self.assertEqual(count, 0, "No enrollment must be created for an invalid section_id")
+
 
 if __name__ == "__main__":
     unittest.main()
