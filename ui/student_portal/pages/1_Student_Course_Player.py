@@ -1755,16 +1755,25 @@ elif step == "complete":
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
             st.markdown("<div style='height: 16px'></div>", unsafe_allow_html=True)
-            st.markdown("## 🎉 Congratulations!")
-            st.markdown("### 🎓 Course complete!")
+            st.markdown("## Course completed")
+            st.markdown("### Next Steps in AI")
             st.markdown(
-                f"You've completed all **{len(SECTIONS)} sections** of this course. "
-                "Great work — your progress has been saved."
+                f"You completed all **{len(SECTIONS)} lessons** in this course."
+            )
+            st.markdown(
+                """
+In this course you explored:
+
+• What artificial intelligence is
+• How machines learn from data
+• How data is prepared for models
+• How machine learning results are evaluated
+"""
             )
             st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
             st.markdown("---")
             st.markdown(
-                "_Take a moment to reflect on what you've learned before you go._"
+                "_Take a moment to reflect on what you've learned before you continue your AI journey._"
             )
             st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True)
             if st.button("← Review this Section"):
