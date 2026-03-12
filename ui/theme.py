@@ -110,14 +110,21 @@ hr {{
 def apply_colaberry_theme(
     portal_title: str,
     subtitle: str | None = None,
+    show_header: bool = True,
 ) -> None:
     """Inject Colaberry brand CSS and render the shared sticky top bar.
 
     Must be called immediately after st.set_page_config() in each portal page.
     Uses components.html() for the header so Streamlit does not escape the HTML.
+
+    Pass show_header=False to inject the CSS tokens only, without rendering the
+    black header bar (e.g. when the page supplies its own branded header).
     """
     # 1) App-wide CSS tokens + layout styles
     st.markdown(_CSS, unsafe_allow_html=True)
+
+    if not show_header:
+        return
 
     # 2) Build logo element (base64 data URL — works without a running server)
     logo_html = ""

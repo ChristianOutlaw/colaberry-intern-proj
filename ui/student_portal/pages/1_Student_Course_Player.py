@@ -346,7 +346,7 @@ def _chunk_markdown(text: str) -> list[str]:
 # Page config — must be the first Streamlit call in the file.
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Student Course Player", layout="wide")
-apply_colaberry_theme("Student Portal", "Free Intro to AI")
+apply_colaberry_theme("Student Portal", "Free Intro to AI", show_header=False)
 
 st.markdown(
     """
@@ -443,14 +443,6 @@ st.markdown(
     /* ── Nav row (back / forward buttons) ────────────────────────────────── */
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 
-    /* ── Suppress black theme header (components.html iframe from apply_colaberry_theme).
-       Replaced by the white logo header rendered below. ─────────────────── */
-    [data-testid="stCustomComponentV1"] {
-        height: 0 !important;
-        overflow: hidden !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
     </style>
     """,
     unsafe_allow_html=True,
