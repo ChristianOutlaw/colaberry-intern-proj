@@ -491,11 +491,6 @@ st.markdown(
         padding: 0.2rem 0;
         line-height: 1.5;
     }
-    .cb-complete-items li::before {
-        content: "\2713\00a0";
-        color: #2e7d52;
-        font-weight: 700;
-    }
 
     </style>
     """,
@@ -1818,10 +1813,10 @@ elif step == "complete":
   </p>
   <p class="cb-complete-covered">What you covered</p>
   <ul class="cb-complete-items">
-    <li>What artificial intelligence is</li>
-    <li>How machines learn from data</li>
-    <li>How data is prepared for models</li>
-    <li>How model results are evaluated</li>
+    <li>✓ What artificial intelligence is</li>
+    <li>✓ How machines learn from data</li>
+    <li>✓ How data is prepared for models</li>
+    <li>✓ How model results are evaluated</li>
   </ul>
 </div>""",
                 unsafe_allow_html=True,
