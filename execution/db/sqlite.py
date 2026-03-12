@@ -71,6 +71,18 @@ def init_db(conn: sqlite3.Connection) -> None:
             updated_at  TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS course_enrollments (
+            id          TEXT PRIMARY KEY,
+            lead_id     TEXT NOT NULL,
+            course_id   TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0',
+            enrolled_at TEXT,
+            status      TEXT NOT NULL DEFAULT 'active',
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            FOREIGN KEY (lead_id) REFERENCES leads (id),
+            UNIQUE (lead_id, course_id)
+        );
+
         CREATE TABLE IF NOT EXISTS course_invites (
             id             TEXT PRIMARY KEY,
             lead_id        TEXT NOT NULL,
