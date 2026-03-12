@@ -622,7 +622,7 @@ with st.sidebar:
         lead_id = st.session_state["player_lead_id"]
     else:
         lead_id = st.text_input(
-            "Lead ID",
+            "Access code",
             value="",
             placeholder="e.g. lead-123",
         ).strip()
