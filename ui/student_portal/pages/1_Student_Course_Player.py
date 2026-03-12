@@ -1662,11 +1662,16 @@ elif step == "complete":
             and _status.get("lead_exists")
             and _status["course_state"]["completion_pct"] is not None
         ):
-            st.metric("Course progress", f"{_status['course_state']['completion_pct']:.1f} %")
+            _pct = _status["course_state"]["completion_pct"]
+            st.markdown(
+                f'<p class="cb-progress-meta">Course progress: {_pct:.0f}% complete</p>',
+                unsafe_allow_html=True,
+            )
         else:
-            st.metric(
-                "Completed sections",
-                f"{len(st.session_state['player_completed'])}/9",
+            _done = len(st.session_state["player_completed"])
+            st.markdown(
+                f'<p class="cb-progress-meta">{_done} of {len(SECTIONS)} sections completed</p>',
+                unsafe_allow_html=True,
             )
 
         st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
