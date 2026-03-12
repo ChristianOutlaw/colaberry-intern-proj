@@ -85,6 +85,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS progress_events (
             id            TEXT PRIMARY KEY,
             lead_id       TEXT NOT NULL,
+            course_id     TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0',
             section       TEXT,
             occurred_at   TEXT,
             metadata_json TEXT,
@@ -174,3 +175,18 @@ def init_db(conn: sqlite3.Connection) -> None:
         "ON course_invites (token)"
     )
     conn.commit()
+
+    # ---------------------------------------------------------------------------
+    # Idempotent column migration — add course_id to progress_events for
+    # existing databases that were created before this column was introduced.
+    # ---------------------------------------------------------------------------
+    existing_pe_columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(progress_events)").fetchall()
+    }
+    if "course_id" not in existing_pe_columns:
+        conn.execute(
+            "ALTER TABLE progress_events "
+            "ADD COLUMN course_id TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0'"
+        )
+        conn.commit()

@@ -127,5 +127,46 @@ class TestComputeCourseState(unittest.TestCase):
         )
 
 
+    # ------------------------------------------------------------------
+    # Test 4 — course_id scoping: events from another course are excluded
+    # ------------------------------------------------------------------
+    def test_course_id_scoping(self):
+        """compute_course_state must only count events matching the given course_id."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        # Two events for the target course.
+        record_progress_event(
+            "E1", "L1", "P1_S1",
+            occurred_at="2026-01-01T00:00:00+00:00",
+            course_id="FREE_INTRO_AI_V0",
+            db_path=TEST_DB_PATH,
+        )
+        record_progress_event(
+            "E2", "L1", "P1_S2",
+            occurred_at="2026-01-02T00:00:00+00:00",
+            course_id="FREE_INTRO_AI_V0",
+            db_path=TEST_DB_PATH,
+        )
+        # One event for a different course — must not be counted.
+        record_progress_event(
+            "E3", "L1", "P1_S3",
+            occurred_at="2026-01-03T00:00:00+00:00",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        compute_course_state(
+            "L1", total_sections=10,
+            course_id="FREE_INTRO_AI_V0",
+            db_path=TEST_DB_PATH,
+        )
+        row = _fetch_course_state("L1")
+
+        self.assertEqual(row["current_section"], "P1_S2",
+                         "current_section must reflect only FREE_INTRO_AI_V0 events")
+        self.assertAlmostEqual(row["completion_pct"], 20.0, places=5,
+                               msg="completion_pct must not count events from other courses")
+
+
 if __name__ == "__main__":
     unittest.main()

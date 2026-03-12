@@ -18,18 +18,21 @@ def _utc_now() -> str:
 def compute_course_state(
     lead_id: str,
     total_sections: int = 10,
+    course_id: str = "FREE_INTRO_AI_V0",
     db_path: str | None = None,
 ) -> None:
     """Derive and upsert a lead's course state from their progress events.
 
-    Reads all progress_events for the lead, computes the current section,
-    completion percentage, and last activity timestamp, then writes the
-    result into course_state. If the lead has no events, nothing is written.
+    Reads all progress_events for the lead and course, computes the current
+    section, completion percentage, and last activity timestamp, then writes
+    the result into course_state. If the lead has no events, nothing is written.
 
     Args:
         lead_id:        ID of the lead to compute state for.
         total_sections: Denominator used for completion_pct calculation.
                         Defaults to 10.
+        course_id:      Course whose events are used. Defaults to
+                        'FREE_INTRO_AI_V0' for backward compatibility.
         db_path:        Path to the SQLite file; defaults to tmp/app.db.
     """
     conn = connect(db_path)
@@ -40,10 +43,10 @@ def compute_course_state(
             """
             SELECT section, occurred_at
             FROM progress_events
-            WHERE lead_id = ?
+            WHERE lead_id = ? AND course_id = ?
             ORDER BY occurred_at ASC
             """,
-            (lead_id,),
+            (lead_id, course_id),
         ).fetchall()
 
         if not rows:
@@ -57,9 +60,9 @@ def compute_course_state(
             """
             SELECT COUNT(DISTINCT section)
             FROM progress_events
-            WHERE lead_id = ?
+            WHERE lead_id = ? AND course_id = ?
             """,
-            (lead_id,),
+            (lead_id, course_id),
         ).fetchone()[0]
 
         completion_pct = (distinct_sections / total_sections) * 100.0

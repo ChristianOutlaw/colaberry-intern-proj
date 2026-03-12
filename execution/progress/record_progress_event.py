@@ -23,6 +23,7 @@ def record_progress_event(
     section: str,
     occurred_at: str | None = None,
     metadata_json: str | None = None,
+    course_id: str = "FREE_INTRO_AI_V0",
     db_path: str | None = None,
 ) -> None:
     """Insert a progress event row, skipping silently if it already exists.
@@ -38,6 +39,8 @@ def record_progress_event(
                        execution/course/course_registry.SECTION_IDS.
         occurred_at:   ISO 8601 timestamp; defaults to current UTC if None.
         metadata_json: Optional JSON string for extra context.
+        course_id:     Course this event belongs to. Defaults to
+                       'FREE_INTRO_AI_V0' for backward compatibility.
         db_path:       Path to the SQLite file; defaults to tmp/app.db.
 
     Raises:
@@ -62,10 +65,10 @@ def record_progress_event(
 
         conn.execute(
             """
-            INSERT INTO progress_events (id, lead_id, section, occurred_at, metadata_json)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO progress_events (id, lead_id, course_id, section, occurred_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (event_id, lead_id, section, occurred_at, metadata_json),
+            (event_id, lead_id, course_id, section, occurred_at, metadata_json),
         )
         conn.commit()
     finally:

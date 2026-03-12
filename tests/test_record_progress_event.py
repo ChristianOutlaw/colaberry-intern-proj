@@ -51,7 +51,7 @@ class TestRecordProgressEvent(unittest.TestCase):
         conn = connect(TEST_DB_PATH)
         try:
             row = conn.execute(
-                "SELECT id, lead_id, section FROM progress_events WHERE id = ?",
+                "SELECT id, lead_id, course_id, section FROM progress_events WHERE id = ?",
                 ("E1",),
             ).fetchone()
         finally:
@@ -61,6 +61,30 @@ class TestRecordProgressEvent(unittest.TestCase):
         self.assertEqual(row["id"], "E1")
         self.assertEqual(row["lead_id"], "L1")
         self.assertEqual(row["section"], "P2_S2")
+        self.assertEqual(row["course_id"], "FREE_INTRO_AI_V0",
+                         "course_id must default to FREE_INTRO_AI_V0")
+
+    # ------------------------------------------------------------------
+    # Test 6 — explicit course_id is stored correctly
+    # ------------------------------------------------------------------
+    def test_explicit_course_id_stored(self):
+        """An explicit course_id must be written to the row."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        record_progress_event(
+            "E1", "L1", "P1_S1",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT course_id FROM progress_events WHERE id = ?", ("E1",)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertEqual(row["course_id"], "OTHER_COURSE_V1")
 
     # ------------------------------------------------------------------
     # Test 2 — idempotency on duplicate event_id (AC3)
