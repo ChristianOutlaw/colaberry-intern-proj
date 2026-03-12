@@ -442,6 +442,34 @@ st.markdown(
 
     /* ── Nav row (back / forward buttons) ────────────────────────────────── */
     .cb-nav-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+
+    /* ── Branded header strip ─────────────────────────────────────────────── */
+    .cb-brand-strip {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0 0.65rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        margin-bottom: 0.5rem;
+    }
+    .cb-brand-name {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #EB3537;
+    }
+    .cb-brand-sep {
+        font-size: 0.68rem;
+        color: #EBEBE9;
+        user-select: none;
+    }
+    .cb-brand-course {
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: #5B5A59;
+        letter-spacing: 0.02em;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1063,6 +1091,16 @@ if st.session_state.get("_backnav_pending_idx") is not None:
     _trace_backnav("BEFORE_STOP_CONFIRM_BLOCK")
     st.stop()
 
+
+# ── Branded header strip — visible on every player screen ─────────────────────
+st.markdown(
+    '<div class="cb-brand-strip">'
+    '<span class="cb-brand-name">Colaberry</span>'
+    '<span class="cb-brand-sep">·</span>'
+    '<span class="cb-brand-course">Free Intro to AI</span>'
+    "</div>",
+    unsafe_allow_html=True,
+)
 
 # ── Course-level welcome screen ────────────────────────────────────────────────
 # Portal gate: always shown until the student clicks a begin/resume CTA.
