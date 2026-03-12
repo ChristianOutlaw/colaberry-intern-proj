@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from execution.db.sqlite import connect, init_db                                    # noqa: E402
+from execution.leads.upsert_lead import upsert_lead                                 # noqa: E402
 from execution.reflection.save_reflection_response import (                         # noqa: E402
     save_reflection_response,
     _validate,
@@ -46,6 +47,9 @@ class _ReflectionTestBase(unittest.TestCase):
         conn = connect(TEST_DB_PATH)
         init_db(conn)
         conn.close()
+        # Pre-seed leads so upsert_enrollment FK constraint is satisfied.
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        upsert_lead("L2", db_path=TEST_DB_PATH)
 
     def tearDown(self):
         if os.path.exists(TEST_DB_PATH):
@@ -166,6 +170,58 @@ class TestSaveAndLoad(_ReflectionTestBase):
         finally:
             conn.close()
         self.assertIsNone(row["created_at"])
+
+    def test_save_creates_matching_enrollment(self):
+        """save_reflection_response must ensure a course_enrollments row exists
+        for the same (lead_id, course_id) after the reflection is saved."""
+        save_reflection_response(
+            "L1", "FREE_INTRO_AI_V0", "P1_S1", 0, "My answer",
+            db_path=TEST_DB_PATH,
+        )
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT lead_id, course_id FROM course_enrollments "
+                "WHERE lead_id = ? AND course_id = ?",
+                ("L1", "FREE_INTRO_AI_V0"),
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertIsNotNone(row, "Expected a course_enrollments row after saving reflection")
+        self.assertEqual(row["lead_id"], "L1")
+        self.assertEqual(row["course_id"], "FREE_INTRO_AI_V0")
+
+    def test_save_creates_enrollment_for_explicit_course_id(self):
+        """Saving a reflection with an explicit course_id must create an enrollment
+        for that specific course."""
+        save_reflection_response(
+            "L1", "OTHER_COURSE_V1", "P1_S1", 0, "My answer",
+            db_path=TEST_DB_PATH,
+        )
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT course_id FROM course_enrollments "
+                "WHERE lead_id = ? AND course_id = ?",
+                ("L1", "OTHER_COURSE_V1"),
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertIsNotNone(row, "Expected enrollment for OTHER_COURSE_V1")
+        self.assertEqual(row["course_id"], "OTHER_COURSE_V1")
+
+    def test_repeated_save_does_not_duplicate_enrollment(self):
+        """Saving the same reflection slot twice must not create duplicate enrollment rows."""
+        save_reflection_response("L1", "FREE_INTRO_AI_V0", "P1_S1", 0, "v1", db_path=TEST_DB_PATH)
+        save_reflection_response("L1", "FREE_INTRO_AI_V0", "P1_S1", 0, "v2", db_path=TEST_DB_PATH)
+        conn = connect(TEST_DB_PATH)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM course_enrollments WHERE lead_id = ?", ("L1",)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        self.assertEqual(count, 1, "Repeated save must not create duplicate enrollment rows")
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ No datetime.now() — created_at must be supplied by the caller or omitted
 """
 
 from execution.db.sqlite import connect, init_db
+from execution.leads.upsert_enrollment import upsert_enrollment
 
 
 def save_reflection_response(
@@ -45,6 +46,11 @@ def save_reflection_response(
         ValueError: If any required argument fails type or content validation.
     """
     _validate(lead_id, course_id, section_id, prompt_index, response_text)
+
+    # Ensure an enrollment row exists before writing the reflection.  Called
+    # before opening the reflection connection to avoid concurrent write-lock
+    # contention.  upsert_enrollment is idempotent — safe to call every time.
+    upsert_enrollment(lead_id, course_id=course_id, db_path=db_path)
 
     conn = connect(db_path)
     try:
