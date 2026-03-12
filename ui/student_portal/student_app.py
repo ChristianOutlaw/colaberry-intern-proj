@@ -67,13 +67,8 @@ if token:
         st.session_state["player_lead_id"] = resolved["lead_id"]
     else:
         st.markdown("### Access unavailable")
-        st.markdown(
-            "This invite link is **invalid or has already been used.**"
-        )
-        st.markdown(
-            "Each invite link can only be used once. "
-            "Please contact your instructor to receive a new link."
-        )
+        st.markdown("This invite link is **invalid or could not be verified.**")
+        st.markdown("Please contact your instructor for a new access link.")
         st.stop()
 
 # ---------------------------------------------------------------------------
