@@ -1577,7 +1577,7 @@ elif step == "reflection":
         st.markdown('<div class="cb-card-inner">', unsafe_allow_html=True)
         if not section_prompt_ids:
             st.info("No reflection prompts for this section.")
-            if st.button("Continue to Complete →", type="primary"):
+            if st.button("Continue to Complete →", type="primary", use_container_width=True):
                 st.session_state["player_flow_step"] = "complete"
                 st.rerun()
         else:
@@ -1585,7 +1585,7 @@ elif step == "reflection":
 
             if refl_idx >= len(section_prompt_ids):
                 # All prompts answered — show continue.
-                if st.button("Continue to Complete →", type="primary"):
+                if st.button("Continue to Complete →", type="primary", use_container_width=True):
                     st.session_state["player_flow_step"] = "complete"
                     st.rerun()
             else:
@@ -1597,21 +1597,27 @@ elif step == "reflection":
                     prompt_id.replace("_", " ").capitalize(),
                 )
 
-                st.caption(f"Reflection {refl_idx + 1} of {len(section_prompt_ids)}")
+                st.markdown(
+                    f'<p class="cb-progress-meta">Reflection {refl_idx + 1} of {len(section_prompt_ids)}</p>',
+                    unsafe_allow_html=True,
+                )
                 st.markdown(f"**{question}**")
+                st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
                 txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
                 st.text_area(
                     label=f"Prompt {refl_idx + 1}",
                     key=txt_key,
-                    height=120,
+                    height=140,
                     placeholder="Write your response here…",
                     label_visibility="collapsed",
                 )
+                st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
                 if st.button(
                     "Save & Continue →",
                     type="primary",
+                    use_container_width=True,
                     key=f"refl_save_{active_section_id}_{refl_idx}",
                 ):
                     current_text = st.session_state.get(txt_key, "").strip()
