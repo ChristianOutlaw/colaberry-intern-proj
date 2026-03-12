@@ -69,7 +69,8 @@ def compute_course_state(
         now = _utc_now()
 
         existing = conn.execute(
-            "SELECT lead_id FROM course_state WHERE lead_id = ?", (lead_id,)
+            "SELECT lead_id FROM course_state WHERE lead_id = ? AND course_id = ?",
+            (lead_id, course_id),
         ).fetchone()
 
         if existing is not None:
@@ -81,18 +82,21 @@ def compute_course_state(
                     last_activity_at = ?,
                     started_at       = COALESCE(started_at, ?),
                     updated_at       = ?
-                WHERE lead_id = ?
+                WHERE lead_id = ? AND course_id = ?
                 """,
-                (current_section, completion_pct, last_activity_at, first_activity_at, now, lead_id),
+                (current_section, completion_pct, last_activity_at, first_activity_at, now,
+                 lead_id, course_id),
             )
         else:
             conn.execute(
                 """
                 INSERT INTO course_state
-                    (lead_id, current_section, completion_pct, last_activity_at, started_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (lead_id, course_id, current_section, completion_pct,
+                     last_activity_at, started_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (lead_id, current_section, completion_pct, last_activity_at, first_activity_at, now),
+                (lead_id, course_id, current_section, completion_pct,
+                 last_activity_at, first_activity_at, now),
             )
 
         conn.commit()

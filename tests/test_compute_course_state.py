@@ -26,12 +26,16 @@ from execution.progress.compute_course_state import compute_course_state    # no
 TEST_DB_PATH = str(REPO_ROOT / "tmp" / "test_course_state.db")
 
 
-def _fetch_course_state(lead_id: str) -> dict:
-    """Return the course_state row for a lead as a plain dict, or {} if missing."""
+def _fetch_course_state(
+    lead_id: str,
+    course_id: str = "FREE_INTRO_AI_V0",
+) -> dict:
+    """Return the course_state row for a (lead, course) pair as a plain dict, or {} if missing."""
     conn = connect(TEST_DB_PATH)
     try:
         row = conn.execute(
-            "SELECT * FROM course_state WHERE lead_id = ?", (lead_id,)
+            "SELECT * FROM course_state WHERE lead_id = ? AND course_id = ?",
+            (lead_id, course_id),
         ).fetchone()
         return dict(row) if row else {}
     finally:
@@ -84,6 +88,7 @@ class TestComputeCourseState(unittest.TestCase):
         row = _fetch_course_state("L1")
 
         self.assertNotEqual(row, {}, "Expected a course_state row to be created")
+        self.assertEqual(row["course_id"], "FREE_INTRO_AI_V0")
         self.assertEqual(row["current_section"], "P1_S2")
         self.assertEqual(row["last_activity_at"], "2026-01-02T00:00:00+00:00")
         self.assertAlmostEqual(row["completion_pct"], 20.0, places=5)
@@ -166,6 +171,58 @@ class TestComputeCourseState(unittest.TestCase):
                          "current_section must reflect only FREE_INTRO_AI_V0 events")
         self.assertAlmostEqual(row["completion_pct"], 20.0, places=5,
                                msg="completion_pct must not count events from other courses")
+
+    # ------------------------------------------------------------------
+    # Test 5 — two courses produce two independent course_state rows
+    # ------------------------------------------------------------------
+    def test_two_courses_produce_separate_rows(self):
+        """Computing state for two different courses must write two separate rows
+        that do not overwrite each other."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        record_progress_event(
+            "E1", "L1", "P1_S1",
+            occurred_at="2026-01-01T00:00:00+00:00",
+            course_id="FREE_INTRO_AI_V0",
+            db_path=TEST_DB_PATH,
+        )
+        record_progress_event(
+            "E2", "L1", "P1_S1",
+            occurred_at="2026-01-02T00:00:00+00:00",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+        record_progress_event(
+            "E3", "L1", "P1_S2",
+            occurred_at="2026-01-03T00:00:00+00:00",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        compute_course_state("L1", total_sections=10,
+                             course_id="FREE_INTRO_AI_V0", db_path=TEST_DB_PATH)
+        compute_course_state("L1", total_sections=10,
+                             course_id="OTHER_COURSE_V1", db_path=TEST_DB_PATH)
+
+        row_a = _fetch_course_state("L1", "FREE_INTRO_AI_V0")
+        row_b = _fetch_course_state("L1", "OTHER_COURSE_V1")
+
+        self.assertNotEqual(row_a, {}, "Expected course_state row for FREE_INTRO_AI_V0")
+        self.assertNotEqual(row_b, {}, "Expected course_state row for OTHER_COURSE_V1")
+        self.assertEqual(row_a["current_section"], "P1_S1")
+        self.assertEqual(row_b["current_section"], "P1_S2")
+        self.assertAlmostEqual(row_a["completion_pct"], 10.0, places=5)
+        self.assertAlmostEqual(row_b["completion_pct"], 20.0, places=5)
+
+        # Verify two physical rows exist in the DB.
+        conn = connect(TEST_DB_PATH)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM course_state WHERE lead_id = ?", ("L1",)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        self.assertEqual(count, 2, "Expected exactly two course_state rows for lead L1")
 
 
 if __name__ == "__main__":

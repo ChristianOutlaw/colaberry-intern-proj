@@ -153,10 +153,10 @@ class TestGetLeadStatus(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO course_state
-                    (lead_id, current_section, completion_pct, last_activity_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                    (lead_id, course_id, current_section, completion_pct, last_activity_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                ("L1", "section_3", 30.0, "2026-02-21T12:00:00Z", "2026-02-21T12:00:00Z"),
+                ("L1", "FREE_INTRO_AI_V0", "section_3", 30.0, "2026-02-21T12:00:00Z", "2026-02-21T12:00:00Z"),
             )
             conn.commit()
         finally:

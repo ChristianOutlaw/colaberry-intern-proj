@@ -106,12 +106,14 @@ def init_db(conn: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS course_state (
-            lead_id          TEXT PRIMARY KEY,
+            lead_id          TEXT NOT NULL,
+            course_id        TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0',
             current_section  TEXT,
             completion_pct   REAL,
             last_activity_at TEXT,
             started_at       TEXT,
             updated_at       TEXT,
+            PRIMARY KEY (lead_id, course_id),
             FOREIGN KEY (lead_id) REFERENCES leads (id)
         );
 
@@ -210,3 +212,52 @@ def init_db(conn: sqlite3.Connection) -> None:
             "ADD COLUMN course_id TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0'"
         )
         conn.commit()
+
+    # ---------------------------------------------------------------------------
+    # Structural migration — promote course_state from one-row-per-lead to
+    # one-row-per-(lead_id, course_id).
+    #
+    # SQLite does not support ALTER TABLE ... DROP PRIMARY KEY or ADD PRIMARY KEY,
+    # so the only safe path is a table recreation.  The idempotency guard checks
+    # for the presence of the course_id column; once it exists the block is
+    # skipped on every subsequent init_db() call.
+    #
+    # Safety notes:
+    #   • DROP TABLE IF EXISTS course_state_new first to clean up any leftover
+    #     from a previously interrupted migration.
+    #   • All existing rows are assigned course_id = 'FREE_INTRO_AI_V0' which is
+    #     correct because all historical data belongs to that course.
+    #   • executescript() issues an implicit COMMIT before running, so the
+    #     statements execute in auto-commit mode — each is individually durable.
+    # ---------------------------------------------------------------------------
+    existing_cs_columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(course_state)").fetchall()
+    }
+    if "course_id" not in existing_cs_columns:
+        conn.execute("DROP TABLE IF EXISTS course_state_new")
+        conn.commit()
+        conn.executescript("""
+            CREATE TABLE course_state_new (
+                lead_id          TEXT NOT NULL,
+                course_id        TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0',
+                current_section  TEXT,
+                completion_pct   REAL,
+                last_activity_at TEXT,
+                started_at       TEXT,
+                updated_at       TEXT,
+                PRIMARY KEY (lead_id, course_id),
+                FOREIGN KEY (lead_id) REFERENCES leads (id)
+            );
+
+            INSERT INTO course_state_new
+                (lead_id, course_id, current_section, completion_pct,
+                 last_activity_at, started_at, updated_at)
+            SELECT
+                lead_id, 'FREE_INTRO_AI_V0', current_section, completion_pct,
+                last_activity_at, started_at, updated_at
+            FROM course_state;
+
+            DROP TABLE course_state;
+            ALTER TABLE course_state_new RENAME TO course_state;
+        """)

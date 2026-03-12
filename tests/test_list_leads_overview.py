@@ -104,9 +104,9 @@ def _seed_course_state(lead_id: str, completion_pct: float,
     conn = connect(TEST_DB_PATH)
     conn.execute(
         "INSERT INTO course_state"
-        " (lead_id, completion_pct, current_section, last_activity_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?)",
-        (lead_id, completion_pct, current_section, last_activity_at, _TS_CREATED),
+        " (lead_id, course_id, completion_pct, current_section, last_activity_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (lead_id, "FREE_INTRO_AI_V0", completion_pct, current_section, last_activity_at, _TS_CREATED),
     )
     conn.commit()
     conn.close()
