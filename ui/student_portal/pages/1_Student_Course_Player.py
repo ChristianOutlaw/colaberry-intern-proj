@@ -1068,16 +1068,20 @@ if st.session_state.get("_backnav_pending_idx") is not None:
 # ── White logo header — visible on every player screen ────────────────────────
 _logo_path = REPO_ROOT / "ui" / "assets" / "colaberry_logo(wide).png"
 if _logo_path.exists():
-    st.image(str(_logo_path), width=200)
+    st.image(str(_logo_path), width=260)
 else:
-    st.markdown("**Colaberry**")
+    st.markdown("### Colaberry")
 st.markdown(
-    '<p style="font-size:0.72rem; color:#5B5A59; margin:0.1rem 0 0; letter-spacing:0.03em;">'
-    "Student Portal &nbsp;·&nbsp; Free Intro to AI</p>",
+    '<div style="margin:0.3rem 0 0;">'
+    '<p style="font-size:0.95rem; font-weight:700; color:#0D0D0D; margin:0; line-height:1.3;">'
+    "Student Portal</p>"
+    '<p style="font-size:0.78rem; font-weight:400; color:#5B5A59; margin:0.15rem 0 0; letter-spacing:0.02em;">'
+    "Free Intro to AI</p>"
+    "</div>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    "<div style='height:1px; background:rgba(0,0,0,0.08); margin:0.45rem 0 0.75rem;'></div>",
+    "<div style='height:1px; background:rgba(0,0,0,0.08); margin:0.65rem 0 0.75rem;'></div>",
     unsafe_allow_html=True,
 )
 
