@@ -22,6 +22,7 @@ def mark_course_invite_sent(
     sent_at: str | None = None,
     channel: str | None = None,
     metadata_json: str | None = None,
+    course_id: str = "FREE_INTRO_AI_V0",
     db_path: str | None = None,
 ) -> None:
     """Insert a course invite record, skipping silently if it already exists.
@@ -37,6 +38,8 @@ def mark_course_invite_sent(
                        defaults to current UTC if None.
         channel:       Delivery channel (e.g. "sms", "email", "call").
         metadata_json: Optional JSON string for extra context.
+        course_id:     Course this invite belongs to. Defaults to
+                       'FREE_INTRO_AI_V0' for backward compatibility.
         db_path:       Path to the SQLite file; defaults to tmp/app.db.
     """
     conn = connect(db_path)
@@ -57,10 +60,10 @@ def mark_course_invite_sent(
 
         conn.execute(
             """
-            INSERT INTO course_invites (id, lead_id, sent_at, channel, token, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO course_invites (id, lead_id, course_id, sent_at, channel, token, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (invite_id, lead_id, sent_at, channel, token, metadata_json),
+            (invite_id, lead_id, course_id, sent_at, channel, token, metadata_json),
         )
         conn.commit()
     finally:

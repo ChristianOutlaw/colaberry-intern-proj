@@ -135,6 +135,47 @@ class TestMarkCourseInviteSent(unittest.TestCase):
         self.assertEqual(len(tokens), 2, "Expected two invite rows")
         self.assertNotEqual(tokens[0], tokens[1], "Each invite must have a unique token")
 
+    # ------------------------------------------------------------------
+    # Test 6 — course_id defaults to FREE_INTRO_AI_V0
+    # ------------------------------------------------------------------
+    def test_course_id_defaults_to_free_intro_ai_v0(self):
+        """course_id must default to FREE_INTRO_AI_V0 when not supplied."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT course_id FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertEqual(row["course_id"], "FREE_INTRO_AI_V0",
+                         "course_id must default to FREE_INTRO_AI_V0")
+
+    # ------------------------------------------------------------------
+    # Test 7 — explicit course_id is stored correctly
+    # ------------------------------------------------------------------
+    def test_explicit_course_id_stored(self):
+        """An explicit course_id must be written to the invite row."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent(
+            "I1", "L1",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT course_id FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertEqual(row["course_id"], "OTHER_COURSE_V1")
+
 
 if __name__ == "__main__":
     unittest.main()

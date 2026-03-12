@@ -155,6 +155,34 @@ class TestResolveInviteToken(unittest.TestCase):
         self.assertGreater(len(post_use), 10, "first_used_at must be a non-trivially short string")
 
     # ------------------------------------------------------------------
+    # T7a — token resolves correctly when invite has an explicit course_id
+    # ------------------------------------------------------------------
+    def test_resolves_correctly_with_explicit_course_id(self):
+        """An invite created with a non-default course_id must still resolve
+        to the correct lead and invite context."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent(
+            "I1", "L1",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            stored_token = conn.execute(
+                "SELECT token FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["token"]
+        finally:
+            conn.close()
+
+        result = resolve_invite_token(stored_token, db_path=TEST_DB_PATH)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["invite_id"], "I1")
+        self.assertEqual(result["lead_id"], "L1")
+        self.assertEqual(result["token"], stored_token)
+
+    # ------------------------------------------------------------------
     # T7 — first_used_at is not overwritten on a second resolve
     # ------------------------------------------------------------------
     def test_first_used_at_not_overwritten_on_second_resolve(self):

@@ -132,6 +132,31 @@ class TestGetLatestInviteToken(unittest.TestCase):
 
         self.assertEqual(result, stored)
 
+    # ------------------------------------------------------------------
+    # T7 — works correctly when invite has an explicit course_id
+    # ------------------------------------------------------------------
+    def test_works_with_explicit_course_id(self):
+        """get_latest_invite_token must return the correct token regardless of course_id."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent(
+            "I1", "L1",
+            course_id="OTHER_COURSE_V1",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            stored = conn.execute(
+                "SELECT token FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()["token"]
+        finally:
+            conn.close()
+
+        result = get_latest_invite_token("L1", db_path=TEST_DB_PATH)
+
+        self.assertEqual(result, stored,
+                         "Token must be returned correctly when invite has a non-default course_id")
+
 
 if __name__ == "__main__":
     unittest.main()
