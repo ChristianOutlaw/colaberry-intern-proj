@@ -1169,7 +1169,10 @@ if not st.session_state.get("player_course_started"):
             _wc_summary = f"{_wc_pct:.0f}% complete"
             if _wc_cur_title:
                 _wc_summary += f" · last section: **{_wc_cur_title}**"
-            st.info(f"Saved progress found — {_wc_summary}")
+            st.markdown(
+                f'<p class="cb-progress-meta">Progress saved — {_wc_summary}</p>',
+                unsafe_allow_html=True,
+            )
 
             _rb_col, _rs_col = st.columns([2, 1])
             with _rb_col:
