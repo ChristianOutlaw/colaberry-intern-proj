@@ -1243,6 +1243,14 @@ st.markdown(
 )
 st.progress(_bar_val)
 
+# ── Course progress caption — reads already-fetched player_status, no new DB call.
+_hdr_status = st.session_state.get("player_status")
+if _hdr_status and _hdr_status.get("lead_exists"):
+    _hdr_pct = float((_hdr_status.get("course_state") or {}).get("completion_pct") or 0.0)
+    st.caption(f"Course progress: {_hdr_pct:.0f}% complete  ·  Section {active_idx + 1} of {len(SECTIONS)}")
+else:
+    st.caption(f"Section {active_idx + 1} of {len(SECTIONS)}")
+
 
 # ── Tutor expander — closure over active_title / section_markdown / step ───────
 def _render_tutor_expander() -> None:
