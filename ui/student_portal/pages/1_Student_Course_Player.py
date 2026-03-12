@@ -1581,10 +1581,10 @@ elif step == "reflection":
 # ── COMPLETE ──────────────────────────────────────────────────────────────────
 elif step == "complete":
     with st.container(border=True):
-        st.subheader("Section completed")
+        st.markdown("### \u2713 Section complete")
         st.markdown(
-            "You've finished all the content for this section. "
-            "Record your progress below, then move on to the next section."
+            f"You've finished **{active_title}**. "
+            "Keep going — your progress is saved automatically."
         )
 
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
@@ -1603,11 +1603,11 @@ elif step == "complete":
                 f"{len(st.session_state['player_completed'])}/9",
             )
 
-        st.divider()
+        st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
 
         if _already_completed:
             st.success("Progress saved — this section is marked complete.")
-        elif st.button("Mark Complete", type="primary"):
+        elif st.button("Mark Complete", type="primary", use_container_width=True):
             occurred_at = datetime.now(timezone.utc).isoformat()
             event_id = f"{lead_id}:{active_section_id}"
             try:
@@ -1679,7 +1679,7 @@ elif step == "complete":
                 logging.exception("Unexpected error in Mark Complete")
                 st.error("An unexpected error occurred. See console for details.")
 
-        st.markdown("---")
+        st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         _has_next = active_idx < (len(SECTIONS) - 1)
         _next_idx = active_idx + 1
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
@@ -1711,7 +1711,7 @@ elif step == "complete":
             )
             if _has_next:
                 with st.form(key=f"next_section_form_{st.session_state.get('_section_radio_confirmed', active_idx)}"):
-                    _clicked_next = st.form_submit_button("Go to next section \u2192", type="primary")
+                    _clicked_next = st.form_submit_button("Go to next section \u2192", type="primary", use_container_width=True)
             else:
                 _clicked_next = False
             _dbg_log(
@@ -1758,6 +1758,7 @@ elif step == "complete":
                 st.session_state["player_refl_idx"] = 0
                 st.rerun()
 
+            st.markdown("<div style='height: 16px'></div>", unsafe_allow_html=True)
             if st.button("← Restart this Section"):
                 st.session_state["player_flow_step"] = "lesson"
                 st.session_state["player_flow_chunk_idx"] = 0
