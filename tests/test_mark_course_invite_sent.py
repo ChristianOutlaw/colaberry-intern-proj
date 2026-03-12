@@ -176,6 +176,70 @@ class TestMarkCourseInviteSent(unittest.TestCase):
 
         self.assertEqual(row["course_id"], "OTHER_COURSE_V1")
 
+    # ------------------------------------------------------------------
+    # Test 8 — creating an invite also creates a matching enrollment row
+    # ------------------------------------------------------------------
+    def test_invite_creates_matching_enrollment(self):
+        """mark_course_invite_sent must ensure a course_enrollments row exists
+        for the same (lead_id, course_id) after the invite is created."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT lead_id, course_id FROM course_enrollments "
+                "WHERE lead_id = ? AND course_id = ?",
+                ("L1", "FREE_INTRO_AI_V0"),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected a course_enrollments row after invite creation")
+        self.assertEqual(row["lead_id"], "L1")
+        self.assertEqual(row["course_id"], "FREE_INTRO_AI_V0")
+
+    # ------------------------------------------------------------------
+    # Test 9 — explicit course_id produces enrollment for that course
+    # ------------------------------------------------------------------
+    def test_invite_creates_enrollment_for_explicit_course_id(self):
+        """An invite with an explicit course_id must create an enrollment for that course."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", course_id="OTHER_COURSE_V1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT course_id FROM course_enrollments "
+                "WHERE lead_id = ? AND course_id = ?",
+                ("L1", "OTHER_COURSE_V1"),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected enrollment for OTHER_COURSE_V1")
+        self.assertEqual(row["course_id"], "OTHER_COURSE_V1")
+
+    # ------------------------------------------------------------------
+    # Test 10 — idempotent invite does not duplicate the enrollment row
+    # ------------------------------------------------------------------
+    def test_idempotent_invite_does_not_duplicate_enrollment(self):
+        """Calling mark_course_invite_sent twice with the same invite_id must
+        not create duplicate enrollment rows."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+        mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM course_enrollments WHERE lead_id = ?", ("L1",)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        self.assertEqual(count, 1, "Duplicate invite must not create a second enrollment row")
+
 
 if __name__ == "__main__":
     unittest.main()

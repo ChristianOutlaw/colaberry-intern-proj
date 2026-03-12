@@ -9,6 +9,7 @@ import secrets
 from datetime import datetime, timezone
 
 from execution.db.sqlite import connect, init_db
+from execution.leads.upsert_enrollment import upsert_enrollment
 
 
 def _utc_now() -> str:
@@ -42,6 +43,11 @@ def mark_course_invite_sent(
                        'FREE_INTRO_AI_V0' for backward compatibility.
         db_path:       Path to the SQLite file; defaults to tmp/app.db.
     """
+    # Ensure an enrollment row exists before inserting the invite.  Called
+    # before opening the invite connection to avoid concurrent write-lock
+    # contention.  upsert_enrollment is idempotent — safe to call every time.
+    upsert_enrollment(lead_id, course_id=course_id, db_path=db_path)
+
     conn = connect(db_path)
     try:
         init_db(conn)
