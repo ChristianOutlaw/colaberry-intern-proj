@@ -12,6 +12,13 @@ Run:
     python services/webhook/student_invite_endpoint.py          # default port 8520
     python services/webhook/student_invite_endpoint.py 9000     # custom port
 
+Environment variables:
+    STUDENT_PORTAL_BASE_URL   Base URL of the student portal used when the
+                               request body does not supply one.
+                               Default: http://localhost:8501
+    COURSE_EVENT_WEBHOOK_URL  Outbound webhook URL for course lifecycle events.
+                               Default: (none — outbound events are skipped)
+
 Request shape:
     {
         "lead_id":   "...",          # required
@@ -38,6 +45,7 @@ Error response (400 / 404 / 405):
 """
 
 import json
+import os
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -52,6 +60,16 @@ from execution.leads.create_student_invite_from_payload import (  # noqa: E402
 
 INVITE_PATH = "/invite"
 DEFAULT_PORT = 8520
+
+# ---------------------------------------------------------------------------
+# Runtime configuration — read once at import time from environment variables.
+# Both can be overridden per-process without code changes.
+# ---------------------------------------------------------------------------
+STUDENT_PORTAL_BASE_URL: str = os.environ.get(
+    "STUDENT_PORTAL_BASE_URL", "http://localhost:8501"
+).rstrip("/")
+
+COURSE_EVENT_WEBHOOK_URL: str | None = os.environ.get("COURSE_EVENT_WEBHOOK_URL")
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +102,7 @@ def _handle_invite_request(body: dict, db_path: str | None = None) -> tuple[int,
             phone=body.get("phone"),
             course_id=body.get("course_id", "FREE_INTRO_AI_V0"),
             invite_id=body.get("invite_id"),
-            base_url=body.get("base_url", "http://localhost:8501"),
+            base_url=body.get("base_url") or STUDENT_PORTAL_BASE_URL,
             db_path=db_path,
         )
         return 200, result
@@ -146,6 +164,8 @@ def run(port: int = DEFAULT_PORT, db_path: str | None = None) -> None:
     _InviteHandler.db_path = db_path
     server = HTTPServer(("", port), _InviteHandler)
     print(f"Student invite webhook listening on :{port}  →  POST {INVITE_PATH}")
+    print(f"  STUDENT_PORTAL_BASE_URL  = {STUDENT_PORTAL_BASE_URL}")
+    print(f"  COURSE_EVENT_WEBHOOK_URL = {COURSE_EVENT_WEBHOOK_URL or '(not set)'}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
