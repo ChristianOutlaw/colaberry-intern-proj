@@ -1804,6 +1804,58 @@ elif step == "complete":
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
             st.markdown(
+                """
+<style>
+@keyframes cb-fall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  75%  { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(540deg); opacity: 0; }
+}
+.cb-cp {
+  position: fixed; top: -12px;
+  animation: cb-fall linear 1 forwards;
+  pointer-events: none; z-index: 9999;
+}
+</style>
+<div class="cb-cp" style="left:3%;width:8px;height:8px;background:#EB3537;border-radius:2px;animation-delay:0s;animation-duration:2.5s"></div>
+<div class="cb-cp" style="left:9%;width:7px;height:7px;background:#2e7d52;border-radius:50%;animation-delay:0.3s;animation-duration:2.8s"></div>
+<div class="cb-cp" style="left:15%;width:9px;height:9px;background:#497095;border-radius:2px;animation-delay:0.1s;animation-duration:3.0s"></div>
+<div class="cb-cp" style="left:22%;width:6px;height:6px;background:#f59e0b;border-radius:50%;animation-delay:0.8s;animation-duration:2.4s"></div>
+<div class="cb-cp" style="left:29%;width:8px;height:8px;background:#EB3537;border-radius:2px;animation-delay:0.4s;animation-duration:3.2s"></div>
+<div class="cb-cp" style="left:36%;width:7px;height:7px;background:#8b5cf6;border-radius:50%;animation-delay:0.6s;animation-duration:2.6s"></div>
+<div class="cb-cp" style="left:43%;width:10px;height:10px;background:#2e7d52;border-radius:2px;animation-delay:0.2s;animation-duration:2.9s"></div>
+<div class="cb-cp" style="left:50%;width:6px;height:6px;background:#f59e0b;border-radius:2px;animation-delay:1.0s;animation-duration:2.3s"></div>
+<div class="cb-cp" style="left:57%;width:8px;height:8px;background:#497095;border-radius:50%;animation-delay:0.5s;animation-duration:3.1s"></div>
+<div class="cb-cp" style="left:63%;width:7px;height:7px;background:#EB3537;border-radius:50%;animation-delay:0.9s;animation-duration:2.7s"></div>
+<div class="cb-cp" style="left:70%;width:9px;height:9px;background:#8b5cf6;border-radius:2px;animation-delay:0.3s;animation-duration:2.5s"></div>
+<div class="cb-cp" style="left:77%;width:6px;height:6px;background:#2e7d52;border-radius:2px;animation-delay:0.7s;animation-duration:3.0s"></div>
+<div class="cb-cp" style="left:83%;width:8px;height:8px;background:#f59e0b;border-radius:50%;animation-delay:0.1s;animation-duration:2.8s"></div>
+<div class="cb-cp" style="left:90%;width:7px;height:7px;background:#497095;border-radius:2px;animation-delay:1.2s;animation-duration:2.4s"></div>
+<div class="cb-cp" style="left:96%;width:9px;height:9px;background:#EB3537;border-radius:50%;animation-delay:0.6s;animation-duration:3.3s"></div>
+<div class="cb-cp" style="left:7%;width:8px;height:8px;background:#8b5cf6;border-radius:2px;animation-delay:1.1s;animation-duration:2.6s"></div>
+<div class="cb-cp" style="left:18%;width:6px;height:6px;background:#2e7d52;border-radius:50%;animation-delay:0.4s;animation-duration:2.9s"></div>
+<div class="cb-cp" style="left:26%;width:9px;height:9px;background:#f59e0b;border-radius:2px;animation-delay:0.8s;animation-duration:3.1s"></div>
+<div class="cb-cp" style="left:33%;width:7px;height:7px;background:#EB3537;border-radius:50%;animation-delay:0.2s;animation-duration:2.7s"></div>
+<div class="cb-cp" style="left:40%;width:8px;height:8px;background:#497095;border-radius:2px;animation-delay:1.3s;animation-duration:2.5s"></div>
+<div class="cb-cp" style="left:48%;width:6px;height:6px;background:#8b5cf6;border-radius:50%;animation-delay:0.5s;animation-duration:3.2s"></div>
+<div class="cb-cp" style="left:55%;width:10px;height:10px;background:#2e7d52;border-radius:2px;animation-delay:0.9s;animation-duration:2.8s"></div>
+<div class="cb-cp" style="left:66%;width:7px;height:7px;background:#f59e0b;border-radius:50%;animation-delay:0.1s;animation-duration:2.4s"></div>
+<div class="cb-cp" style="left:74%;width:8px;height:8px;background:#EB3537;border-radius:2px;animation-delay:0.7s;animation-duration:3.0s"></div>
+<div class="cb-cp" style="left:80%;width:6px;height:6px;background:#497095;border-radius:50%;animation-delay:1.0s;animation-duration:2.6s"></div>
+<div class="cb-cp" style="left:87%;width:9px;height:9px;background:#8b5cf6;border-radius:2px;animation-delay:0.3s;animation-duration:2.9s"></div>
+<div class="cb-cp" style="left:93%;width:7px;height:7px;background:#2e7d52;border-radius:50%;animation-delay:0.8s;animation-duration:3.3s"></div>
+<div class="cb-cp" style="left:11%;width:8px;height:8px;background:#f59e0b;border-radius:2px;animation-delay:1.4s;animation-duration:2.3s"></div>
+<div class="cb-cp" style="left:45%;width:6px;height:6px;background:#EB3537;border-radius:50%;animation-delay:0.6s;animation-duration:3.1s"></div>
+<div class="cb-cp" style="left:60%;width:10px;height:10px;background:#497095;border-radius:2px;animation-delay:1.0s;animation-duration:2.4s"></div>
+<div class="cb-cp" style="left:72%;width:7px;height:7px;background:#8b5cf6;border-radius:50%;animation-delay:0.4s;animation-duration:2.8s"></div>
+<div class="cb-cp" style="left:85%;width:8px;height:8px;background:#2e7d52;border-radius:2px;animation-delay:0.9s;animation-duration:3.2s"></div>
+<div class="cb-cp" style="left:98%;width:6px;height:6px;background:#f59e0b;border-radius:50%;animation-delay:0.3s;animation-duration:2.6s"></div>
+<div class="cb-cp" style="left:52%;width:9px;height:9px;background:#EB3537;border-radius:2px;animation-delay:1.5s;animation-duration:2.3s"></div>
+<div class="cb-cp" style="left:38%;width:7px;height:7px;background:#497095;border-radius:50%;animation-delay:1.1s;animation-duration:2.7s"></div>
+""",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
                 f"""<div class="cb-complete-hero">
   <p class="cb-complete-eyebrow">Completed</p>
   <h2 class="cb-complete-title">🎉 Course completed</h2>
