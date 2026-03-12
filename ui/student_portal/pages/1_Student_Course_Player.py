@@ -1138,7 +1138,10 @@ if not st.session_state.get("player_course_started"):
             _cw_ph.markdown("\n\n".join(_cw_lines))
 
         # ── Course outline preview card ────────────────────────────────────────
-        st.markdown("---")
+        st.markdown(
+            "<div style='height: 1px; background: rgba(0,0,0,0.08); margin: 1rem 0;'></div>",
+            unsafe_allow_html=True,
+        )
         _sid_to_title_wc = {sid: title for sid, title in SECTIONS}
         st.markdown(
             f"**{len(SECTIONS)} sections** &nbsp;·&nbsp; "
