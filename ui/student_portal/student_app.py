@@ -32,6 +32,30 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Entry-screen shell — narrow centred container, phone + desktop safe.
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+section.main .block-container {
+    max-width: 520px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-top: 4rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    padding-bottom: 3rem !important;
+}
+@media (max-width: 640px) {
+    section.main .block-container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 2.5rem !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
 # Invite-token resolution — runs before the page switch.
 # ---------------------------------------------------------------------------
 token = st.query_params.get("token")
@@ -42,11 +66,20 @@ if token:
         # Pre-populate the lead identity used by the course player.
         st.session_state["player_lead_id"] = resolved["lead_id"]
     else:
-        st.error(
-            "This invite link is invalid or has already been used. "
-            "Please contact your instructor for a new link."
+        st.markdown("### Access unavailable")
+        st.markdown(
+            "This invite link is **invalid or has already been used.**"
+        )
+        st.markdown(
+            "Each invite link can only be used once. "
+            "Please contact your instructor to receive a new link."
         )
         st.stop()
 
+# ---------------------------------------------------------------------------
+# Brief loading state — visible for a moment while the player page loads.
+# ---------------------------------------------------------------------------
+st.markdown("### 🎓 Loading your course…")
+st.caption("Setting up your learning session — you'll be redirected automatically.")
+
 st.switch_page("pages/1_Student_Course_Player.py")
-st.info("Redirecting… If you are not redirected, use the sidebar.")
