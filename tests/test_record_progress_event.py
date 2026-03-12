@@ -11,6 +11,7 @@ import sqlite3
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 # ---------------------------------------------------------------------------
 # PYTHONPATH bootstrap — repo root must be importable from any test runner.
@@ -209,6 +210,132 @@ class TestRecordProgressEvent(unittest.TestCase):
             conn.close()
 
         self.assertEqual(count, 0, "No enrollment must be created for an invalid section_id")
+
+
+class TestRecordProgressEventWebhook(unittest.TestCase):
+    """Tests for the outbound section_completed webhook emission."""
+
+    def setUp(self):
+        (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+        conn = connect(TEST_DB_PATH)
+        init_db(conn)
+        conn.close()
+
+    def tearDown(self):
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
+
+    # ------------------------------------------------------------------
+    # Test 10 — no outbound call when webhook_url is absent
+    # ------------------------------------------------------------------
+    def test_no_webhook_call_when_url_absent(self):
+        """send_course_event must not be called when webhook_url is not supplied."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        with patch(
+            "execution.progress.record_progress_event.send_course_event"
+        ) as mock_send:
+            record_progress_event("E1", "L1", "P1_S1", db_path=TEST_DB_PATH)
+
+        mock_send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Test 11 — send_course_event called with correct args after new write
+    # ------------------------------------------------------------------
+    def test_webhook_called_after_successful_write(self):
+        """send_course_event must be called once with 'section_completed' and
+        the correct payload after a new progress event is written."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        with patch(
+            "execution.progress.record_progress_event.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
+            record_progress_event(
+                "E1", "L1", "P1_S1",
+                course_id="FREE_INTRO_AI_V0",
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        mock_send.assert_called_once_with(
+            "section_completed",
+            {"lead_id": "L1", "course_id": "FREE_INTRO_AI_V0", "section": "P1_S1"},
+            webhook_url="http://example.com/hook",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 12 — invalid section raises before webhook is called
+    # ------------------------------------------------------------------
+    def test_invalid_section_raises_before_webhook(self):
+        """A ValueError for an invalid section must fire before any webhook call."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        with patch(
+            "execution.progress.record_progress_event.send_course_event"
+        ) as mock_send:
+            with self.assertRaises(ValueError):
+                record_progress_event(
+                    "E1", "L1", "PHASE_X_S99",
+                    webhook_url="http://example.com/hook",
+                    db_path=TEST_DB_PATH,
+                )
+
+        mock_send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Test 13 — webhook failure does not break progress recording
+    # ------------------------------------------------------------------
+    def test_webhook_failure_does_not_break_progress_write(self):
+        """A failed outbound webhook must not prevent the progress row from existing."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        with patch(
+            "execution.progress.record_progress_event.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "error", "http_status": None, "error": "refused"}
+            record_progress_event(
+                "E1", "L1", "P1_S1",
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT id FROM progress_events WHERE id = ?", ("E1",)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Progress row must exist despite webhook failure")
+
+    # ------------------------------------------------------------------
+    # Test 14 — idempotent duplicate does NOT fire webhook a second time
+    # ------------------------------------------------------------------
+    def test_webhook_not_called_on_idempotent_duplicate(self):
+        """Calling with an already-recorded event_id must not fire the webhook again."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        with patch(
+            "execution.progress.record_progress_event.send_course_event"
+        ) as mock_send:
+            mock_send.return_value = {"status": "success", "http_status": 200, "error": None}
+            record_progress_event(
+                "E1", "L1", "P1_S1",
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+            record_progress_event(
+                "E1", "L1", "P1_S1",
+                webhook_url="http://example.com/hook",
+                db_path=TEST_DB_PATH,
+            )
+
+        self.assertEqual(
+            mock_send.call_count, 1,
+            "send_course_event must be called exactly once, not on the idempotent skip",
+        )
 
 
 if __name__ == "__main__":

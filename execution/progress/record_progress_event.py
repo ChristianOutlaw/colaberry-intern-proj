@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from execution.course.course_registry import is_valid_section_id
 from execution.db.sqlite import connect, init_db
+from execution.events.send_course_event import send_course_event
 from execution.leads.upsert_enrollment import upsert_enrollment
 
 
@@ -26,8 +27,14 @@ def record_progress_event(
     metadata_json: str | None = None,
     course_id: str = "FREE_INTRO_AI_V0",
     db_path: str | None = None,
+    webhook_url: str | None = None,
 ) -> None:
     """Insert a progress event row, skipping silently if it already exists.
+
+    After a new row is written, emits a "section_completed" outbound webhook
+    event via send_course_event().  If webhook_url is None or blank the emit
+    is a no-op.  Webhook failures are never propagated — a failed outbound
+    call does not affect the progress write.
 
     The foreign key constraint on lead_id means the lead must exist in the
     leads table before this is called; the caller is responsible for that.
@@ -43,6 +50,8 @@ def record_progress_event(
         course_id:     Course this event belongs to. Defaults to
                        'FREE_INTRO_AI_V0' for backward compatibility.
         db_path:       Path to the SQLite file; defaults to tmp/app.db.
+        webhook_url:   Optional URL to POST a "section_completed" event to
+                       after a successful write.  Omit (or pass None) to skip.
 
     Raises:
         ValueError: If section is not a canonical section ID.
@@ -55,6 +64,7 @@ def record_progress_event(
     # contention.  upsert_enrollment is idempotent — safe to call every time.
     upsert_enrollment(lead_id, course_id=course_id, db_path=db_path)
 
+    _wrote_new_row = False
     conn = connect(db_path)
     try:
         init_db(conn)
@@ -77,5 +87,17 @@ def record_progress_event(
             (event_id, lead_id, course_id, section, occurred_at, metadata_json),
         )
         conn.commit()
+        _wrote_new_row = True
     finally:
         conn.close()
+
+    # Emit outbound event only after the DB connection is fully closed, only
+    # when a new row was actually inserted (not on idempotent skips), and only
+    # when a webhook_url was supplied.  send_course_event swallows all network
+    # failures — progress write is safe.
+    if _wrote_new_row and webhook_url:
+        send_course_event(
+            "section_completed",
+            {"lead_id": lead_id, "course_id": course_id, "section": section},
+            webhook_url=webhook_url,
+        )
