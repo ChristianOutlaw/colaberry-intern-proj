@@ -379,26 +379,41 @@ st.markdown(
         background: rgba(255, 255, 255, 0.97);
         backdrop-filter: blur(6px);
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        padding: 0.6rem 0 0.5rem;
-        margin-bottom: 1rem;
+        padding: 0.65rem 0 0.6rem;
+        margin-bottom: 0.75rem;
     }
     .cb-topbar-caption {
-        font-size: 0.72rem;
+        font-size: 0.7rem;
         color: #5B5A59;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
-        margin: 0 0 3px;
+        margin: 0 0 4px;
     }
     .cb-topbar-title {
-        font-size: 1.2rem;
-        font-weight: 700;
+        font-size: 1.35rem;
+        font-weight: 800;
         color: #0D0D0D;
+        margin: 0 0 5px;
+        line-height: 1.25;
+    }
+    .cb-topbar-step {
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: #497095;
+        letter-spacing: 0.02em;
         margin: 0;
-        line-height: 1.3;
     }
 
     /* ── Section progress bar spacing ────────────────────────────────────── */
-    .stProgress { margin-top: 0.25rem; margin-bottom: 1.25rem; }
+    .stProgress { margin-top: 0.4rem; margin-bottom: 0.5rem; }
+
+    /* ── Progress meta caption ────────────────────────────────────────────── */
+    .cb-progress-meta {
+        font-size: 0.75rem;
+        color: #5B5A59;
+        margin: 0 0 1.25rem;
+        line-height: 1.4;
+    }
 
     /* ── Reading column: full width of the 900 px shell ─────────────────── */
     .cb-card-inner { max-width: 100%; margin: 0 auto; }
@@ -1255,10 +1270,19 @@ _bar_val = max(0.0, min(1.0, _bar_val))
 _topbar_caption = f"Section {active_idx + 1} of {len(SECTIONS)}"
 if step == "lesson" and n_chunks > 1:
     _topbar_caption += f" • Part {chunk_idx + 1} of {n_chunks}"
+_step_labels = {
+    "welcome": "Welcome",
+    "lesson": "Lesson",
+    "quiz": "Quiz",
+    "reflection": "Reflection",
+    "complete": "Section Complete",
+}
+_topbar_step = _step_labels.get(step, "")
 st.markdown(
     f"""<div class="cb-topbar">
       <p class="cb-topbar-caption">{_topbar_caption}</p>
       <p class="cb-topbar-title">{active_title}</p>
+      <p class="cb-topbar-step">{_topbar_step}</p>
     </div>""",
     unsafe_allow_html=True,
 )
@@ -1268,9 +1292,16 @@ st.progress(_bar_val)
 _hdr_status = st.session_state.get("player_status")
 if _hdr_status and _hdr_status.get("lead_exists"):
     _hdr_pct = float((_hdr_status.get("course_state") or {}).get("completion_pct") or 0.0)
-    st.caption(f"Course progress: {_hdr_pct:.0f}% complete  ·  Section {active_idx + 1} of {len(SECTIONS)}")
+    st.markdown(
+        f'<p class="cb-progress-meta">Course progress: {_hdr_pct:.0f}% complete'
+        f"  ·  Section {active_idx + 1} of {len(SECTIONS)}</p>",
+        unsafe_allow_html=True,
+    )
 else:
-    st.caption(f"Section {active_idx + 1} of {len(SECTIONS)}")
+    st.markdown(
+        f'<p class="cb-progress-meta">Section {active_idx + 1} of {len(SECTIONS)}</p>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Tutor expander — closure over active_title / section_markdown / step ───────
