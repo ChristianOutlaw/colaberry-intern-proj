@@ -1385,25 +1385,22 @@ elif step == "lesson":
             fwd_label = "Continue →"
 
         st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
-        c_left, c_mid, c_right = st.columns([1, 6, 1])
-        with c_left:
-            if st.button(fwd_label, type="primary"):
-                if is_last_chunk:
-                    if section_quiz_ids:
-                        st.session_state["player_flow_step"] = "quiz"
-                    elif section_prompt_ids:
-                        st.session_state["player_flow_step"] = "reflection"
-                    else:
-                        st.session_state["player_flow_step"] = "complete"
-                    st.session_state["player_flow_chunk_idx"] = 0
+        if st.button(fwd_label, type="primary", use_container_width=True):
+            if is_last_chunk:
+                if section_quiz_ids:
+                    st.session_state["player_flow_step"] = "quiz"
+                elif section_prompt_ids:
+                    st.session_state["player_flow_step"] = "reflection"
                 else:
-                    st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
+                    st.session_state["player_flow_step"] = "complete"
+                st.session_state["player_flow_chunk_idx"] = 0
+            else:
+                st.session_state["player_flow_chunk_idx"] = chunk_idx + 1
+            st.rerun()
+        if chunk_idx > 0:
+            if st.button("← Back", use_container_width=True):
+                st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
                 st.rerun()
-        with c_right:
-            if chunk_idx > 0:
-                if st.button("← Back"):
-                    st.session_state["player_flow_chunk_idx"] = chunk_idx - 1
-                    st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     _render_tutor_expander()
