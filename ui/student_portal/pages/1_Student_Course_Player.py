@@ -1229,7 +1229,7 @@ if not st.session_state.get("player_course_started"):
         if not lead_id:
             # No lead entered yet — show a disabled Begin button with guidance.
             st.button("Begin Course →", type="primary", key="btn_begin_course", disabled=True)
-            st.caption("Use the invite link sent by your instructor to begin.")
+            st.caption("Use your invite link or enter the access code your instructor sent you to begin.")
 
         elif _wc_has_progress:
             # Progress exists — show Resume (primary) + Restart (secondary).
