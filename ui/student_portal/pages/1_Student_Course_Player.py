@@ -1728,7 +1728,8 @@ elif step == "complete":
         # Compact progress summary — prefer already-fetched player_status.
         _status = st.session_state.get("player_status")
         if (
-            _status
+            _already_completed
+            and _status
             and _status.get("lead_exists")
             and _status["course_state"]["completion_pct"] is not None
         ):
