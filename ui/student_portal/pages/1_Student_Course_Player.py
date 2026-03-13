@@ -10,6 +10,7 @@ Run from the repository root:
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -47,6 +48,7 @@ from ui.student_portal._player_debug import log as _dbg_log, snap as _dbg_snap, 
 DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
 COURSE_CONTENT_DIR = REPO_ROOT / "course_content" / "FREE_INTRO_AI_V0"
 COURSE_ID = "FREE_INTRO_AI_V0"
+COURSE_EVENT_WEBHOOK_URL: str | None = os.environ.get("COURSE_EVENT_WEBHOOK_URL")
 EM_DASH = "\u2014"
 
 
@@ -1734,8 +1736,9 @@ elif step == "complete":
                     active_section_id,
                     occurred_at=occurred_at,
                     db_path=DB_PATH,
+                    webhook_url=COURSE_EVENT_WEBHOOK_URL,
                 )
-                compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH)
+                compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH, webhook_url=COURSE_EVENT_WEBHOOK_URL)
                 updated_status = get_lead_status(lead_id, db_path=DB_PATH)
                 st.session_state["player_status"] = updated_status
                 _hydrate_completed_from_status(updated_status)
