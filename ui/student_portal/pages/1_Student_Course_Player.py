@@ -1357,7 +1357,7 @@ st.markdown(
     </div>""",
     unsafe_allow_html=True,
 )
-st.progress(_bar_val)
+st.progress(_bar_val, text="")
 
 
 # ── Tutor expander — closure over active_title / section_markdown / step ───────
