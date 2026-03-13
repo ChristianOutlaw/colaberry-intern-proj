@@ -1620,6 +1620,8 @@ elif step == "quiz":
                                         st.warning("Not quite — try again.")
                                     else:
                                         st.rerun()  # rerun to reveal correct answer
+                            if chosen is None:
+                                st.caption("Select an answer to continue.")
 
                         # Next → shown when correct or all attempts exhausted.
                         if already_correct or attempts >= 3:
