@@ -1865,6 +1865,7 @@ elif step == "complete":
 """,
                     unsafe_allow_html=True,
                 )
+            _covered_items = "\n".join(f"    <li>✓ {title}</li>" for _, title in SECTIONS)
             st.markdown(
                 f"""<div class="cb-complete-hero">
   <p class="cb-complete-eyebrow">Completed</p>
@@ -1875,10 +1876,7 @@ elif step == "complete":
   </p>
   <p class="cb-complete-covered">What you covered</p>
   <ul class="cb-complete-items">
-    <li>✓ What artificial intelligence is</li>
-    <li>✓ How machines learn from data</li>
-    <li>✓ How data is prepared for models</li>
-    <li>✓ How model results are evaluated</li>
+{_covered_items}
   </ul>
 </div>""",
                 unsafe_allow_html=True,
