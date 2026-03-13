@@ -1656,11 +1656,10 @@ elif step == "reflection":
 
                 txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
                 st.text_area(
-                    label=f"Prompt {refl_idx + 1}",
+                    label="Your response",
                     key=txt_key,
                     height=140,
                     placeholder="Write your response here…",
-                    label_visibility="collapsed",
                 )
                 st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
