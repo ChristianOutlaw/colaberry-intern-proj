@@ -500,6 +500,14 @@ st.markdown(
     /* ── Hide Streamlit's auto-generated sidebar page nav ────────────────── */
     [data-testid="stSidebarNav"] { display: none !important; }
 
+    /* ── Mute locked section radio rows (CSS-only, no Python change) ──────── */
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:not(:has(input:checked)) {
+        opacity: 0.45;
+    }
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:not(:has(input:checked)):hover {
+        opacity: 0.75;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
