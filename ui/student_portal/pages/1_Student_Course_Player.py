@@ -1016,7 +1016,7 @@ with st.sidebar:
                 last_activity = EM_DASH
 
         st.metric("Completion", f"{pct:.2f} %")
-        st.progress(pct / 100.0)
+        st.progress(pct / 100.0, text="")
         st.write(f"**Current:** {current}")
         st.write(f"**Last activity:** {last_activity}")
 
