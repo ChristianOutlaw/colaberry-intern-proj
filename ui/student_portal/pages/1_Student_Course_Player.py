@@ -497,6 +497,9 @@ st.markdown(
     /* ── Hide heading anchor links (not student-facing) ─────────────────── */
     h1 a, h2 a, h3 a { display: none !important; }
 
+    /* ── Hide Streamlit's auto-generated sidebar page nav ────────────────── */
+    [data-testid="stSidebarNav"] { display: none !important; }
+
     </style>
     """,
     unsafe_allow_html=True,
