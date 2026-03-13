@@ -1622,6 +1622,9 @@ elif step == "quiz":
                                         st.rerun()  # rerun to reveal correct answer
                             if chosen is None:
                                 st.caption("Select an answer to continue.")
+                            if attempts > 0 and attempts < 3:
+                                tries_left = 3 - attempts
+                                st.caption(f"Attempt {attempts} of 3 used. You have {tries_left} {'try' if tries_left == 1 else 'tries'} left.")
 
                         # Next → shown when correct or all attempts exhausted.
                         if already_correct or attempts >= 3:
