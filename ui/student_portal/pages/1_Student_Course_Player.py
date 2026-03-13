@@ -1466,7 +1466,7 @@ elif step == "lesson":
                 for _wi in range(0, len(_line_words), 3):
                     _line_built = " ".join(_line_words[: _wi + 3])
                     _chunk_ph.write(_built + _line_built)
-                    time.sleep(0.02)
+                    time.sleep(0.01)
                 _built += _line_built + "\n"
             _chunk_ph.markdown(_chunk_text)
             st.session_state[_chunk_key] = True
