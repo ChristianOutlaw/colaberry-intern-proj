@@ -1357,7 +1357,7 @@ _bar_val = max(0.0, min(1.0, _bar_val))
 
 _topbar_caption = f"Section {active_idx + 1} of {len(SECTIONS)}"
 if step == "lesson" and n_chunks > 1:
-    _topbar_caption += f" • Part {chunk_idx + 1} of {n_chunks}"
+    _topbar_caption += f" • Reading {chunk_idx + 1} of {n_chunks}"
 st.markdown(
     f"""<div class="cb-topbar">
       <p class="cb-topbar-caption">{_topbar_caption}</p>
