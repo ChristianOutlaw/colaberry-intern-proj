@@ -1021,7 +1021,6 @@ if st.session_state.get("_backnav_pending_idx") is not None:
     _target_sid, _target_title = SECTIONS[_target_idx]
 
     _trace_backnav("CONFIRM_BLOCK_ENTER")
-    st.error("CONFIRM BLOCK ENTERED (diagnostic)")
     # PLAYER_DEBUG: confirm-screen render log
     _dbg_log(
         "backnav_confirm_rendered",
@@ -1030,7 +1029,6 @@ if st.session_state.get("_backnav_pending_idx") is not None:
         section_radio_confirmed=st.session_state.get("_section_radio_confirmed"),
         state=_dbg_snap(st.session_state),
     )
-    st.warning("BACKNAV CONFIRM ACTIVE — if you see this, the confirm screen block is executing.")
 
     with st.container(border=True):
         st.warning(
