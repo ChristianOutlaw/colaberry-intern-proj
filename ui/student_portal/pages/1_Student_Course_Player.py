@@ -676,7 +676,7 @@ with st.sidebar:
         lead_id = st.text_input(
             "Access code",
             value="",
-            placeholder="e.g. lead-123",
+            placeholder="Enter your access code",
         ).strip()
         # Require an existing course invite for manual-entry users.
         # Token-resolved users never reach this branch — they are handled above.
