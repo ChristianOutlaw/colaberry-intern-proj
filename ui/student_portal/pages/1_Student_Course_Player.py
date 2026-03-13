@@ -1618,13 +1618,12 @@ elif step == "quiz":
                                     st.session_state["player_quiz_attempts"][qk] = new_attempts
                                     if new_attempts < 3:
                                         st.warning("Not quite — try again.")
+                                        tries_left = 3 - new_attempts
+                                        st.caption(f"Attempt {new_attempts} of 3 used. You have {tries_left} {'try' if tries_left == 1 else 'tries'} left.")
                                     else:
                                         st.rerun()  # rerun to reveal correct answer
                             if chosen is None:
                                 st.caption("Select an answer to continue.")
-                            if attempts > 0 and attempts < 3:
-                                tries_left = 3 - attempts
-                                st.caption(f"Attempt {attempts} of 3 used. You have {tries_left} {'try' if tries_left == 1 else 'tries'} left.")
 
                         # Next → shown when correct or all attempts exhausted.
                         if already_correct or attempts >= 3:
