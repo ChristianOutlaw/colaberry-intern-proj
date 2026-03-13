@@ -494,6 +494,9 @@ st.markdown(
         line-height: 1.5;
     }
 
+    /* ── Hide heading anchor links (not student-facing) ─────────────────── */
+    h1 a, h2 a, h3 a { display: none !important; }
+
     </style>
     """,
     unsafe_allow_html=True,
