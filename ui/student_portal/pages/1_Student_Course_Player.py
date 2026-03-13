@@ -1804,8 +1804,10 @@ elif step == "complete":
         if not _already_completed:
             st.info("Mark the section complete to unlock the next section.")
         elif _already_completed and not _has_next:
-            st.markdown(
-                """
+            if not st.session_state.get("confetti_shown"):
+                st.session_state["confetti_shown"] = True
+                st.markdown(
+                    """
 <style>
 @keyframes cb-fall {
   0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
@@ -1854,8 +1856,8 @@ elif step == "complete":
 <div class="cb-cp" style="left:52%;width:9px;height:9px;background:#EB3537;border-radius:2px;animation-delay:1.5s;animation-duration:2.3s"></div>
 <div class="cb-cp" style="left:38%;width:7px;height:7px;background:#497095;border-radius:50%;animation-delay:1.1s;animation-duration:2.7s"></div>
 """,
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
             st.markdown(
                 f"""<div class="cb-complete-hero">
   <p class="cb-complete-eyebrow">Completed</p>
