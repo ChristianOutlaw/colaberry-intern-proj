@@ -992,7 +992,14 @@ with st.sidebar:
             _raw_current = cs["current_section"]
             _sid_to_title = {sid: title for sid, title in SECTIONS}
             current = _sid_to_title.get(_raw_current, _raw_current) if _raw_current else EM_DASH
-            last_activity = cs["last_activity_at"] or EM_DASH
+            _raw_last = cs["last_activity_at"]
+            if _raw_last:
+                try:
+                    last_activity = datetime.fromisoformat(_raw_last).strftime("%b %d, %Y %H:%M UTC")
+                except (ValueError, TypeError):
+                    last_activity = _raw_last
+            else:
+                last_activity = EM_DASH
 
         st.metric("Completion", f"{pct:.2f} %")
         st.progress(pct / 100.0)
