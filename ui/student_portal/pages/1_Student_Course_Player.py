@@ -1595,6 +1595,7 @@ elif step == "quiz":
                             format_func=lambda j, o=opts: o[j],
                             key=radio_key,
                             label_visibility="collapsed",
+                            index=None,
                         )
                         st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
@@ -1608,7 +1609,7 @@ elif step == "quiz":
                             correct_text = opts[q["correct_index"]]
                             st.info(f"Correct answer: **{correct_text}**")
                         else:
-                            if st.button("Submit Answer", type="primary", use_container_width=True, key=f"submit_ans_{qk}"):
+                            if st.button("Submit Answer", type="primary", use_container_width=True, key=f"submit_ans_{qk}", disabled=(chosen is None)):
                                 if chosen == q["correct_index"]:
                                     st.session_state["player_quiz_correct"].add(qk)
                                     st.rerun()
