@@ -381,7 +381,7 @@ st.markdown(
         background: rgba(255, 255, 255, 0.97);
         backdrop-filter: blur(6px);
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        padding: 0.65rem 0 0.6rem;
+        padding: 0.4rem 0 0.35rem;
         margin-bottom: 0.75rem;
     }
     .cb-topbar-caption {
