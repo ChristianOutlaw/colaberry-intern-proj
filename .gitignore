@@ -16,3 +16,8 @@ tmp/
 .tmp/
 *.log
 settings.local.json
+
+# Playwright / MCP artifacts
+.playwright-mcp/
+*.png
+.mcp.json
