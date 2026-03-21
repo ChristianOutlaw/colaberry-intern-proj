@@ -1655,6 +1655,7 @@ elif step == "reflection":
 
             if refl_idx >= len(section_prompt_ids):
                 # All prompts answered — show continue.
+                st.success("Reflections saved. You've completed Section 2!")
                 if st.button("Continue to Complete →", type="primary", use_container_width=True):
                     st.session_state["player_flow_step"] = "complete"
                     st.rerun()
