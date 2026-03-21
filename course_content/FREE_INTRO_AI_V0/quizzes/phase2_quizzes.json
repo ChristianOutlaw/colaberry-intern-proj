@@ -37,7 +37,8 @@
           "Random noise to improve generalization",
           "Unlabeled clusters of examples"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Think back to Reading 4 — the labels on the emails and images are what makes the data supervised."
       },
       {
         "question": "What is the goal of a machine learning model during training?",

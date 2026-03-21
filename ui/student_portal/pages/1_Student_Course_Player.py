@@ -1617,7 +1617,7 @@ elif step == "quiz":
                                     new_attempts = attempts + 1
                                     st.session_state["player_quiz_attempts"][qk] = new_attempts
                                     if new_attempts < 3:
-                                        st.warning("Not quite — try again.")
+                                        st.warning(q.get("hint", "Not quite — try again."))
                                         tries_left = 3 - new_attempts
                                         st.caption(f"Attempt {new_attempts} of 3 used. You have {tries_left} {'try' if tries_left == 1 else 'tries'} left.")
                                     else:
