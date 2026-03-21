@@ -1541,6 +1541,7 @@ elif step == "quiz":
 
             if quiz_idx >= len(section_quiz_ids):
                 # All quizzes in this section finished — show continue.
+                st.success("Quiz complete! You're ready to reflect.")
                 next_label = (
                     "Continue to Reflection →" if section_prompt_ids else "Continue to Complete →"
                 )
