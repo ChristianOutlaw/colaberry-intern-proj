@@ -11,7 +11,9 @@ No secrets stored here; no requirements files modified.
 
 from __future__ import annotations
 
+import json
 import os
+import pathlib
 import re
 
 
@@ -25,6 +27,91 @@ _FOLLOWUP_LINES: tuple[str, ...] = (
     "Want to test your understanding?",
     "I can simplify that more if you want.",
 )
+
+# ---------------------------------------------------------------------------
+# Course-content grounding — loaded once at import time
+# ---------------------------------------------------------------------------
+
+# Absolute path to the course content root, resolved relative to this file.
+# ai_tutor.py lives at  ui/student_portal/ai_tutor.py
+# course content lives at  course_content/FREE_INTRO_AI_V0/
+_CONTENT_ROOT: pathlib.Path = (
+    pathlib.Path(__file__).parent.parent.parent / "course_content" / "FREE_INTRO_AI_V0"
+)
+
+# Ordered list of (section_id, display_title) — index matches the 0-based section_idx
+# passed to generate_tutor_reply, so hints can be resolved without a new parameter.
+_SECTION_FILES: tuple[tuple[str, str], ...] = (
+    ("P1_S1", "What Is AI?"),
+    ("P1_S2", "How Machines Learn"),
+    ("P1_S3", "AI in the Real World"),
+    ("P2_S1", "Understanding Data"),
+    ("P2_S2", "Exploring Data"),
+    ("P2_S3", "Preparing Data for AI"),
+    ("P3_S1", "Building Your First Model"),
+    ("P3_S2", "Evaluating Results"),
+    ("P3_S3", "Next Steps in AI"),
+)
+
+
+def _build_course_summary() -> str:
+    """One-paragraph-per-section overview used as low-priority background context."""
+    lines: list[str] = []
+    for section_id, title in _SECTION_FILES:
+        try:
+            text = (_CONTENT_ROOT / f"{section_id}.md").read_text(encoding="utf-8")
+        except OSError:
+            continue
+        first_para = ""
+        for para in re.split(r"\n{2,}", text):
+            para = para.strip()
+            if para and not para.startswith("#") and para != "---" and len(para) > 50:
+                # Truncate very long intros to keep the summary compact.
+                first_para = para[:200].rstrip()
+                break
+        if first_para:
+            lines.append(f"- **{title}:** {first_para}")
+    return "\n".join(lines)
+
+
+def _build_quiz_hints() -> dict[str, list[str]]:
+    """Return section_id -> [hint, ...] for every section that has quiz hints."""
+    try:
+        course_map = json.loads((_CONTENT_ROOT / "course_map.json").read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+
+    # Build quiz_id -> hints lookup by scanning every quiz JSON file.
+    quiz_hints: dict[str, list[str]] = {}
+    try:
+        for quiz_file in (_CONTENT_ROOT / "quizzes").glob("*.json"):
+            for quiz in json.loads(quiz_file.read_text(encoding="utf-8")):
+                qid = quiz.get("quiz_id", "")
+                hints = list(dict.fromkeys(  # deduplicate within quiz, preserve order
+                    q["hint"] for q in quiz.get("questions", []) if q.get("hint")
+                ))
+                if qid and hints:
+                    quiz_hints[qid] = hints
+    except OSError:
+        return {}
+
+    # Map section_id -> flat, deduplicated hint list.
+    section_hints: dict[str, list[str]] = {}
+    for section in course_map.get("sections", []):
+        sid = section.get("section_id", "")
+        all_hints: list[str] = []
+        for qid in section.get("quiz_ids", []):
+            all_hints.extend(quiz_hints.get(qid, []))
+        deduped = list(dict.fromkeys(all_hints))  # deduplicate across quizzes
+        if deduped:
+            section_hints[sid] = deduped
+    return section_hints
+
+
+# Built once at import time; empty strings/dicts are safe fallbacks if files are missing.
+_FULL_COURSE_SUMMARY: str = _build_course_summary()
+_SECTION_QUIZ_HINTS: dict[str, list[str]] = _build_quiz_hints()
+
 
 # ---------------------------------------------------------------------------
 # Internal parsing helpers — purely functional, no randomness
@@ -227,6 +314,14 @@ def generate_tutor_reply(
             }
             _guidance = _step_guidance.get(flow_step or "", "Help the student engage with the material in a meaningful way.")
 
+            # Resolve active section_id for quiz-hint lookup (uses section_idx if available).
+            _active_sid: str = (
+                _SECTION_FILES[section_idx][0]
+                if section_idx is not None and 0 <= section_idx < len(_SECTION_FILES)
+                else ""
+            )
+            _active_hints: list[str] = _SECTION_QUIZ_HINTS.get(_active_sid, [])
+
             system_prompt = (
                 "You are an encouraging learning guide — warm, clear, and direct. "
                 "Your job is to help students genuinely understand ideas, not just answer questions. "
@@ -252,11 +347,28 @@ def generate_tutor_reply(
                 "current lesson. Example: 'That's a bit outside what I cover here — I'm focused on AI and this "
                 "course. Want me to help with something from the current section?'\n\n"
 
-                f"Current section: \"{section_title}\"\n"
+                + (
+                    "## Full course overview (background — lower priority)\n"
+                    "The course covers 9 sections. Use this only for cross-section questions "
+                    "or to help students connect ideas across the course:\n"
+                    + _FULL_COURSE_SUMMARY + "\n\n"
+                    if _FULL_COURSE_SUMMARY else ""
+                )
+
+                + f"## Current section (primary grounding source)\n"
+                + f"Section: \"{section_title}\"\n"
                 + (f"Progress: {_ctx_line}\n" if _ctx_line else "")
                 + f"Context: {_guidance}\n"
                 + f"\nSection content:\n{section_markdown}\n\n"
-                "Use markdown formatting in your reply."
+
+                + (
+                    "## Supplemental explanations for this section\n"
+                    "These plain-language hints explain concepts students often find tricky here:\n"
+                    + "\n".join(f"- {h}" for h in _active_hints) + "\n\n"
+                    if _active_hints else ""
+                )
+
+                + "Use markdown formatting in your reply."
             )
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
