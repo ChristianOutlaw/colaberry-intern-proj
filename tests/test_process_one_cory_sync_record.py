@@ -13,14 +13,20 @@ Scenarios covered:
     T4  — processes oldest Cory row first when multiple exist
     T5  — response_json stored correctly on the SENT row
     T6  — second call after processing -> NO_PENDING
+    T7  — explicit dispatch_mode="dry_run" behaves identically to default
+    T8  — dispatch_mode="log_sink" writes file and marks row SENT
+    T9  — unknown dispatch_mode raises ValueError before touching DB
+    T10 — log_sink failure marks row FAILED and returns ok=False
 """
 
 import json
 import os
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -180,6 +186,97 @@ class TestProcessOneCorySyncRecord(unittest.TestCase):
         self.assertTrue(first["processed"])
         self.assertFalse(second["processed"])
         self.assertEqual(second["reason"], "NO_PENDING")
+
+    # ------------------------------------------------------------------
+    # T7 — explicit dispatch_mode="dry_run" behaves identically to default
+    # ------------------------------------------------------------------
+    def test_explicit_dry_run_mode_behaves_as_default(self):
+        self._seed("CORY_BOOKING")
+
+        result = process_one_cory_sync_record(
+            db_path=TEST_DB_PATH, now=NOW_STR, dispatch_mode="dry_run"
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["processed"])
+
+        rows = self._rows()
+        stored = json.loads(rows[0]["response_json"])
+        self.assertFalse(stored["dispatched"])
+        self.assertEqual(stored["mode"], "dry_run")
+
+    # ------------------------------------------------------------------
+    # T8 — dispatch_mode="log_sink" writes file and marks row SENT
+    # ------------------------------------------------------------------
+    def test_log_sink_mode_writes_file_and_marks_sent(self):
+        self._seed("CORY_BOOKING")
+        tmpdir = tempfile.mkdtemp()
+
+        try:
+            result = process_one_cory_sync_record(
+                db_path=TEST_DB_PATH, now=NOW_STR,
+                dispatch_mode="log_sink", log_dir=tmpdir,
+            )
+
+            # Return value
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["processed"])
+            self.assertEqual(result["destination"], "CORY_BOOKING")
+
+            # Row is SENT
+            rows = self._rows()
+            self.assertEqual(rows[0]["status"], "SENT")
+
+            # response_json stores the log_sink dispatcher result
+            stored = json.loads(rows[0]["response_json"])
+            self.assertTrue(stored["dispatched"])
+            self.assertEqual(stored["mode"], "log_sink")
+            self.assertIn("path", stored)
+
+            # The file actually exists on disk
+            self.assertTrue(os.path.isfile(stored["path"]))
+
+        finally:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ------------------------------------------------------------------
+    # T9 — unknown dispatch_mode raises ValueError before touching DB
+    # ------------------------------------------------------------------
+    def test_unknown_dispatch_mode_raises_value_error(self):
+        self._seed("CORY_BOOKING")
+
+        with self.assertRaises(ValueError) as ctx:
+            process_one_cory_sync_record(
+                db_path=TEST_DB_PATH, now=NOW_STR, dispatch_mode="carrier_pigeon"
+            )
+
+        self.assertIn("carrier_pigeon", str(ctx.exception))
+
+        # Row must remain untouched
+        rows = self._rows()
+        self.assertEqual(rows[0]["status"], "NEEDS_SYNC")
+
+    # ------------------------------------------------------------------
+    # T10 — log_sink failure marks row FAILED and returns ok=False
+    # ------------------------------------------------------------------
+    def test_log_sink_failure_marks_row_failed(self):
+        self._seed("CORY_BOOKING")
+
+        with patch(
+            "execution.events.process_one_cory_sync_record.dispatch_cory_log_sink",
+            side_effect=OSError("disk full"),
+        ):
+            result = process_one_cory_sync_record(
+                db_path=TEST_DB_PATH, now=NOW_STR, dispatch_mode="log_sink"
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("error", result)
+        self.assertIn("disk full", result["error"])
+
+        rows = self._rows()
+        self.assertEqual(rows[0]["status"], "FAILED")
 
 
 if __name__ == "__main__":
