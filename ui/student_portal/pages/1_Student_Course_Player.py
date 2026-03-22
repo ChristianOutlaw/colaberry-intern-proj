@@ -1567,7 +1567,15 @@ def _render_tutor_expander() -> None:
             )
         messages.append({"role": "assistant", "content": reply})
 
-    with st.expander("AI Tutor", expanded=False):
+    _tutor_hints: dict[str, str] = {
+        "lesson":     "💡 Need help understanding something? The tutor can explain it simply.",
+        "quiz":       "💡 Stuck on a question? The tutor can guide your thinking.",
+        "reflection": "💡 Want to go deeper? The tutor can help you connect ideas.",
+        "complete":   "💡 Want a quick review? The tutor can reinforce what you learned.",
+    }
+    st.caption(_tutor_hints.get(step, "💡 Have a question? The tutor is here to help."))
+
+    with st.expander("AI Tutor — Ask for help anytime", expanded=False):
         # Welcome line — only shown when no messages exist yet.
         if len(messages) == 0:
             _tutor_welcome: dict[str, str] = {
