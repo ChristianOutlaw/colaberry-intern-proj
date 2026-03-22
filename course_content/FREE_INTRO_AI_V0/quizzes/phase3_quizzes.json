@@ -11,7 +11,8 @@
           "External Data Aggregation",
           "Estimated Distribution Average"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Think about what analysts do before building a model — they examine and explore the data to understand what's in it."
       },
       {
         "question": "Which chart type is best suited for showing the distribution of a single numeric variable?",
@@ -21,7 +22,8 @@
           "Line chart",
           "Scatter plot"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Recall which visualization groups values into bins to show how often each range of values appears."
       }
     ]
   },
@@ -37,7 +39,8 @@
           "Removing duplicate records",
           "Converting text data to images"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Think about what happens when one feature is measured in thousands and another in single digits — scaling brings them onto the same playing field."
       },
       {
         "question": "Which technique replaces missing values with the column mean?",
@@ -47,7 +50,8 @@
           "Min-max normalization",
           "Label encoding"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "The name of this technique hints at the statistic being used to fill in the gaps."
       }
     ]
   }

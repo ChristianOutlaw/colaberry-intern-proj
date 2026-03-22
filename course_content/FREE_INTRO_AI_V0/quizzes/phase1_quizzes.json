@@ -11,7 +11,8 @@
           "Advanced Interface",
           "Analytic Integration"
         ],
-        "correct_index": 0
+        "correct_index": 0,
+        "hint": "Think about what each letter represents — one word describes what the intelligence is, and the other describes what it isn't."
       },
       {
         "question": "Which of the following best describes Artificial Intelligence?",
@@ -21,7 +22,8 @@
           "Hardware designed exclusively for data storage",
           "A type of internet connection"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Recall how the course defined AI — it's about systems that can mimic something humans do naturally."
       }
     ]
   },
@@ -37,7 +39,8 @@
           "A spam filter that learns from feedback",
           "A printed book"
         ],
-        "correct_index": 2
+        "correct_index": 2,
+        "hint": "Look for the option that involves a system adapting or learning from experience, not just following fixed instructions."
       },
       {
         "question": "AI is best described as a field of:",
@@ -47,7 +50,8 @@
           "Civil engineering",
           "Astronomy"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Think about which academic discipline builds the software and algorithms that power AI."
       }
     ]
   }

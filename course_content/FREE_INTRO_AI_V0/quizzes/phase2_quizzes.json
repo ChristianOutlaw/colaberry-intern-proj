@@ -11,7 +11,8 @@
           "Images and audio recordings",
           "Data that has never been cleaned"
         ],
-        "correct_index": 0
+        "correct_index": 0,
+        "hint": "Think back to the lesson on data types — structured data has a predictable format you might recognize from spreadsheets or databases."
       },
       {
         "question": "Which of the following is an example of unstructured data?",
@@ -21,7 +22,8 @@
           "A collection of social media posts",
           "A CSV file of product prices"
         ],
-        "correct_index": 2
+        "correct_index": 2,
+        "hint": "Unstructured data doesn't fit neatly into rows and columns — think about content that is hard to organize in a table."
       }
     ]
   },
@@ -48,7 +50,8 @@
           "To maximize the number of parameters",
           "To store all data in RAM"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Recall the training loop — each cycle adjusts the model slightly to bring its guesses closer to the correct answers."
       }
     ]
   }

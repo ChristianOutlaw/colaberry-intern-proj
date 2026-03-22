@@ -11,7 +11,8 @@
           "A mechanical clock",
           "A filing cabinet"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Look for the option that involves a system learning from user behavior to make personalized predictions."
       },
       {
         "question": "AI systems in healthcare are most commonly used for:",
@@ -21,7 +22,8 @@
           "Printing patient forms",
           "Ordering office supplies"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Think about tasks where AI can analyze large volumes of medical data quickly — especially visual data like scans."
       }
     ]
   },
@@ -37,7 +39,8 @@
           "The total size of the training dataset",
           "The number of features used by the model"
         ],
-        "correct_index": 1
+        "correct_index": 1,
+        "hint": "Think about the simplest way to judge whether a model got answers right — it's a ratio of correct predictions to all predictions made."
       },
       {
         "question": "Overfitting occurs when a model:",
@@ -47,7 +50,8 @@
           "Uses too few parameters",
           "Predicts the same value for every input"
         ],
-        "correct_index": 0
+        "correct_index": 0,
+        "hint": "A model that memorizes training examples too closely may struggle when it sees data it hasn't seen before."
       }
     ]
   }
