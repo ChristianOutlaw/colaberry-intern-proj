@@ -37,6 +37,7 @@ from execution.leads.upsert_lead import upsert_lead                             
 from execution.progress.compute_course_state import compute_course_state            # noqa: E402
 from execution.progress.record_progress_event import record_progress_event          # noqa: E402
 from execution.decision.get_cora_recommendation import get_cora_recommendation       # noqa: E402
+from execution.events.send_course_event import send_course_event                    # noqa: E402
 from execution.reflection.load_reflection_responses import load_reflection_responses  # noqa: E402
 from execution.reflection.save_reflection_response import save_reflection_response   # noqa: E402
 from ui.theme import apply_colaberry_theme                                          # noqa: E402
@@ -2057,6 +2058,19 @@ elif step == "complete":
                             event_type=_cory_rec["event_type"],
                             priority=_cory_rec["priority"],
                             recommended_channel=_cory_rec["recommended_channel"],
+                        )
+                        send_course_event(
+                            "cory_recommendation",
+                            {
+                                "lead_id": lead_id,
+                                "section": active_section_id,
+                                "event_type": _cory_rec["event_type"],
+                                "priority": _cory_rec["priority"],
+                                "recommended_channel": _cory_rec["recommended_channel"],
+                                "reason_codes": _cory_rec["reason_codes"],
+                                "built_at": _cory_rec["built_at"],
+                            },
+                            webhook_url=COURSE_EVENT_WEBHOOK_URL,
                         )
                 except Exception:
                     logging.exception("Cory recommendation failed at section completion")
