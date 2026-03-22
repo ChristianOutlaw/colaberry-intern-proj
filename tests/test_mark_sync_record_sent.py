@@ -16,6 +16,10 @@ Scenarios:
           no IntegrityError, row counts unchanged
     T7  — After success, exactly one row remains (SENT); no residual NEEDS_SYNC row
     T8  — Non-default destination respected (row with destination="OTHER" not touched)
+    T9  — record_id path: stale SENT row present → target row becomes SENT, changed=True,
+          only one SENT row remains, stale row removed
+    T10 — record_id path: row does not exist → ok=False, reason=RECORD_NOT_FOUND
+    T11 — record_id path: response_json stored on the promoted row
 """
 
 import os
@@ -86,6 +90,24 @@ class TestMarkSyncRecordSent(unittest.TestCase):
             (lead_id, destination, status, response_json, _TS, _TS),
         )
         self.conn.commit()
+
+    def _seed_sync_ret_id(
+        self,
+        lead_id: str = LEAD_ID,
+        status: str = "NEEDS_SYNC",
+        destination: str = "GHL",
+    ) -> int:
+        """Seed one sync_records row and return its auto-assigned id."""
+        cur = self.conn.execute(
+            """
+            INSERT INTO sync_records
+                (lead_id, destination, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (lead_id, destination, status, _TS, _TS),
+        )
+        self.conn.commit()
+        return cur.lastrowid
 
     def _get_sync_rows(
         self, lead_id: str = LEAD_ID, destination: str = "GHL"
@@ -264,6 +286,64 @@ class TestMarkSyncRecordSent(unittest.TestCase):
         other_rows = self._get_sync_rows(destination="OTHER")
         self.assertEqual(len(other_rows), 1)
         self.assertEqual(other_rows[0]["status"], "NEEDS_SYNC")
+
+
+    # ------------------------------------------------------------------
+    # T9 — record_id path: stale SENT row present → target promoted, one SENT remains
+    # ------------------------------------------------------------------
+    def test_record_id_promotes_target_when_stale_sent_exists(self):
+        """With record_id: stale SENT row is removed, target NEEDS_SYNC becomes SENT."""
+        self._seed_lead()
+        # Stale SENT row from a previous dispatch cycle.
+        self._seed_sync(status="SENT", destination="GHL")
+        # Fresh NEEDS_SYNC row — this is the one we want to promote.
+        target_id = self._seed_sync_ret_id(status="NEEDS_SYNC", destination="GHL")
+
+        result = self._call(destination="GHL", record_id=target_id)
+
+        self.assertTrue(result["ok"],     f"Expected ok=True, got {result}")
+        self.assertTrue(result["changed"], f"Expected changed=True, got {result}")
+        self.assertEqual(result["status"], "SENT")
+
+        rows = self._get_sync_rows(destination="GHL")
+        self.assertEqual(len(rows), 1, "Exactly one row must remain")
+        self.assertEqual(rows[0]["status"], "SENT")
+        self.assertEqual(rows[0]["id"], target_id, "The promoted row must be the target row")
+
+    # ------------------------------------------------------------------
+    # T10 — record_id path: row does not exist → RECORD_NOT_FOUND
+    # ------------------------------------------------------------------
+    def test_record_id_not_found_returns_error(self):
+        """record_id pointing to a non-existent row returns ok=False, RECORD_NOT_FOUND."""
+        self._seed_lead()
+
+        result = self._call(destination="GHL", record_id=99999)
+
+        self.assertFalse(result["ok"], f"Expected ok=False, got {result}")
+        self.assertEqual(result["reason"], "RECORD_NOT_FOUND")
+
+        # No rows must have been written or altered.
+        rows = self._get_sync_rows(destination="GHL")
+        self.assertEqual(len(rows), 0)
+
+    # ------------------------------------------------------------------
+    # T11 — record_id path: response_json stored on promoted row
+    # ------------------------------------------------------------------
+    def test_record_id_stores_response_json(self):
+        """record_id path must persist response_json on the promoted row."""
+        self._seed_lead()
+        target_id = self._seed_sync_ret_id(status="NEEDS_SYNC", destination="GHL")
+        payload = '{"dispatched": true, "mode": "log_sink"}'
+
+        result = self._call(destination="GHL", record_id=target_id, response_json=payload)
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["changed"])
+
+        rows = self._get_sync_rows(destination="GHL")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["response_json"], payload)
+        self.assertEqual(rows[0]["updated_at"], NOW_STR)
 
 
 if __name__ == "__main__":
