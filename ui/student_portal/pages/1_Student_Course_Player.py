@@ -494,6 +494,65 @@ st.markdown(
         line-height: 1.5;
     }
 
+    /* ── Section welcome hero ──────────────────────────────────────────────── */
+    .cb-section-hero {
+        background: #fafafa;
+        border: 1px solid rgba(0,0,0,0.07);
+        border-top: 3px solid #EB3537;
+        border-radius: 12px;
+        padding: 2rem 2.25rem 1.75rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .cb-section-hero-eyebrow {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #5B5A59;
+        margin: 0 0 1rem;
+    }
+    .cb-section-hero-icon {
+        font-size: 2.75rem;
+        line-height: 1;
+        margin: 0 0 0.85rem;
+    }
+    .cb-section-hero-title {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #0D0D0D;
+        margin: 0 0 0.75rem;
+        line-height: 1.15;
+    }
+    .cb-section-hero-subtitle {
+        font-size: 1.05rem;
+        color: #374151;
+        max-width: 520px;
+        margin: 0 auto 1.5rem;
+        line-height: 1.6;
+    }
+    .cb-section-hero-pills {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .cb-section-hero-pill {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #497095;
+        background: #EEF3F8;
+        border-radius: 20px;
+        padding: 0.3rem 0.8rem;
+    }
+    .cb-section-hero-arrow {
+        font-size: 0.78rem;
+        color: #9CA3AF;
+        font-weight: 500;
+    }
+
     /* ── Hide heading anchor links (not student-facing) ─────────────────── */
     h1 a, h2 a, h3 a { display: none !important; }
 
@@ -1427,37 +1486,42 @@ def _render_tutor_expander() -> None:
 
 # ── WELCOME ───────────────────────────────────────────────────────────────────
 if step == "welcome":
-    with st.container(border=True):
-        st.markdown(f"## Welcome to **{active_title}**")
-
-        _welcome_lines = [
-            "In this section, we'll explore the core ideas step by step.",
-            "You'll read a guided lesson, test your understanding, and reflect briefly.",
-            "Move at your own pace — your progress is saved automatically.",
-        ]
-        _placeholder = st.empty()
-        _typed_key = f"welcome_typed_{active_section_id}"
-
-        if _typed_key not in st.session_state:
-            st.session_state[_typed_key] = False
-
-        if st.session_state.get(_typed_key) is False:
-            _current_text = ""
-            for _line in _welcome_lines:
-                for _char in _line:
-                    _current_text += _char
-                    _placeholder.markdown(_current_text)
-                    time.sleep(0.01)
-                _current_text += "\n\n"
-            st.session_state[_typed_key] = True
-        else:
-            _placeholder.markdown("\n\n".join(_welcome_lines))
-
-        st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
-        if st.button("Begin Section →", type="primary", use_container_width=True):
-            st.session_state["player_flow_step"] = "lesson"
-            st.session_state["player_flow_chunk_idx"] = 0
-            st.rerun()
+    # Presentation data only — emoji icon + mission subtitle per section_id.
+    _SECTION_INTROS: dict[str, tuple[str, str]] = {
+        "P1_S1": ("🤖", "Uncover what artificial intelligence actually is — and why it's reshaping everything around you."),
+        "P1_S2": ("🧠", "Discover how computers find patterns in data and improve without being explicitly programmed."),
+        "P1_S3": ("🌍", "See how AI powers the products, decisions, and experiences you encounter every day."),
+        "P2_S1": ("📊", "Learn why data is the fuel behind every AI system — and how to think about it clearly."),
+        "P2_S2": ("🔍", "Start asking real questions of data and build the intuition to see what numbers reveal."),
+        "P2_S3": ("🛠️", "Master the step that separates good AI models from great ones: clean, well-shaped data."),
+        "P3_S1": ("⚡", "Put everything into action and train your first machine learning model from scratch."),
+        "P3_S2": ("📈", "Learn to measure what your model actually learned — and where it still falls short."),
+        "P3_S3": ("🚀", "Tie it all together and chart your personal path deeper into the world of AI."),
+    }
+    _icon, _subtitle = _SECTION_INTROS.get(
+        active_section_id, ("📘", "Explore the key ideas in this section at your own pace.")
+    )
+    st.markdown(
+        f"""<div class="cb-section-hero">
+  <p class="cb-section-hero-eyebrow">Section {active_idx + 1} of {len(SECTIONS)}</p>
+  <div class="cb-section-hero-icon">{_icon}</div>
+  <h2 class="cb-section-hero-title">{active_title}</h2>
+  <p class="cb-section-hero-subtitle">{_subtitle}</p>
+  <div class="cb-section-hero-pills">
+    <span class="cb-section-hero-pill">Read</span>
+    <span class="cb-section-hero-arrow">→</span>
+    <span class="cb-section-hero-pill">Quiz</span>
+    <span class="cb-section-hero-arrow">→</span>
+    <span class="cb-section-hero-pill">Reflect</span>
+  </div>
+</div>""",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div style='height: 18px'></div>", unsafe_allow_html=True)
+    if st.button("Begin Section →", type="primary", use_container_width=True):
+        st.session_state["player_flow_step"] = "lesson"
+        st.session_state["player_flow_chunk_idx"] = 0
+        st.rerun()
 
 # ── LESSON ────────────────────────────────────────────────────────────────────
 elif step == "lesson":
