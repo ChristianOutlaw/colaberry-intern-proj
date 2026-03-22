@@ -13,12 +13,17 @@ Scenarios covered:
     T2  — one CORY_BOOKING row  -> processed=True, one row marked SENT
     T3  — run() prints valid JSON to stdout
     T4  — only one row processed per call when multiple CORY rows exist
+    T5  — default mode (dry_run) still works after signature change
+    T6  — log_sink mode writes a real file and marks row SENT
+    T7  — invalid dispatch_mode propagates as ValueError
 """
 
 import io
 import json
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -81,8 +86,9 @@ class TestRunCorySync(unittest.TestCase):
         conn.close()
         return rows
 
-    def _call(self) -> dict:
-        return run(db_path=TEST_DB_PATH, now=NOW_STR)
+    def _call(self, dispatch_mode: str = "dry_run", log_dir: str | None = None) -> dict:
+        return run(db_path=TEST_DB_PATH, now=NOW_STR,
+                   dispatch_mode=dispatch_mode, log_dir=log_dir)
 
     # ------------------------------------------------------------------
     # T1 — no pending rows -> NO_PENDING
@@ -137,6 +143,57 @@ class TestRunCorySync(unittest.TestCase):
         statuses = {r["destination"]: r["status"] for r in rows}
         self.assertEqual(statuses["CORY_NUDGE"],   "SENT")
         self.assertEqual(statuses["CORY_BOOKING"], "NEEDS_SYNC")
+
+
+    # ------------------------------------------------------------------
+    # T5 — default mode (dry_run) still works after signature change
+    # ------------------------------------------------------------------
+    def test_default_dry_run_mode_unchanged(self):
+        self._seed("CORY_BOOKING")
+
+        result = self._call()  # dispatch_mode defaults to "dry_run"
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["processed"])
+        self.assertEqual(self._rows()[0]["status"], "SENT")
+
+        import json as _json
+        stored = _json.loads(self._rows()[0]["response_json"])
+        self.assertFalse(stored["dispatched"])
+        self.assertEqual(stored["mode"], "dry_run")
+
+    # ------------------------------------------------------------------
+    # T6 — log_sink mode writes a real file and marks row SENT
+    # ------------------------------------------------------------------
+    def test_log_sink_mode_writes_file_and_marks_sent(self):
+        self._seed("CORY_BOOKING")
+        tmpdir = tempfile.mkdtemp()
+
+        try:
+            result = self._call(dispatch_mode="log_sink", log_dir=tmpdir)
+
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["processed"])
+            self.assertEqual(self._rows()[0]["status"], "SENT")
+
+            stored = json.loads(self._rows()[0]["response_json"])
+            self.assertTrue(stored["dispatched"])
+            self.assertEqual(stored["mode"], "log_sink")
+            self.assertTrue(os.path.isfile(stored["path"]))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ------------------------------------------------------------------
+    # T7 — invalid dispatch_mode propagates as ValueError
+    # ------------------------------------------------------------------
+    def test_invalid_dispatch_mode_raises_value_error(self):
+        self._seed("CORY_BOOKING")
+
+        with self.assertRaises(ValueError):
+            self._call(dispatch_mode="fax_machine")
+
+        # Row must remain untouched
+        self.assertEqual(self._rows()[0]["status"], "NEEDS_SYNC")
 
 
 if __name__ == "__main__":
