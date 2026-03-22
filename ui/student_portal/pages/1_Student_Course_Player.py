@@ -1938,17 +1938,8 @@ elif step == "complete":
                             st.toast(f"Unlocked: {_unlocked_title}")
                         except Exception:
                             pass
-                        st.session_state["player_flash"] = (
-                            "success", f"Unlocked: {_unlocked_title}"
-                        )
-                    else:
-                        st.session_state["player_flash"] = (
-                            "success", f"\u2713 '{active_title}' marked complete."
-                        )
                 except Exception:
-                    st.session_state["player_flash"] = (
-                        "success", f"\u2713 '{active_title}' marked complete."
-                    )
+                    pass
                 st.rerun()
             except ValueError:
                 logging.exception("ValueError marking %s complete", active_section_id)
@@ -1962,20 +1953,33 @@ elif step == "complete":
                 st.error("An unexpected error occurred. See console for details.")
                 _write_error = True
 
-        if not _write_error:
-            st.success("Progress saved — this section is marked complete.")
-
         st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         _has_next = active_idx < (len(SECTIONS) - 1)
         _next_idx = active_idx + 1
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
+
+        _SECTION_RECAPS: dict[str, str] = {
+            "P1_S1": "You learned that AI is pattern recognition at scale — not magic — and saw how it quietly shapes navigation, recommendations, and fraud detection every day.",
+            "P1_S2": "You built a mental model of how machines improve from examples rather than rules, and understood training, patterns, and prediction at a practical level.",
+            "P1_S3": "You traced AI through real industries — from medical diagnostics to hiring algorithms — and started thinking about what AI literacy means for your own career.",
+            "P2_S1": "You learned what data actually is, why it comes in structured and unstructured forms, and why data quality sets the ceiling on everything an AI system can do.",
+            "P2_S2": "You followed raw data from collection to insight, practiced asking meaningful questions of numbers, and learned why skipping foundational data work makes AI fragile.",
+            "P2_S3": "You walked through the preparation steps — cleaning, reshaping, splitting — that determine whether a model learns from reality or learns from noise.",
+            "P3_S1": "You traced the full arc of building a machine learning model — from defining a goal to deployment — and saw where human judgment is required at every step.",
+            "P3_S2": "You learned why a single accuracy number isn't enough to trust a model, and practiced thinking about precision, recall, fairness, and real-world performance tradeoffs.",
+            "P3_S3": "You connected everything you've built into a clear picture of where to go next — from conceptual understanding to the applied skills that create real professional leverage.",
+        }
+        _recap_body = _SECTION_RECAPS.get(
+            active_section_id,
+            "You worked through the lesson, tested your understanding, and captured a reflection.",
+        )
 
         if _already_completed and not _write_error:
             st.markdown(
                 f"""<div class="cb-recap-card">
   <p class="cb-recap-eyebrow">Section recap</p>
   <p class="cb-recap-title">\u2713 {active_title}</p>
-  <p class="cb-recap-body">You worked through the lesson, tested your understanding, and captured a reflection.</p>
+  <p class="cb-recap-body">{_recap_body}</p>
 </div>""",
                 unsafe_allow_html=True,
             )
