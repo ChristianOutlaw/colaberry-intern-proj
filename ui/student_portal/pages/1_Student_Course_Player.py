@@ -1751,7 +1751,7 @@ elif step == "complete":
 
         if _already_completed:
             st.success("Progress saved — this section is marked complete.")
-        elif st.button("Mark Complete", type="primary", use_container_width=True):
+        elif st.button("Continue to Next Section →", type="primary", use_container_width=True):
             occurred_at = datetime.now(timezone.utc).isoformat()
             event_id = f"{lead_id}:{active_section_id}"
             try:
@@ -1830,7 +1830,7 @@ elif step == "complete":
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
 
         if not _already_completed:
-            st.info("Mark the section complete to unlock the next section.")
+            st.info("Continue to unlock the next section.")
         elif _already_completed and not _has_next:
             if not st.session_state.get("confetti_shown"):
                 st.session_state["confetti_shown"] = True
