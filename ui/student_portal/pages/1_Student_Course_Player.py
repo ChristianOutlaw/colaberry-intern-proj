@@ -645,18 +645,24 @@ st.markdown(
 _RUN_ID: str = uuid.uuid4().hex[:8]
 
 # ── Micro-celebration message pools ──────────────────────────────────────────
-# Rotated deterministically; no randomness. Shared across all 9 sections.
-_QUIZ_MSGS: tuple[tuple[str, str], ...] = (
-    ("Correct — keep going.", "✅"),
-    ("You've got it.", "✅"),
-    ("Right. Keep moving.", "✅"),
-    ("That's it.", "✅"),
+# Outer index: active_idx % 3  → one of 3 section-cycle buckets (0, 1, 2).
+# Inner index: item number     → rotates within that bucket deterministically.
+# No randomness. Shared across all 9 sections.
+_QUIZ_MSGS: tuple[tuple[tuple[str, str], ...], ...] = (
+    # bucket 0 — sections 1, 4, 7  (active_idx % 3 == 0)
+    (("Correct — keep going.", "✅"), ("That's it.", "✅")),
+    # bucket 1 — sections 2, 5, 8  (active_idx % 3 == 1)
+    (("You've got it.", "✅"), ("Right there.", "✅")),
+    # bucket 2 — sections 3, 6, 9  (active_idx % 3 == 2)
+    (("Exactly right.", "✅"), ("Right. Keep moving.", "✅")),
 )
-_REFL_MSGS: tuple[tuple[str, str], ...] = (
-    ("Saved. Good thinking.", "✍️"),
-    ("Noted. Keep going.", "✍️"),
-    ("Saved.", "✍️"),
-    ("Good — keep reflecting.", "✍️"),
+_REFL_MSGS: tuple[tuple[tuple[str, str], ...], ...] = (
+    # bucket 0 — sections 1, 4, 7  (active_idx % 3 == 0)
+    (("Saved. Good thinking.", "✍️"), ("Noted.", "✍️")),
+    # bucket 1 — sections 2, 5, 8  (active_idx % 3 == 1)
+    (("Good — keep reflecting.", "✍️"), ("Noted. Keep going.", "✍️")),
+    # bucket 2 — sections 3, 6, 9  (active_idx % 3 == 2)
+    (("Saved.", "✍️"), ("Captured. Keep going.", "✍️")),
 )
 
 # ---------------------------------------------------------------------------
@@ -1778,7 +1784,8 @@ elif step == "quiz":
                                     # Cadence: fire on 1-based odd positions (q_idx 0, 2, 4...).
                                     # Rotate message per quiz so multi-quiz sections vary.
                                     if q_idx % 2 == 0:
-                                        _qmsg, _qicon = _QUIZ_MSGS[quiz_idx % len(_QUIZ_MSGS)]
+                                        _qbucket = _QUIZ_MSGS[active_idx % 3]
+                                        _qmsg, _qicon = _qbucket[quiz_idx % len(_qbucket)]
                                         st.session_state["player_toast"] = (_qmsg, _qicon)
                                     st.rerun()
                                 else:
@@ -1873,7 +1880,8 @@ elif step == "reflection":
                             # Cadence: fire on 1-based odd positions (refl_idx 0, 2, 4...).
                             # Advance rotation only on firing positions via integer division.
                             if refl_idx % 2 == 0:
-                                _rmsg, _ricon = _REFL_MSGS[(refl_idx // 2) % len(_REFL_MSGS)]
+                                _rbucket = _REFL_MSGS[active_idx % 3]
+                                _rmsg, _ricon = _rbucket[(refl_idx // 2) % len(_rbucket)]
                                 st.session_state["player_toast"] = (_rmsg, _ricon)
                             st.rerun()
                         except Exception:
