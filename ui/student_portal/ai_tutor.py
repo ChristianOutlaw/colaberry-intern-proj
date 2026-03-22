@@ -199,13 +199,26 @@ def generate_tutor_reply(
                 _ctx_parts.append(f"Step: {flow_step}")
             _ctx_line = " | ".join(_ctx_parts)
 
+            # Step-specific behavioral guidance injected into the prompt.
+            _step_guidance: dict[str, str] = {
+                "lesson":     "The student is reading the lesson. Explain ideas clearly and simply. Use concrete examples instead of abstract definitions.",
+                "quiz":       "The student is taking a quiz. Guide their thinking without giving away answers. Ask a helpful question back if they seem stuck.",
+                "reflection": "The student is in a reflection exercise. Help them go deeper — connect ideas, challenge assumptions, and surface what they actually learned.",
+                "complete":   "The student just finished this section. Reinforce their understanding, highlight what matters, and build their confidence for what comes next.",
+            }
+            _guidance = _step_guidance.get(flow_step or "", "Help the student engage with the material in a meaningful way.")
+
             system_prompt = (
-                "You are a helpful AI tutor for a course called \"Free Intro to AI\".\n"
-                f"The student is currently reading the section titled: \"{section_title}\".\n"
+                "You are an encouraging learning guide — warm, clear, and direct. "
+                "Your job is to help students genuinely understand ideas, not just answer questions. "
+                "Avoid sounding like a textbook or a formal instructor. "
+                "Be concise: 2–4 short paragraphs max unless the student explicitly asks for more. "
+                "Prefer concrete examples over abstract explanations. "
+                "Do not repeat the section title unnecessarily.\n\n"
+                f"Current section: \"{section_title}\"\n"
                 + (f"Progress: {_ctx_line}\n" if _ctx_line else "")
+                + f"Context: {_guidance}\n"
                 + f"\nSection content:\n{section_markdown}\n\n"
-                "Answer the student's question concisely and helpfully, "
-                "referencing the section content where relevant. "
                 "Use markdown formatting in your reply."
             )
             response = client.chat.completions.create(
