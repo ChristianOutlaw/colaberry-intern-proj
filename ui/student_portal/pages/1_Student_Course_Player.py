@@ -1577,23 +1577,35 @@ def _render_tutor_expander() -> None:
             }
             st.caption(_tutor_welcome.get(step, f"Ask me anything about **{active_title}**."))
 
-        # Quick-action buttons — 2 × 2 grid.
+        # Quick-action buttons — 2 × 2 grid, labels vary by flow_step.
         # Each button directly calls the tutor in-place; the implicit Streamlit
         # rerun from the button click re-renders the updated chat history.
         # No tutor_pending / extra st.rerun() needed here.
+        _step_buttons: dict[str, list[str]] = {
+            "lesson":     ["Summarize this simply", "Give me a real example",
+                           "Explain like I'm new", "What matters most here?"],
+            "quiz":       ["Help me think this through", "Give me a hint",
+                           "Explain this concept", "What should I focus on?"],
+            "reflection": ["Help me go deeper", "Challenge my thinking",
+                           "Connect this to real life", "What did I really learn?"],
+            "complete":   ["Summarize this section", "What should I remember?",
+                           "How does this connect forward?", "Test me quickly"],
+        }
+        _fallback_buttons = ["Summarize this simply", "Give me a real example",
+                             "Explain like I'm new", "What matters most here?"]
+        _btn_labels = _step_buttons.get(step, _fallback_buttons)
+
         b_left, b_right = st.columns(2)
         with b_left:
-            if st.button("Summarize", use_container_width=True, key="btn_summarize"):
-                _call_tutor("Summarize this section for me.")
-            if st.button("Give me an example", use_container_width=True, key="btn_example"):
-                _call_tutor("Give me a concrete example of the key ideas in this section.")
+            if st.button(_btn_labels[0], use_container_width=True, key="btn_0"):
+                _call_tutor(_btn_labels[0])
+            if st.button(_btn_labels[1], use_container_width=True, key="btn_1"):
+                _call_tutor(_btn_labels[1])
         with b_right:
-            if st.button("Explain like I'm new", use_container_width=True, key="btn_explain"):
-                _call_tutor("Explain this section like I'm completely new to the topic.")
-            if st.button(
-                "Quiz me (2 questions)", use_container_width=True, key="btn_quiz"
-            ):
-                _call_tutor("Quiz me with 2 questions about this section.")
+            if st.button(_btn_labels[2], use_container_width=True, key="btn_2"):
+                _call_tutor(_btn_labels[2])
+            if st.button(_btn_labels[3], use_container_width=True, key="btn_3"):
+                _call_tutor(_btn_labels[3])
 
         st.divider()
 
