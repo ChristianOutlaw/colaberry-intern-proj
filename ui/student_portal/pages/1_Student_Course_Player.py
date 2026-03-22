@@ -626,12 +626,25 @@ st.markdown(
     /* ── Hide Streamlit's auto-generated sidebar page nav ────────────────── */
     [data-testid="stSidebarNav"] { display: none !important; }
 
-    /* ── Mute locked section radio rows (CSS-only, no Python change) ──────── */
+    /* ── Sidebar section states ─────────────────────────────────────────────── */
+    /* Non-selected: gentle dimming (same rule applies to locked, completed, not-started) */
     [data-testid="stSidebar"] [data-testid="stRadio"] label:not(:has(input:checked)) {
-        opacity: 0.45;
+        opacity: 0.78;
     }
     [data-testid="stSidebar"] [data-testid="stRadio"] label:not(:has(input:checked)):hover {
-        opacity: 0.75;
+        opacity: 0.95;
+    }
+    /* Selected / in-progress: subtle slate-blue tint */
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+        background: rgba(73, 112, 149, 0.1);
+        border-radius: 8px;
+    }
+    /* Status badge line: markdown *text* → <em>; smaller, muted, not italic */
+    [data-testid="stSidebar"] [data-testid="stRadio"] label em {
+        font-size: 0.68rem;
+        font-style: normal;
+        opacity: 0.6;
+        letter-spacing: 0.01em;
     }
 
     </style>
@@ -941,12 +954,12 @@ with st.sidebar:
             is_locked = i > allowed_max_idx
             is_cur    = i == _cur_radio_idx
             if is_done:
-                return f"\u2705 {title}  \n*(Completed)*"
+                return f"\u2713 {title}  \n*Completed*"
             if is_locked:
-                return f"\U0001f512 {title}  \n*(Locked)*"
+                return f"{title}  \n*Locked*"
             if is_cur:
-                return f"\u25b6 {title}  \n*(In progress)*"
-            return f"{title}  \n*(Not started)*"
+                return f"{title}  \n*In progress*"
+            return f"{title}  \n*Not started*"
 
         _radio_raw = st.radio(
             "Select a section",
