@@ -503,6 +503,9 @@ st.markdown(
         padding: 2rem 2.25rem 1.75rem;
         text-align: center;
         margin-bottom: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
     .cb-section-hero-eyebrow {
         font-size: 0.68rem;
@@ -511,6 +514,7 @@ st.markdown(
         text-transform: uppercase;
         color: #5B5A59;
         margin: 0 0 1rem;
+        text-align: center;
     }
     .cb-section-hero-icon {
         font-size: 2.75rem;
@@ -523,13 +527,15 @@ st.markdown(
         color: #0D0D0D;
         margin: 0 0 0.75rem;
         line-height: 1.15;
+        text-align: center;
     }
     .cb-section-hero-subtitle {
         font-size: 1.05rem;
         color: #374151;
         max-width: 520px;
-        margin: 0 auto 1.5rem;
+        margin: 0 0 1.5rem;
         line-height: 1.6;
+        text-align: center;
     }
     .cb-section-hero-pills {
         display: flex;
