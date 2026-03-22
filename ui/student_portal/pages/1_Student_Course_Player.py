@@ -918,12 +918,12 @@ with st.sidebar:
             is_locked = i > allowed_max_idx
             is_cur    = i == _cur_radio_idx
             if is_done:
-                return f"\u2705 {title} (Completed)"
+                return f"\u2705 {title}  \n*(Completed)*"
             if is_locked:
-                return f"\U0001f512 {title} (Locked)"
+                return f"\U0001f512 {title}  \n*(Locked)*"
             if is_cur:
-                return f"\u25b6 {title} (In progress)"
-            return f"{title} (Not started)"
+                return f"\u25b6 {title}  \n*(In progress)*"
+            return f"{title}  \n*(Not started)*"
 
         _radio_raw = st.radio(
             "Select a section",
