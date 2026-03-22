@@ -553,6 +553,38 @@ st.markdown(
         font-weight: 500;
     }
 
+    /* ── Next-section unlock banner ─────────────────────────────────────── */
+    .cb-unlock-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        background: #f0f7f1;
+        border: 1px solid #b7d9bc;
+        border-left: 4px solid #2e7d52;
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem;
+        margin: 0 0 0.9rem;
+    }
+    .cb-unlock-icon {
+        font-size: 1.35rem;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+    .cb-unlock-eyebrow {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #2e7d52;
+        margin: 0 0 0.15rem;
+    }
+    .cb-unlock-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #0D0D0D;
+        margin: 0;
+    }
+
     /* ── Hide heading anchor links (not student-facing) ─────────────────── */
     h1 a, h2 a, h3 a { display: none !important; }
 
@@ -1982,6 +2014,19 @@ elif step == "complete":
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.rerun()
         else:
+            # ── Unlock banner — shown whenever this section is complete and a next section exists.
+            # Static HTML; renders identically on every rerun — no animation, no spam.
+            _next_title = SECTIONS[_next_idx][1]
+            st.markdown(
+                f"""<div class="cb-unlock-banner">
+  <span class="cb-unlock-icon">🔓</span>
+  <div>
+    <p class="cb-unlock-eyebrow">Next section unlocked</p>
+    <p class="cb-unlock-title">{_next_title}</p>
+  </div>
+</div>""",
+                unsafe_allow_html=True,
+            )
             _dbg_log(
                 "next_section_gate",
                 run_id=_RUN_ID,
