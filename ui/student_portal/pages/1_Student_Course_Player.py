@@ -1607,14 +1607,14 @@ def _render_tutor_expander() -> None:
         b_left, b_right = st.columns(2)
         with b_left:
             if st.button(_btn_labels[0], use_container_width=True, key="btn_0"):
-                _call_tutor(_btn_labels[0])
+                st.session_state["tutor_input"] = _btn_labels[0]
             if st.button(_btn_labels[1], use_container_width=True, key="btn_1"):
-                _call_tutor(_btn_labels[1])
+                st.session_state["tutor_input"] = _btn_labels[1]
         with b_right:
             if st.button(_btn_labels[2], use_container_width=True, key="btn_2"):
-                _call_tutor(_btn_labels[2])
+                st.session_state["tutor_input"] = _btn_labels[2]
             if st.button(_btn_labels[3], use_container_width=True, key="btn_3"):
-                _call_tutor(_btn_labels[3])
+                st.session_state["tutor_input"] = _btn_labels[3]
 
         st.divider()
 
@@ -1626,7 +1626,10 @@ def _render_tutor_expander() -> None:
         # Free-form chat input — st.chat_input triggers its own rerun on submit;
         # the explicit st.rerun() below ensures a clean second pass that clears
         # the widget state and renders the updated history at the top.
-        user_input = st.chat_input("Ask about this section…")
+        user_input = st.chat_input(
+            "Ask about this section…",
+            key="tutor_input",
+        )
         if user_input:
             _call_tutor(user_input)
             st.rerun()
