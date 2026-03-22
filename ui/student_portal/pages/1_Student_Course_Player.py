@@ -541,7 +541,7 @@ if "quiz_submitted" not in st.session_state:
 if "player_course_started" not in st.session_state:
     st.session_state["player_course_started"] = False  # True after Begin Course clicked
 if "player_flow_step" not in st.session_state:
-    st.session_state["player_flow_step"] = "lesson"    # lesson|quiz|reflection|complete (welcome unused)
+    st.session_state["player_flow_step"] = "welcome"   # welcome|lesson|quiz|reflection|complete
 if "player_flow_chunk_idx" not in st.session_state:
     st.session_state["player_flow_chunk_idx"] = 0      # current lesson chunk index
 if "player_flow_section_id" not in st.session_state:
@@ -983,7 +983,7 @@ with st.sidebar:
 
         # Reset guided flow when the student navigates to a new section.
         if active_section_id != st.session_state["player_flow_section_id"]:
-            st.session_state["player_flow_step"] = "lesson"
+            st.session_state["player_flow_step"] = "welcome"
             st.session_state["player_flow_chunk_idx"] = 0
             st.session_state["player_flow_section_id"] = active_section_id
             st.session_state["player_quiz_idx"] = 0
