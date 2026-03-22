@@ -1748,6 +1748,7 @@ elif step == "quiz":
                             if st.button("Submit Answer", type="primary", use_container_width=True, key=f"submit_ans_{qk}", disabled=(chosen is None)):
                                 if chosen == q["correct_index"]:
                                     st.session_state["player_quiz_correct"].add(qk)
+                                    st.toast("Nice — you've got it.", icon="✅")
                                     st.rerun()
                                 else:
                                     new_attempts = attempts + 1
@@ -1838,6 +1839,7 @@ elif step == "reflection":
                                 db_path=DB_PATH,
                             )
                             st.session_state["player_refl_idx"] = refl_idx + 1
+                            st.toast("Saved. Good thinking.", icon="✍️")
                             st.rerun()
                         except Exception:
                             logging.exception("Error saving reflection response")
@@ -1940,6 +1942,7 @@ elif step == "complete":
                             pass
                 except Exception:
                     pass
+                st.toast("Section complete", icon="🎯")
                 st.rerun()
             except ValueError:
                 logging.exception("ValueError marking %s complete", active_section_id)
