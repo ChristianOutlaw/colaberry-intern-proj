@@ -68,17 +68,17 @@ def _deterministic_reply(
 
     # ── Summarize ──────────────────────────────────────────────────────────
     if "summarize" in lower or "summary" in lower:
-        parts = [f"**Summary of \"{section_title}\"**\n"]
+        parts = ["Here's what this section is really getting at:\n"]
         if headings:
             parts.append("**Topics covered:** " + ", ".join(headings))
         if key_ideas:
-            parts.append("\n**Key ideas:**")
+            parts.append("\nThe core ideas:")
             for idea in key_ideas:
                 parts.append(f"- {idea}")
         if not headings and not key_ideas:
             parts.append(
-                f"This section covers: **{section_title}**. "
-                "Read through the lesson content above for the full picture."
+                f"This section is all about **{section_title}**. "
+                "Read through the lesson above for the full picture."
             )
         parts.append(f"\n{_followup}")
         return "\n".join(parts)
@@ -87,7 +87,7 @@ def _deterministic_reply(
     if "quiz" in lower or "question" in lower:
         if len(key_ideas) >= 2:
             return (
-                f"**Quiz — {section_title}**\n\n"
+                "Let's check your understanding — two quick questions:\n\n"
                 f"**Q1.** In your own words, explain:\n> *{key_ideas[0]}*\n\n"
                 f"**Q2.** Why does this matter?\n> *{key_ideas[1]}*\n\n"
                 "*(Write your answers, then compare with the lesson content above.)*"
@@ -95,14 +95,14 @@ def _deterministic_reply(
             )
         if len(key_ideas) == 1:
             return (
-                f"**Quiz — {section_title}**\n\n"
+                "Here's a quick check on this section:\n\n"
                 f"**Q1.** In your own words, explain:\n> *{key_ideas[0]}*\n\n"
                 "**Q2.** How would you apply this concept in a real-world scenario?\n\n"
                 "*(Write your answers, then compare with the lesson content above.)*"
                 f"\n\n{_followup}"
             )
         return (
-            f"**Quiz — {section_title}**\n\n"
+            "Here's a quick check on this section:\n\n"
             "**Q1.** What is the main idea of this section?\n\n"
             "**Q2.** How does what you learned here connect to something you already know?\n\n"
             "*(Write your answers, then compare with the lesson content above.)*"
@@ -111,12 +111,12 @@ def _deterministic_reply(
 
     # ── Explain like I'm new ───────────────────────────────────────────────
     if "explain" in lower or "new" in lower or "beginner" in lower or "simple" in lower:
-        parts = [f"**{section_title} — Simply Explained**\n"]
+        parts = ["Let's break this down simply.\n"]
         parts.append(
-            f"Think of **{section_title}** as a big idea broken into smaller, digestible pieces."
+            f"Think of **{section_title}** as one big idea made up of smaller, connected pieces."
         )
         if key_ideas:
-            parts.append("\nHere are the essentials in plain language:")
+            parts.append("\nHere's what it really comes down to:")
             for idea in key_ideas:
                 parts.append(f"- {idea}")
         elif headings:
@@ -131,38 +131,36 @@ def _deterministic_reply(
     if "example" in lower:
         if key_ideas:
             return (
-                f"**Example for \"{section_title}\"**\n\n"
-                f"Consider this key idea: *{key_ideas[0]}*\n\n"
-                "A concrete way to think about it: imagine explaining this to a friend who has "
-                "never heard of it. You'd start by naming what it is, then show one real-world "
-                "case where it applies.\n\n"
-                "The lesson content above includes specific examples — look for tables, "
+                "Here's a concrete way to think about it.\n\n"
+                f"Take this idea: *{key_ideas[0]}*\n\n"
+                "Imagine explaining it to someone who's never heard of it. "
+                "You'd start by naming what it is, then show one real situation where it shows up.\n\n"
+                "The lesson above has specific examples — look for tables, "
                 f"code blocks, or numbered steps.\n\n{_followup}"
             )
         return (
-            f"**Example for \"{section_title}\"**\n\n"
-            "The lesson content above contains worked examples. "
-            "Re-read it and look for tables, code blocks, or numbered steps — "
+            "The lesson above has worked examples worth revisiting.\n\n"
+            "Look for tables, code blocks, or numbered steps — "
             f"those are the concrete illustrations.\n\n{_followup}"
         )
 
     # ── Catch-all ──────────────────────────────────────────────────────────
-    parts = [f"Great question about **{section_title}**!\n"]
+    parts = [f"Happy to help with **{section_title}**.\n"]
     if key_ideas:
-        parts.append("Here are the key ideas for this section:")
+        parts.append("Here's what this section is really about:")
         for idea in key_ideas:
             parts.append(f"- {idea}")
         parts.append(
-            "\nReview the lesson content above for more detail, or use the quick-action "
-            "buttons for a summary, plain explanation, example, or quiz."
+            "\nFeel free to ask a follow-up, or use the quick-action buttons for a summary, "
+            "plain explanation, example, or quiz."
         )
     elif headings:
         parts.append(f"This section covers: {', '.join(headings)}.")
-        parts.append("Review the lesson content above, or try the quick-action buttons.")
+        parts.append("Ask a follow-up or try the quick-action buttons.")
     else:
         parts.append(
-            "I'm here to help! Use the quick-action buttons above for a summary, "
-            "simple explanation, example, or quiz based on this section."
+            "Use the quick-action buttons above for a summary, simple explanation, "
+            "example, or quiz — or just ask me directly."
         )
     parts.append(f"\n{_followup}")
     return "\n".join(parts)
