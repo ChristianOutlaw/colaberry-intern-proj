@@ -16,6 +16,17 @@ import re
 
 
 # ---------------------------------------------------------------------------
+# Follow-up guidance lines — deterministic rotation, no randomness
+# ---------------------------------------------------------------------------
+
+_FOLLOWUP_LINES: tuple[str, ...] = (
+    "Want me to break that down further?",
+    "Want a quick example for this?",
+    "Want to test your understanding?",
+    "I can simplify that more if you want.",
+)
+
+# ---------------------------------------------------------------------------
 # Internal parsing helpers — purely functional, no randomness
 # ---------------------------------------------------------------------------
 
@@ -52,6 +63,9 @@ def _deterministic_reply(
     headings = _extract_headings(section_markdown)
     key_ideas = _extract_key_ideas(section_markdown)
 
+    # Deterministic follow-up rotation keyed by message length (no history available here).
+    _followup = _FOLLOWUP_LINES[len(user_message) % len(_FOLLOWUP_LINES)]
+
     # ── Summarize ──────────────────────────────────────────────────────────
     if "summarize" in lower or "summary" in lower:
         parts = [f"**Summary of \"{section_title}\"**\n"]
@@ -66,6 +80,7 @@ def _deterministic_reply(
                 f"This section covers: **{section_title}**. "
                 "Read through the lesson content above for the full picture."
             )
+        parts.append(f"\n{_followup}")
         return "\n".join(parts)
 
     # ── Quiz ───────────────────────────────────────────────────────────────
@@ -76,6 +91,7 @@ def _deterministic_reply(
                 f"**Q1.** In your own words, explain:\n> *{key_ideas[0]}*\n\n"
                 f"**Q2.** Why does this matter?\n> *{key_ideas[1]}*\n\n"
                 "*(Write your answers, then compare with the lesson content above.)*"
+                f"\n\n{_followup}"
             )
         if len(key_ideas) == 1:
             return (
@@ -83,12 +99,14 @@ def _deterministic_reply(
                 f"**Q1.** In your own words, explain:\n> *{key_ideas[0]}*\n\n"
                 "**Q2.** How would you apply this concept in a real-world scenario?\n\n"
                 "*(Write your answers, then compare with the lesson content above.)*"
+                f"\n\n{_followup}"
             )
         return (
             f"**Quiz — {section_title}**\n\n"
             "**Q1.** What is the main idea of this section?\n\n"
             "**Q2.** How does what you learned here connect to something you already know?\n\n"
             "*(Write your answers, then compare with the lesson content above.)*"
+            f"\n\n{_followup}"
         )
 
     # ── Explain like I'm new ───────────────────────────────────────────────
@@ -106,6 +124,7 @@ def _deterministic_reply(
         parts.append(
             "\nTake it one piece at a time — re-read the section above if anything feels unclear."
         )
+        parts.append(f"\n{_followup}")
         return "\n".join(parts)
 
     # ── Give me an example ─────────────────────────────────────────────────
@@ -118,13 +137,13 @@ def _deterministic_reply(
                 "never heard of it. You'd start by naming what it is, then show one real-world "
                 "case where it applies.\n\n"
                 "The lesson content above includes specific examples — look for tables, "
-                "code blocks, or numbered steps."
+                f"code blocks, or numbered steps.\n\n{_followup}"
             )
         return (
             f"**Example for \"{section_title}\"**\n\n"
             "The lesson content above contains worked examples. "
             "Re-read it and look for tables, code blocks, or numbered steps — "
-            "those are the concrete illustrations."
+            f"those are the concrete illustrations.\n\n{_followup}"
         )
 
     # ── Catch-all ──────────────────────────────────────────────────────────
@@ -145,6 +164,7 @@ def _deterministic_reply(
             "I'm here to help! Use the quick-action buttons above for a summary, "
             "simple explanation, example, or quiz based on this section."
         )
+    parts.append(f"\n{_followup}")
     return "\n".join(parts)
 
 
@@ -234,7 +254,8 @@ def generate_tutor_reply(
             )
             content = response.choices[0].message.content
             if content:
-                return content
+                followup = _FOLLOWUP_LINES[len(history or []) % len(_FOLLOWUP_LINES)]
+                return content + f"\n\n{followup}"
         except Exception:
             pass  # Fall through to deterministic reply
 
