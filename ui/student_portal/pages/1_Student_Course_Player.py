@@ -1444,6 +1444,10 @@ section_prompt_ids: list[str] = section_data.get("reflection_prompts", [])
 
 # Chunk the lesson markdown (deterministic — no randomness).
 chunks = _chunk_markdown(section_markdown) if section_markdown else ["Content unavailable."]
+# Drop a leading H1 intro chunk — section files that begin with `# Section Title\n\n...`
+# produce a chunk 0 that duplicates the hero screen. Real lesson content uses H2+.
+if chunks and chunks[0].lstrip().startswith("# "):
+    chunks = chunks[1:] or ["Content unavailable."]
 n_chunks = len(chunks)
 
 # Clamp chunk_idx in case section content shrinks after a nav change.
