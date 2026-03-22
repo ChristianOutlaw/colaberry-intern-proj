@@ -655,6 +655,8 @@ if "player_status" not in st.session_state:
     st.session_state["player_status"] = None
 if "player_flash" not in st.session_state:
     st.session_state["player_flash"] = None  # (level, message) or None
+if "player_toast" not in st.session_state:
+    st.session_state["player_toast"] = None  # (message, icon) or None
 if "tutor_history" not in st.session_state:
     st.session_state["tutor_history"] = {}    # dict[lead_id -> list[{"role": str, "content": str}]]
 if "tutor_lead_id" not in st.session_state:
@@ -1158,6 +1160,16 @@ if st.session_state["player_flash"] is not None:
         st.success(msg)
     else:
         st.error(msg)
+
+# Deferred toast — queued before st.rerun() and rendered at the start of
+# the next run, after the page has re-rendered, so it stays visible.
+if st.session_state["player_toast"] is not None:
+    _toast_msg, _toast_icon = st.session_state["player_toast"]
+    st.session_state["player_toast"] = None
+    try:
+        st.toast(_toast_msg, icon=_toast_icon)
+    except Exception:
+        pass
 
 
 # ── Back-nav reset confirmation UI ────────────────────────────────────────────
@@ -1748,7 +1760,7 @@ elif step == "quiz":
                             if st.button("Submit Answer", type="primary", use_container_width=True, key=f"submit_ans_{qk}", disabled=(chosen is None)):
                                 if chosen == q["correct_index"]:
                                     st.session_state["player_quiz_correct"].add(qk)
-                                    st.toast("Nice — you've got it.", icon="✅")
+                                    st.session_state["player_toast"] = ("Nice — you've got it.", "✅")
                                     st.rerun()
                                 else:
                                     new_attempts = attempts + 1
@@ -1839,7 +1851,7 @@ elif step == "reflection":
                                 db_path=DB_PATH,
                             )
                             st.session_state["player_refl_idx"] = refl_idx + 1
-                            st.toast("Saved. Good thinking.", icon="✍️")
+                            st.session_state["player_toast"] = ("Saved. Good thinking.", "✍️")
                             st.rerun()
                         except Exception:
                             logging.exception("Error saving reflection response")
@@ -1942,7 +1954,7 @@ elif step == "complete":
                             pass
                 except Exception:
                     pass
-                st.toast("Section complete", icon="🎯")
+                st.session_state["player_toast"] = ("Section complete", "🎯")
                 st.rerun()
             except ValueError:
                 logging.exception("ValueError marking %s complete", active_section_id)
