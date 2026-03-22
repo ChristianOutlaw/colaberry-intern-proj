@@ -157,6 +157,7 @@ def generate_tutor_reply(
     section_title: str,
     section_markdown: str,
     user_message: str,
+    history: list[dict] | None = None,
     section_idx: int | None = None,
     total_sections: int | None = None,
     chunk_idx: int | None = None,
@@ -223,10 +224,11 @@ def generate_tutor_reply(
             )
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
+                messages=(
+                    [{"role": "system", "content": system_prompt}]
+                    + (history or [])
+                    + [{"role": "user", "content": user_message}]
+                ),
                 max_tokens=512,
                 temperature=0.7,
             )

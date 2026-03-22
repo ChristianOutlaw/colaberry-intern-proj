@@ -1558,6 +1558,7 @@ def _render_tutor_expander() -> None:
                 section_title=active_title,
                 section_markdown=section_markdown or "",
                 user_message=user_msg,
+                history=messages[:-1],
                 section_idx=active_idx,
                 total_sections=len(SECTIONS),
                 chunk_idx=chunk_idx,
