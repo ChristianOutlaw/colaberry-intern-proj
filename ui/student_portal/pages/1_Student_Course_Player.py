@@ -1567,6 +1567,16 @@ def _render_tutor_expander() -> None:
         messages.append({"role": "assistant", "content": reply})
 
     with st.expander("AI Tutor", expanded=False):
+        # Welcome line — only shown when no messages exist yet.
+        if len(messages) == 0:
+            _tutor_welcome: dict[str, str] = {
+                "lesson":     f"You're working through **{active_title}**. Ask me anything, or use the options below.",
+                "quiz":       f"You're on the quiz for **{active_title}**. Want help thinking through a question?",
+                "reflection": f"You're reflecting on **{active_title}**. I can help you go deeper or connect ideas.",
+                "complete":   f"You finished **{active_title}**. Want to review anything before moving on?",
+            }
+            st.caption(_tutor_welcome.get(step, f"Ask me anything about **{active_title}**."))
+
         # Quick-action buttons — 2 × 2 grid.
         # Each button directly calls the tutor in-place; the implicit Streamlit
         # rerun from the button click re-renders the updated chat history.
