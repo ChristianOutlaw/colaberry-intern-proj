@@ -1749,9 +1749,9 @@ elif step == "complete":
 
         st.markdown("<div style='height: 4px'></div>", unsafe_allow_html=True)
 
-        if _already_completed:
-            st.success("Progress saved — this section is marked complete.")
-        elif st.button("Continue to Next Section →", type="primary", use_container_width=True):
+        # Auto-record completion on first entry to this step.
+        _write_error = False
+        if not _already_completed:
             occurred_at = datetime.now(timezone.utc).isoformat()
             event_id = f"{lead_id}:{active_section_id}"
             try:
@@ -1818,19 +1818,25 @@ elif step == "complete":
             except ValueError:
                 logging.exception("ValueError marking %s complete", active_section_id)
                 st.error("Cannot record completion: unrecognised section.")
+                _write_error = True
             except sqlite3.OperationalError:
                 st.error("Could not save progress. Check that tmp/app.db is accessible.")
+                _write_error = True
             except Exception:
                 logging.exception("Unexpected error in Mark Complete")
                 st.error("An unexpected error occurred. See console for details.")
+                _write_error = True
+
+        if not _write_error:
+            st.success("Progress saved — this section is marked complete.")
 
         st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
         _has_next = active_idx < (len(SECTIONS) - 1)
         _next_idx = active_idx + 1
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
 
-        if not _already_completed:
-            st.info("Continue to unlock the next section.")
+        if _write_error:
+            pass  # error already displayed above; student must reload to retry
         elif _already_completed and not _has_next:
             if not st.session_state.get("confetti_shown"):
                 st.session_state["confetti_shown"] = True
