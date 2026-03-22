@@ -644,6 +644,21 @@ st.markdown(
 # ---------------------------------------------------------------------------
 _RUN_ID: str = uuid.uuid4().hex[:8]
 
+# ── Micro-celebration message pools ──────────────────────────────────────────
+# Rotated deterministically; no randomness. Shared across all 9 sections.
+_QUIZ_MSGS: tuple[tuple[str, str], ...] = (
+    ("Correct — keep going.", "✅"),
+    ("You've got it.", "✅"),
+    ("Right. Keep moving.", "✅"),
+    ("That's it.", "✅"),
+)
+_REFL_MSGS: tuple[tuple[str, str], ...] = (
+    ("Saved. Good thinking.", "✍️"),
+    ("Noted. Keep going.", "✍️"),
+    ("Saved.", "✍️"),
+    ("Good — keep reflecting.", "✍️"),
+)
+
 # ---------------------------------------------------------------------------
 # Session state initialisation
 # ---------------------------------------------------------------------------
@@ -1760,7 +1775,11 @@ elif step == "quiz":
                             if st.button("Submit Answer", type="primary", use_container_width=True, key=f"submit_ans_{qk}", disabled=(chosen is None)):
                                 if chosen == q["correct_index"]:
                                     st.session_state["player_quiz_correct"].add(qk)
-                                    st.session_state["player_toast"] = ("Nice — you've got it.", "✅")
+                                    # Cadence: fire on 1-based odd positions (q_idx 0, 2, 4...).
+                                    # Rotate message per quiz so multi-quiz sections vary.
+                                    if q_idx % 2 == 0:
+                                        _qmsg, _qicon = _QUIZ_MSGS[quiz_idx % len(_QUIZ_MSGS)]
+                                        st.session_state["player_toast"] = (_qmsg, _qicon)
                                     st.rerun()
                                 else:
                                     new_attempts = attempts + 1
@@ -1851,7 +1870,11 @@ elif step == "reflection":
                                 db_path=DB_PATH,
                             )
                             st.session_state["player_refl_idx"] = refl_idx + 1
-                            st.session_state["player_toast"] = ("Saved. Good thinking.", "✍️")
+                            # Cadence: fire on 1-based odd positions (refl_idx 0, 2, 4...).
+                            # Advance rotation only on firing positions via integer division.
+                            if refl_idx % 2 == 0:
+                                _rmsg, _ricon = _REFL_MSGS[(refl_idx // 2) % len(_REFL_MSGS)]
+                                st.session_state["player_toast"] = (_rmsg, _ricon)
                             st.rerun()
                         except Exception:
                             logging.exception("Error saving reflection response")
@@ -1954,7 +1977,6 @@ elif step == "complete":
                             pass
                 except Exception:
                     pass
-                st.session_state["player_toast"] = ("Section complete", "🎯")
                 st.rerun()
             except ValueError:
                 logging.exception("ValueError marking %s complete", active_section_id)
