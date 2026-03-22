@@ -36,6 +36,7 @@ from execution.leads.get_lead_status import get_lead_status                     
 from execution.leads.upsert_lead import upsert_lead                                 # noqa: E402
 from execution.progress.compute_course_state import compute_course_state            # noqa: E402
 from execution.progress.record_progress_event import record_progress_event          # noqa: E402
+from execution.decision.get_cora_recommendation import get_cora_recommendation       # noqa: E402
 from execution.reflection.load_reflection_responses import load_reflection_responses  # noqa: E402
 from execution.reflection.save_reflection_response import save_reflection_response   # noqa: E402
 from ui.theme import apply_colaberry_theme                                          # noqa: E402
@@ -2040,6 +2041,25 @@ elif step == "complete":
                     active_section_id=active_section_id,
                     state=_dbg_snap(st.session_state),
                 )
+                # CORY: dev-facing recommendation at shared section completion.
+                # Read-only — no DB writes. Errors are isolated and never
+                # surfaced to the student.
+                try:
+                    if lead_id:
+                        _cory_now = datetime.fromisoformat(occurred_at)
+                        _cory_rec = get_cora_recommendation(
+                            lead_id, now=_cory_now, db_path=DB_PATH
+                        )
+                        _dbg_log(
+                            "cory_recommendation",
+                            lead_id=lead_id,
+                            section=active_section_id,
+                            event_type=_cory_rec["event_type"],
+                            priority=_cory_rec["priority"],
+                            recommended_channel=_cory_rec["recommended_channel"],
+                        )
+                except Exception:
+                    logging.exception("Cory recommendation failed at section completion")
                 # Show unlock feedback when a new section becomes available.
                 try:
                     _unlock_before = _allowed_max_idx(
