@@ -1600,6 +1600,28 @@ def _render_tutor_expander() -> None:
             "complete":   ["Summarize this section", "What should I remember?",
                            "How does this connect forward?", "Test me quickly"],
         }
+        _step_button_prompts: dict[str, str] = {
+            # lesson
+            "Summarize this simply":      "Can you explain this section in simple terms and give me a real-world example?",
+            "Give me a real example":     "Can you give me a clear real-world example of what this section is teaching?",
+            "Explain like I'm new":       "I'm completely new to this — can you explain this step by step in a very simple way?",
+            "What matters most here?":    "What are the most important takeaways from this section and what should I focus on remembering?",
+            # quiz
+            "Help me think this through": "I'm stuck on this — can you guide me step by step without giving me the answer?",
+            "Give me a hint":             "Can you give me a small hint to help me move in the right direction?",
+            "Explain this concept":       "Can you explain the concept behind this question in a simple way?",
+            "What should I focus on?":    "What should I focus on to get this question right?",
+            # reflection
+            "Help me go deeper":          "Can you help me go deeper on what I just learned and connect it to real-world applications?",
+            "Challenge my thinking":      "Can you challenge my understanding with a deeper question or perspective?",
+            "Connect this to real life":  "How does this concept show up in real life or real work situations?",
+            "What did I really learn?":   "What did I actually learn here beyond the surface level?",
+            # complete
+            "Summarize this section":     "Can you give me a clear and concise summary of this entire section?",
+            "What should I remember?":    "What are the key things I should remember long-term from this section?",
+            "How does this connect forward?": "How does this section connect to what comes next in the course?",
+            "Test me quickly":            "Can you quickly test my understanding with a couple of questions?",
+        }
         _fallback_buttons = ["Summarize this simply", "Give me a real example",
                              "Explain like I'm new", "What matters most here?"]
         _btn_labels = _step_buttons.get(step, _fallback_buttons)
@@ -1607,14 +1629,14 @@ def _render_tutor_expander() -> None:
         b_left, b_right = st.columns(2)
         with b_left:
             if st.button(_btn_labels[0], use_container_width=True, key="btn_0"):
-                st.session_state["tutor_input"] = _btn_labels[0]
+                st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[0], _btn_labels[0])
             if st.button(_btn_labels[1], use_container_width=True, key="btn_1"):
-                st.session_state["tutor_input"] = _btn_labels[1]
+                st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[1], _btn_labels[1])
         with b_right:
             if st.button(_btn_labels[2], use_container_width=True, key="btn_2"):
-                st.session_state["tutor_input"] = _btn_labels[2]
+                st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[2], _btn_labels[2])
             if st.button(_btn_labels[3], use_container_width=True, key="btn_3"):
-                st.session_state["tutor_input"] = _btn_labels[3]
+                st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[3], _btn_labels[3])
 
         st.divider()
 
