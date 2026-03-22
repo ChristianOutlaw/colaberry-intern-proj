@@ -124,13 +124,26 @@ def process_one_cory_sync_record(
             "destination": destination,
             "reason":      reason,
         })
-        mark_sync_record_sent(
+        mark_result = mark_sync_record_sent(
             lead_id=lead_id,
             now=now_dt,
             destination=destination,
             response_json=response_json_str,
             db_path=db_path,
+            record_id=record_id,
         )
+        if not mark_result.get("ok") or not mark_result.get("changed"):
+            logger.error(
+                "process_one_cory_sync_record: mark_sent failed id=%s result=%s",
+                record_id,
+                mark_result,
+            )
+            return {
+                "ok":             False,
+                "sync_record_id": record_id,
+                "destination":    destination,
+                "error":          f"mark_sync_record_sent failed: {mark_result}",
+            }
 
     else:  # log_sink
         row_data = {
@@ -145,13 +158,26 @@ def process_one_cory_sync_record(
                 row_data, log_dir=log_dir, now=now_iso
             )
             response_json_str = json.dumps(dispatch_result)
-            mark_sync_record_sent(
+            mark_result = mark_sync_record_sent(
                 lead_id=lead_id,
                 now=now_dt,
                 destination=destination,
                 response_json=response_json_str,
                 db_path=db_path,
+                record_id=record_id,
             )
+            if not mark_result.get("ok") or not mark_result.get("changed"):
+                logger.error(
+                    "process_one_cory_sync_record: mark_sent failed id=%s result=%s",
+                    record_id,
+                    mark_result,
+                )
+                return {
+                    "ok":             False,
+                    "sync_record_id": record_id,
+                    "destination":    destination,
+                    "error":          f"mark_sync_record_sent failed: {mark_result}",
+                }
         except Exception as exc:
             logger.exception(
                 "process_one_cory_sync_record: dispatch failed id=%s destination=%s",

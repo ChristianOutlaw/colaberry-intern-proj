@@ -17,6 +17,8 @@ Scenarios covered:
     T8  — dispatch_mode="log_sink" writes file and marks row SENT
     T9  — unknown dispatch_mode raises ValueError before touching DB
     T10 — log_sink failure marks row FAILED and returns ok=False
+    T11 — stale SENT row exists: worker still succeeds, exactly one SENT row remains
+    T12 — mark_sync_record_sent returns failure: worker returns ok=False
 """
 
 import json
@@ -277,6 +279,61 @@ class TestProcessOneCorySyncRecord(unittest.TestCase):
 
         rows = self._rows()
         self.assertEqual(rows[0]["status"], "FAILED")
+
+
+    # ------------------------------------------------------------------
+    # T11 — stale SENT row present: worker succeeds, only one SENT row remains
+    # ------------------------------------------------------------------
+    def test_stale_sent_row_does_not_block_re_dispatch(self):
+        """A pre-existing SENT row must not prevent the new NEEDS_SYNC row from
+        being promoted; exactly one SENT row must remain afterward."""
+        # Stale SENT row left over from a previous dispatch cycle.
+        self.conn.execute(
+            """
+            INSERT INTO sync_records
+                (lead_id, destination, status, reason, created_at, updated_at)
+            VALUES (?, 'CORY_BOOKING', 'SENT', 'HOT_LEAD_BOOKING', ?, ?)
+            """,
+            (LEAD_ID, _SEED_TS, _SEED_TS),
+        )
+        self.conn.commit()
+        # Fresh NEEDS_SYNC row — the one the worker should promote.
+        self._seed("CORY_BOOKING", created_at="2026-03-22T18:30:00+00:00")
+
+        result = self._call()
+
+        self.assertTrue(result["ok"],       f"Expected ok=True, got {result}")
+        self.assertTrue(result["processed"], f"Expected processed=True, got {result}")
+        self.assertEqual(result["destination"], "CORY_BOOKING")
+
+        rows = self._rows()
+        sent_rows = [r for r in rows if r["status"] == "SENT"]
+        self.assertEqual(len(sent_rows), 1, "Exactly one SENT row must remain")
+        self.assertEqual(sent_rows[0]["response_json"] is not None, True,
+                         "Promoted row must have response_json set")
+
+    # ------------------------------------------------------------------
+    # T12 — mark_sync_record_sent returns failure: worker surfaces ok=False
+    # ------------------------------------------------------------------
+    def test_mark_sent_failure_is_surfaced_as_worker_failure(self):
+        """If mark_sync_record_sent returns a non-success result the worker
+        must return ok=False with an explanatory error."""
+        self._seed("CORY_BOOKING")
+
+        with patch(
+            "execution.events.process_one_cory_sync_record.mark_sync_record_sent",
+            return_value={"ok": False, "reason": "RECORD_NOT_FOUND"},
+        ):
+            result = process_one_cory_sync_record(
+                db_path=TEST_DB_PATH, now=NOW_STR
+            )
+
+        self.assertFalse(result["ok"],   f"Expected ok=False, got {result}")
+        self.assertIn("error",  result)
+        self.assertIn("sync_record_id", result)
+        # Row must remain NEEDS_SYNC — the mock prevented the update.
+        rows = self._rows()
+        self.assertEqual(rows[0]["status"], "NEEDS_SYNC")
 
 
 if __name__ == "__main__":
