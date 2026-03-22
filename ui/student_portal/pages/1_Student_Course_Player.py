@@ -1219,7 +1219,7 @@ if st.session_state.get("_backnav_pending_idx") is not None:
                     pass
                 st.session_state["_section_radio_confirmed"] = _target_idx
                 st.session_state["_section_radio_pending"] = _target_idx
-                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_step"] = "welcome"
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.session_state["player_quiz_idx"] = 0
                 st.session_state["player_quiz_q_idx"] = 0
@@ -1308,7 +1308,7 @@ if not st.session_state.get("player_course_started"):
     # Shared helper: apply all flow-start state and rerun.
     def _wc_start(resume_idx: int) -> None:
         st.session_state["player_course_started"] = True
-        st.session_state["player_flow_step"] = "lesson"
+        st.session_state["player_flow_step"] = "welcome"
         st.session_state["player_flow_chunk_idx"] = 0
         st.session_state["player_quiz_idx"] = 0
         st.session_state["player_quiz_q_idx"] = 0
@@ -2128,7 +2128,7 @@ elif step == "complete":
                     _backnav_pending_idx=st.session_state.get("_backnav_pending_idx"),
                 )
                 st.session_state["_suppress_backnav_once"] = True
-                st.session_state["player_flow_step"] = "lesson"
+                st.session_state["player_flow_step"] = "welcome"
                 st.session_state["player_flow_chunk_idx"] = 0
                 st.session_state["player_quiz_idx"] = 0
                 st.session_state["player_quiz_q_idx"] = 0
