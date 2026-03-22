@@ -553,6 +553,35 @@ st.markdown(
         font-weight: 500;
     }
 
+    /* ── Section recap card ─────────────────────────────────────────────── */
+    .cb-recap-card {
+        background: #F8F9FA;
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        margin: 0 0 0.75rem;
+    }
+    .cb-recap-eyebrow {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: #5B5A59;
+        margin: 0 0 0.4rem;
+    }
+    .cb-recap-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #0D0D0D;
+        margin: 0 0 0.35rem;
+    }
+    .cb-recap-body {
+        font-size: 0.88rem;
+        color: #4B5563;
+        margin: 0;
+        line-height: 1.55;
+    }
+
     /* ── Next-section unlock banner ─────────────────────────────────────── */
     .cb-unlock-banner {
         display: flex;
@@ -1930,6 +1959,16 @@ elif step == "complete":
         _has_next = active_idx < (len(SECTIONS) - 1)
         _next_idx = active_idx + 1
         _already_completed = active_section_id in st.session_state.get("player_completed", set())
+
+        if _already_completed and not _write_error:
+            st.markdown(
+                f"""<div class="cb-recap-card">
+  <p class="cb-recap-eyebrow">Section recap</p>
+  <p class="cb-recap-title">\u2713 {active_title}</p>
+  <p class="cb-recap-body">You worked through the lesson, tested your understanding, and captured a reflection.</p>
+</div>""",
+                unsafe_allow_html=True,
+            )
 
         if _write_error:
             pass  # error already displayed above; student must reload to retry
