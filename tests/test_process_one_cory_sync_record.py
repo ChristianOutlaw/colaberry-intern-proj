@@ -19,6 +19,9 @@ Scenarios covered:
     T10 — log_sink failure marks row FAILED and returns ok=False
     T11 — stale SENT row exists: worker still succeeds, exactly one SENT row remains
     T12 — mark_sync_record_sent returns failure: worker returns ok=False
+    T13 — webhook mode, no URL -> safe no-op, row stays NEEDS_SYNC, ok=True
+    T14 — webhook mode, mocked 200 success -> row becomes SENT
+    T15 — webhook mode, HTTPError raised -> row becomes FAILED, ok=False
 """
 
 import json
@@ -26,9 +29,10 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -334,6 +338,86 @@ class TestProcessOneCorySyncRecord(unittest.TestCase):
         # Row must remain NEEDS_SYNC — the mock prevented the update.
         rows = self._rows()
         self.assertEqual(rows[0]["status"], "NEEDS_SYNC")
+
+
+    # ------------------------------------------------------------------
+    # T13 — webhook mode, no URL -> safe no-op, row stays NEEDS_SYNC
+    # ------------------------------------------------------------------
+    def test_webhook_no_url_is_safe_no_op(self):
+        """webhook mode with no URL must leave the row NEEDS_SYNC and return ok=True."""
+        self._seed("CORY_BOOKING")
+
+        result = process_one_cory_sync_record(
+            db_path=TEST_DB_PATH, now=NOW_STR,
+            dispatch_mode="webhook",
+            webhook_url=None,
+        )
+
+        self.assertTrue(result["ok"],        f"Expected ok=True, got {result}")
+        self.assertFalse(result["processed"], f"Expected processed=False, got {result}")
+        self.assertEqual(result["reason"], "NO_URL")
+
+        rows = self._rows()
+        self.assertEqual(rows[0]["status"], "NEEDS_SYNC",
+                         "Row must remain NEEDS_SYNC after a no-op webhook call")
+
+    # ------------------------------------------------------------------
+    # T14 — webhook mode, mocked 200 -> row becomes SENT
+    # ------------------------------------------------------------------
+    def test_webhook_success_marks_row_sent(self):
+        """webhook mode with a mocked 200 response must mark the row SENT."""
+        self._seed("CORY_BOOKING")
+
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = process_one_cory_sync_record(
+                db_path=TEST_DB_PATH, now=NOW_STR,
+                dispatch_mode="webhook",
+                webhook_url="https://example.invalid/cory",
+            )
+
+        self.assertTrue(result["ok"],        f"Expected ok=True, got {result}")
+        self.assertTrue(result["processed"],  f"Expected processed=True, got {result}")
+        self.assertEqual(result["destination"], "CORY_BOOKING")
+
+        rows = self._rows()
+        self.assertEqual(rows[0]["status"], "SENT")
+        stored = json.loads(rows[0]["response_json"])
+        self.assertTrue(stored["dispatched"])
+        self.assertEqual(stored["mode"], "webhook")
+        self.assertEqual(stored["http_status"], 200)
+
+    # ------------------------------------------------------------------
+    # T15 — webhook mode, HTTPError raised -> row becomes FAILED
+    # ------------------------------------------------------------------
+    def test_webhook_http_error_marks_row_failed(self):
+        """webhook mode raising HTTPError must mark the row FAILED and return ok=False."""
+        self._seed("CORY_BOOKING")
+
+        error = urllib.error.HTTPError(
+            url="https://example.invalid/cory",
+            code=500,
+            msg="Internal Server Error",
+            hdrs=None,
+            fp=None,
+        )
+        with patch("urllib.request.urlopen", side_effect=error):
+            result = process_one_cory_sync_record(
+                db_path=TEST_DB_PATH, now=NOW_STR,
+                dispatch_mode="webhook",
+                webhook_url="https://example.invalid/cory",
+            )
+
+        self.assertFalse(result["ok"],   f"Expected ok=False, got {result}")
+        self.assertIn("error",  result)
+        self.assertIn("sync_record_id", result)
+
+        rows = self._rows()
+        self.assertEqual(rows[0]["status"], "FAILED")
 
 
 if __name__ == "__main__":

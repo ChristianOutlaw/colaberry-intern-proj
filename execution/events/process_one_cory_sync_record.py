@@ -12,6 +12,10 @@ dry_run  (default)  — records a dry-run payload and marks the row SENT.
                       No file is written.  Current behaviour, preserved.
 log_sink            — calls dispatch_cory_log_sink(), writes one JSON file,
                       marks the row SENT on success or FAILED on error.
+webhook             — calls dispatch_cory_webhook(), POSTs to the configured
+                      webhook_url; marks SENT on success, FAILED on error.
+                      If webhook_url is absent the call is a safe no-op and
+                      the row remains NEEDS_SYNC (not an error).
 
 Run as a one-shot function from any caller (CLI, scheduler, test).
 """
@@ -22,6 +26,7 @@ from datetime import datetime, timezone
 
 from execution.db.sqlite import connect, init_db
 from execution.events.dispatch_cory_log_sink import dispatch_cory_log_sink
+from execution.events.dispatch_cory_webhook import dispatch_cory_webhook
 from execution.leads.mark_sync_record_failed import mark_sync_record_failed
 from execution.leads.mark_sync_record_sent import mark_sync_record_sent
 
@@ -29,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 _STATUS_NEEDS_SYNC = "NEEDS_SYNC"
 _CORY_PREFIX       = "CORY_"
-_VALID_MODES       = frozenset({"dry_run", "log_sink"})
+_VALID_MODES       = frozenset({"dry_run", "log_sink", "webhook"})
 
 
 def process_one_cory_sync_record(
@@ -38,6 +43,7 @@ def process_one_cory_sync_record(
     now:           str | None = None,
     dispatch_mode: str        = "dry_run",
     log_dir:       str | None = None,
+    webhook_url:   str | None = None,
 ) -> dict:
     """Pick the oldest pending CORY_* sync_records row and dispatch it.
 
@@ -47,25 +53,31 @@ def process_one_cory_sync_record(
                        Injected by the caller for determinism.  When None,
                        defaults to datetime.now(timezone.utc) — injection
                        boundary; tests always pass an explicit value.
-        dispatch_mode: "dry_run" (default) or "log_sink".
+        dispatch_mode: "dry_run" (default), "log_sink", or "webhook".
                        Raises ValueError for any other value.
         log_dir:       Directory for log_sink output files.  Passed through
-                       to dispatch_cory_log_sink; ignored in dry_run mode.
+                       to dispatch_cory_log_sink; ignored in other modes.
+        webhook_url:   URL for webhook dispatch.  When None or blank the
+                       webhook dispatcher returns a safe no-op and the row
+                       remains NEEDS_SYNC.  Ignored in dry_run/log_sink modes.
 
     Returns:
         No pending Cory row found:
             {"ok": True, "processed": False, "reason": "NO_PENDING"}
 
-        Row dispatched successfully (either mode):
+        Row dispatched successfully (any mode):
             {"ok": True, "processed": True,
              "sync_record_id": <id>, "destination": "<CORY_*>"}
 
-        Dispatch raised an exception (log_sink only):
+        Webhook no-op (webhook_url absent):
+            {"ok": True, "processed": False, "reason": "NO_URL"}
+
+        Dispatch raised an exception (log_sink or webhook):
             {"ok": False, "sync_record_id": <id>,
              "destination": "<CORY_*>", "error": "<message>"}
 
     Raises:
-        ValueError: dispatch_mode is not "dry_run" or "log_sink".
+        ValueError: dispatch_mode is not one of the valid modes.
     """
     # ------------------------------------------------------------------
     # Guard: reject unknown dispatch modes immediately.
@@ -145,7 +157,7 @@ def process_one_cory_sync_record(
                 "error":          f"mark_sync_record_sent failed: {mark_result}",
             }
 
-    else:  # log_sink
+    elif dispatch_mode == "log_sink":
         row_data = {
             "id":          record_id,
             "lead_id":     lead_id,
@@ -196,6 +208,74 @@ def process_one_cory_sync_record(
                 "sync_record_id": record_id,
                 "destination":    destination,
                 "error":          str(exc),
+            }
+
+    else:  # webhook
+        row_data = {
+            "id":          record_id,
+            "lead_id":     lead_id,
+            "destination": destination,
+            "reason":      reason,
+            "created_at":  created_at,
+        }
+        try:
+            dispatch_result = dispatch_cory_webhook(
+                row_data, webhook_url=webhook_url, now=now_iso
+            )
+        except Exception as exc:
+            logger.exception(
+                "process_one_cory_sync_record: webhook dispatch failed id=%s destination=%s",
+                record_id,
+                destination,
+            )
+            mark_sync_record_failed(
+                lead_id=lead_id,
+                now=now_dt,
+                destination=destination,
+                error=str(exc),
+                db_path=db_path,
+            )
+            return {
+                "ok":             False,
+                "sync_record_id": record_id,
+                "destination":    destination,
+                "error":          str(exc),
+            }
+
+        # Dispatcher returned without raising — check for no-op.
+        if not dispatch_result.get("dispatched"):
+            logger.debug(
+                "process_one_cory_sync_record: webhook no-op id=%s reason=%s",
+                record_id,
+                dispatch_result.get("reason"),
+            )
+            return {
+                "ok":       True,
+                "processed": False,
+                "reason":   dispatch_result.get("reason", "NO_URL"),
+            }
+
+        # Success — mark SENT.
+        response_json_str = json.dumps(dispatch_result)
+        mark_result = mark_sync_record_sent(
+            lead_id=lead_id,
+            now=now_dt,
+            destination=destination,
+            response_json=response_json_str,
+            db_path=db_path,
+            record_id=record_id,
+        )
+        if not mark_result.get("ok") or not mark_result.get("changed"):
+            logger.error(
+                "process_one_cory_sync_record: mark_sent failed id=%s result=%s",
+                record_id,
+                mark_result,
+            )
+            return {
+                "ok":             False,
+                "sync_record_id": record_id,
+                "destination":    destination,
+                "error":          f"mark_sync_record_sent failed: {mark_result}",
             }
 
     logger.debug(
