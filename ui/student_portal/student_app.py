@@ -17,6 +17,9 @@ Invite-token flow:
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()  # loads .env from repo root into os.environ before anything else runs
+
 import streamlit as st
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
