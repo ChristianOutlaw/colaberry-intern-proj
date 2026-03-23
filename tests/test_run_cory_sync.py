@@ -16,6 +16,9 @@ Scenarios covered:
     T5  — default mode (dry_run) still works after signature change
     T6  — log_sink mode writes a real file and marks row SENT
     T7  — invalid dispatch_mode propagates as ValueError
+    T8  — webhook mode, no URL -> safe no-op JSON output, row stays NEEDS_SYNC
+    T9  — webhook mode, mocked 200 -> processed=True, row SENT
+    T10 — webhook mode prints valid JSON for no-op path
 """
 
 import io
@@ -25,9 +28,10 @@ import shutil
 import sys
 import tempfile
 import unittest
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -86,9 +90,11 @@ class TestRunCorySync(unittest.TestCase):
         conn.close()
         return rows
 
-    def _call(self, dispatch_mode: str = "dry_run", log_dir: str | None = None) -> dict:
+    def _call(self, dispatch_mode: str = "dry_run", log_dir: str | None = None,
+              webhook_url: str | None = None) -> dict:
         return run(db_path=TEST_DB_PATH, now=NOW_STR,
-                   dispatch_mode=dispatch_mode, log_dir=log_dir)
+                   dispatch_mode=dispatch_mode, log_dir=log_dir,
+                   webhook_url=webhook_url)
 
     # ------------------------------------------------------------------
     # T1 — no pending rows -> NO_PENDING
@@ -194,6 +200,61 @@ class TestRunCorySync(unittest.TestCase):
 
         # Row must remain untouched
         self.assertEqual(self._rows()[0]["status"], "NEEDS_SYNC")
+
+
+    # ------------------------------------------------------------------
+    # T8 — webhook mode, no URL -> safe no-op, row stays NEEDS_SYNC
+    # ------------------------------------------------------------------
+    def test_webhook_no_url_is_safe_no_op(self):
+        """webhook mode with no URL must return ok=True, processed=False, reason=NO_URL."""
+        self._seed("CORY_BOOKING")
+
+        result = self._call(dispatch_mode="webhook", webhook_url=None)
+
+        self.assertTrue(result["ok"],         f"Expected ok=True, got {result}")
+        self.assertFalse(result["processed"],  f"Expected processed=False, got {result}")
+        self.assertEqual(result["reason"], "NO_URL")
+        self.assertEqual(self._rows()[0]["status"], "NEEDS_SYNC")
+
+    # ------------------------------------------------------------------
+    # T9 — webhook mode, mocked 200 -> processed=True, row SENT
+    # ------------------------------------------------------------------
+    def test_webhook_success_processes_row(self):
+        """webhook mode with a mocked 200 response must mark row SENT and return processed=True."""
+        self._seed("CORY_BOOKING")
+
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = self._call(
+                dispatch_mode="webhook",
+                webhook_url="https://example.invalid/cory",
+            )
+
+        self.assertTrue(result["ok"],        f"Expected ok=True, got {result}")
+        self.assertTrue(result["processed"],  f"Expected processed=True, got {result}")
+        self.assertEqual(result["destination"], "CORY_BOOKING")
+        self.assertEqual(self._rows()[0]["status"], "SENT")
+
+    # ------------------------------------------------------------------
+    # T10 — webhook no-op path prints valid JSON to stdout
+    # ------------------------------------------------------------------
+    def test_webhook_no_op_prints_valid_json(self):
+        """webhook mode with no URL must still print valid JSON to stdout."""
+        self._seed("CORY_BOOKING")
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            run(db_path=TEST_DB_PATH, now=NOW_STR,
+                dispatch_mode="webhook", webhook_url=None)
+            printed = mock_stdout.getvalue().strip()
+
+        parsed = json.loads(printed)
+        self.assertIn("ok", parsed)
+        self.assertIn("processed", parsed)
+        self.assertEqual(parsed["reason"], "NO_URL")
 
 
 if __name__ == "__main__":
