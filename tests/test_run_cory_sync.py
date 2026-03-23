@@ -19,6 +19,8 @@ Scenarios covered:
     T8  — webhook mode, no URL -> safe no-op JSON output, row stays NEEDS_SYNC
     T9  — webhook mode, mocked 200 -> processed=True, row SENT
     T10 — webhook mode prints valid JSON for no-op path
+    T11 — ghl mode, no URL -> safe no-op, row stays NEEDS_SYNC
+    T12 — ghl mode, mocked 200 -> processed=True, row SENT
 """
 
 import io
@@ -59,8 +61,12 @@ class TestRunCorySync(unittest.TestCase):
         conn = connect(TEST_DB_PATH)
         init_db(conn)
         conn.execute(
-            "INSERT OR IGNORE INTO leads (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (LEAD_ID, "Runner Test Lead", _SEED_TS, _SEED_TS),
+            """
+            INSERT OR IGNORE INTO leads
+                (id, name, ghl_contact_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (LEAD_ID, "Runner Test Lead", "GHL-RUNNER-TEST-CID", _SEED_TS, _SEED_TS),
         )
         conn.commit()
         conn.close()
@@ -91,10 +97,10 @@ class TestRunCorySync(unittest.TestCase):
         return rows
 
     def _call(self, dispatch_mode: str = "dry_run", log_dir: str | None = None,
-              webhook_url: str | None = None) -> dict:
+              webhook_url: str | None = None, ghl_api_url: str | None = None) -> dict:
         return run(db_path=TEST_DB_PATH, now=NOW_STR,
                    dispatch_mode=dispatch_mode, log_dir=log_dir,
-                   webhook_url=webhook_url)
+                   webhook_url=webhook_url, ghl_api_url=ghl_api_url)
 
     # ------------------------------------------------------------------
     # T1 — no pending rows -> NO_PENDING
@@ -255,6 +261,44 @@ class TestRunCorySync(unittest.TestCase):
         self.assertIn("ok", parsed)
         self.assertIn("processed", parsed)
         self.assertEqual(parsed["reason"], "NO_URL")
+
+
+    # ------------------------------------------------------------------
+    # T11 — ghl mode, no URL -> safe no-op, row stays NEEDS_SYNC
+    # ------------------------------------------------------------------
+    def test_ghl_no_url_is_safe_no_op(self):
+        """ghl mode with no URL must return ok=True, processed=False, reason=NO_URL."""
+        self._seed("CORY_BOOKING")
+
+        result = self._call(dispatch_mode="ghl", ghl_api_url=None)
+
+        self.assertTrue(result["ok"],         f"Expected ok=True, got {result}")
+        self.assertFalse(result["processed"],  f"Expected processed=False, got {result}")
+        self.assertEqual(result["reason"], "NO_URL")
+        self.assertEqual(self._rows()[0]["status"], "NEEDS_SYNC")
+
+    # ------------------------------------------------------------------
+    # T12 — ghl mode, mocked 200 -> processed=True, row SENT
+    # ------------------------------------------------------------------
+    def test_ghl_success_processes_row(self):
+        """ghl mode with a mocked 200 response must mark row SENT and return processed=True."""
+        self._seed("CORY_BOOKING")
+
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = self._call(
+                dispatch_mode="ghl",
+                ghl_api_url="https://example.invalid/ghl/cory-action",
+            )
+
+        self.assertTrue(result["ok"],        f"Expected ok=True, got {result}")
+        self.assertTrue(result["processed"],  f"Expected processed=True, got {result}")
+        self.assertEqual(result["destination"], "CORY_BOOKING")
+        self.assertEqual(self._rows()[0]["status"], "SENT")
 
 
 if __name__ == "__main__":
