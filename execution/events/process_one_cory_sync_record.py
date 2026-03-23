@@ -16,6 +16,13 @@ webhook             — calls dispatch_cory_webhook(), POSTs to the configured
                       webhook_url; marks SENT on success, FAILED on error.
                       If webhook_url is absent the call is a safe no-op and
                       the row remains NEEDS_SYNC (not an error).
+ghl                 — calls dispatch_cory_ghl(), POSTs to the configured
+                      ghl_api_url using the lead's ghl_contact_id; marks SENT
+                      on success, FAILED on dispatcher exception.
+                      If ghl_api_url is absent the call is a safe no-op and
+                      the row remains NEEDS_SYNC (not an error).
+                      If ghl_contact_id is missing from the lead, the worker
+                      returns ok=False without modifying the sync_records row.
 
 Run as a one-shot function from any caller (CLI, scheduler, test).
 """
@@ -24,6 +31,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
+from execution.cory.dispatch_cory_ghl import dispatch_cory_ghl
 from execution.db.sqlite import connect, init_db
 from execution.events.dispatch_cory_log_sink import dispatch_cory_log_sink
 from execution.events.dispatch_cory_webhook import dispatch_cory_webhook
@@ -34,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 _STATUS_NEEDS_SYNC = "NEEDS_SYNC"
 _CORY_PREFIX       = "CORY_"
-_VALID_MODES       = frozenset({"dry_run", "log_sink", "webhook"})
+_VALID_MODES       = frozenset({"dry_run", "ghl", "log_sink", "webhook"})
 
 
 def process_one_cory_sync_record(
@@ -44,6 +52,7 @@ def process_one_cory_sync_record(
     dispatch_mode: str        = "dry_run",
     log_dir:       str | None = None,
     webhook_url:   str | None = None,
+    ghl_api_url:   str | None = None,
 ) -> dict:
     """Pick the oldest pending CORY_* sync_records row and dispatch it.
 
@@ -53,13 +62,16 @@ def process_one_cory_sync_record(
                        Injected by the caller for determinism.  When None,
                        defaults to datetime.now(timezone.utc) — injection
                        boundary; tests always pass an explicit value.
-        dispatch_mode: "dry_run" (default), "log_sink", or "webhook".
+        dispatch_mode: "dry_run" (default), "ghl", "log_sink", or "webhook".
                        Raises ValueError for any other value.
         log_dir:       Directory for log_sink output files.  Passed through
                        to dispatch_cory_log_sink; ignored in other modes.
         webhook_url:   URL for webhook dispatch.  When None or blank the
                        webhook dispatcher returns a safe no-op and the row
-                       remains NEEDS_SYNC.  Ignored in dry_run/log_sink modes.
+                       remains NEEDS_SYNC.  Ignored in dry_run/ghl/log_sink modes.
+        ghl_api_url:   URL for GHL API dispatch.  When None or blank the
+                       GHL dispatcher returns a safe no-op and the row
+                       remains NEEDS_SYNC.  Ignored in all other modes.
 
     Returns:
         No pending Cory row found:
@@ -69,10 +81,14 @@ def process_one_cory_sync_record(
             {"ok": True, "processed": True,
              "sync_record_id": <id>, "destination": "<CORY_*>"}
 
-        Webhook no-op (webhook_url absent):
+        No-op (url absent — webhook or ghl mode):
             {"ok": True, "processed": False, "reason": "NO_URL"}
 
-        Dispatch raised an exception (log_sink or webhook):
+        GHL contact ID missing from lead (ghl mode only):
+            {"ok": False, "sync_record_id": <id>,
+             "destination": "<CORY_*>", "error": "NO_GHL_CONTACT_ID"}
+
+        Dispatch raised an exception (log_sink, webhook, or ghl):
             {"ok": False, "sync_record_id": <id>,
              "destination": "<CORY_*>", "error": "<message>"}
 
@@ -208,6 +224,104 @@ def process_one_cory_sync_record(
                 "sync_record_id": record_id,
                 "destination":    destination,
                 "error":          str(exc),
+            }
+
+    elif dispatch_mode == "ghl":
+        # ------------------------------------------------------------------
+        # Worker responsibility: resolve ghl_contact_id from the leads table
+        # before calling the dispatcher.  The dispatcher must never read DB.
+        # ------------------------------------------------------------------
+        conn = connect(db_path)
+        try:
+            init_db(conn)
+            lead_row = conn.execute(
+                "SELECT ghl_contact_id FROM leads WHERE id = ?", (lead_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        ghl_contact_id = (
+            (lead_row["ghl_contact_id"] or "").strip() if lead_row else ""
+        )
+        if not ghl_contact_id:
+            logger.warning(
+                "process_one_cory_sync_record: ghl_contact_id missing "
+                "id=%s lead_id=%s — row left NEEDS_SYNC",
+                record_id,
+                lead_id,
+            )
+            return {
+                "ok":             False,
+                "sync_record_id": record_id,
+                "destination":    destination,
+                "error":          "NO_GHL_CONTACT_ID",
+            }
+
+        action = {
+            "type":   destination,
+            "reason": reason,
+        }
+        try:
+            dispatch_result = dispatch_cory_ghl(
+                ghl_contact_id,
+                action,
+                ghl_api_url=ghl_api_url,
+                now=now_iso,
+            )
+        except Exception as exc:
+            logger.exception(
+                "process_one_cory_sync_record: ghl dispatch failed id=%s destination=%s",
+                record_id,
+                destination,
+            )
+            mark_sync_record_failed(
+                lead_id=lead_id,
+                now=now_dt,
+                destination=destination,
+                error=str(exc),
+                db_path=db_path,
+            )
+            return {
+                "ok":             False,
+                "sync_record_id": record_id,
+                "destination":    destination,
+                "error":          str(exc),
+            }
+
+        # Dispatcher returned without raising — check for no-op (missing URL).
+        if not dispatch_result.get("dispatched"):
+            logger.debug(
+                "process_one_cory_sync_record: ghl no-op id=%s reason=%s",
+                record_id,
+                dispatch_result.get("reason"),
+            )
+            return {
+                "ok":      True,
+                "processed": False,
+                "reason":  dispatch_result.get("reason", "NO_URL"),
+            }
+
+        # Success — mark SENT using the record-targeted path.
+        response_json_str = json.dumps(dispatch_result)
+        mark_result = mark_sync_record_sent(
+            lead_id=lead_id,
+            now=now_dt,
+            destination=destination,
+            response_json=response_json_str,
+            db_path=db_path,
+            record_id=record_id,
+        )
+        if not mark_result.get("ok") or not mark_result.get("changed"):
+            logger.error(
+                "process_one_cory_sync_record: mark_sent failed id=%s result=%s",
+                record_id,
+                mark_result,
+            )
+            return {
+                "ok":             False,
+                "sync_record_id": record_id,
+                "destination":    destination,
+                "error":          f"mark_sync_record_sent failed: {mark_result}",
             }
 
     else:  # webhook
