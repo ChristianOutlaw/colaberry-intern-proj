@@ -289,6 +289,9 @@ def generate_tutor_reply(
     """
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
+    if not api_key:
+        print("[TUTOR_MODE] no_key — deterministic fallback", flush=True)
+
     if api_key:
         try:
             import openai  # noqa: PLC0415 — intentional late import
@@ -383,9 +386,13 @@ def generate_tutor_reply(
             content = response.choices[0].message.content
             if content:
                 followup = _FOLLOWUP_LINES[len(history or []) % len(_FOLLOWUP_LINES)]
+                print("[TUTOR_MODE] openai", flush=True)  # DEBUG: remove when stable
                 return content + f"\n\n{followup}"
-        except Exception:
-            pass  # Fall through to deterministic reply
+        except Exception as _tutor_exc:  # DEBUG: was bare `pass`
+            print(
+                f"[TUTOR_MODE] fallback  exc={type(_tutor_exc).__name__}: {_tutor_exc}",
+                flush=True,
+            )
 
     # Deterministic fallback ignores progress context (pure markdown parsing).
     return _deterministic_reply(
