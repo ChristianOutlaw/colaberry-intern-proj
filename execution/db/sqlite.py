@@ -63,12 +63,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     """
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS leads (
-            id          TEXT PRIMARY KEY,
-            phone       TEXT,
-            email       TEXT,
-            name        TEXT,
-            created_at  TEXT,
-            updated_at  TEXT
+            id              TEXT PRIMARY KEY,
+            phone           TEXT,
+            email           TEXT,
+            name            TEXT,
+            ghl_contact_id  TEXT,
+            created_at      TEXT,
+            updated_at      TEXT
         );
 
         CREATE TABLE IF NOT EXISTS course_enrollments (
@@ -261,3 +262,15 @@ def init_db(conn: sqlite3.Connection) -> None:
             DROP TABLE course_state;
             ALTER TABLE course_state_new RENAME TO course_state;
         """)
+
+    # ---------------------------------------------------------------------------
+    # Idempotent column migration — add ghl_contact_id to leads for existing
+    # databases that were created before this column was introduced.
+    # ---------------------------------------------------------------------------
+    existing_leads_columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(leads)").fetchall()
+    }
+    if "ghl_contact_id" not in existing_leads_columns:
+        conn.execute("ALTER TABLE leads ADD COLUMN ghl_contact_id TEXT")
+        conn.commit()
