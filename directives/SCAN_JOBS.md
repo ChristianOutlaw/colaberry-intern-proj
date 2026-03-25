@@ -43,8 +43,20 @@ states. They do not dispatch outreach, mutate lead state, or enqueue actions.
 - **Source:** `execution/scans/find_completion_finalization_leads.py`
 - **Worker:** `services/worker/run_completion_finalization_scan.py`
 - **Selection rule:** `course_state.started_at IS NOT NULL` + `course_state.completion_pct >= 100`
-- **Returns:** `lead_id, name, email, phone, completion_pct, started_at, last_activity_at, current_section`
+- **Returns:** `lead_id, name, email, phone, completion_pct, started_at, last_activity_at, current_section, score`
 - **Intended action:** `FINALIZE_LEAD_SCORE` — read-only metadata only; does not execute finalization
+- **Worker summary includes:**
+  - `scan_name`, `count`, `lead_ids`, `limit_used`
+  - `score_summary`:
+    ```python
+    {
+        "HAS_SCORE":     int,   # rows where score is numeric
+        "MISSING_SCORE": int,   # rows where score is None
+    }
+    ```
+  - `score_summary` is derived from each returned row's `score` field
+  - With current implementation, rows return `score=None` until safe score enrichment (requiring `invited_sent`, quiz data, and reflection data) is added in a future step
+  - This metadata is read-only and does not execute finalization
 - **Notes:**
   - Read-only candidate scan only
   - No persistent finalized flag exists in the current schema
@@ -247,7 +259,7 @@ The following test files cover this layer:
 | `tests/test_requeue_failed_action.py` | FAILED → NEEDS_SYNC transition, guard cases |
 | `tests/test_failed_scan_requeue_integration.py` | Scan → requeue boundary end-to-end |
 | `tests/test_find_completion_finalization_leads.py` | SQL selection for COMPLETION_FINALIZATION_SCAN (completed leads only, limit) |
-| `tests/test_run_completion_finalization_scan.py` | Worker summary shape, exclusion of incomplete leads, limit |
+| `tests/test_run_completion_finalization_scan.py` | Worker summary shape, exclusion of incomplete leads, limit, score_summary values |
 | `tests/test_run_all_scans.py` | Aggregator shape (5 scans), limit propagation, fixed scan order, intended_action presence, generated_at parseability, action_summary including FINALIZE_LEAD_SCORE |
 | `tests/test_export_scan_snapshot.py` | Snapshot shape, filter by scan_name, filter by intended_action, filtered scan_count behavior |
 
