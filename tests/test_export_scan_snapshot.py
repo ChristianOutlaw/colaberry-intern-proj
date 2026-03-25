@@ -61,5 +61,34 @@ class TestExportScanSnapshot(unittest.TestCase):
         self.assertEqual(snapshot_names, reference_names)
 
 
+    # ------------------------------------------------------------------
+    # T3 — filter by scan_name
+    # ------------------------------------------------------------------
+    def test_t3_filter_by_scan_name(self):
+        """T3: scan_name filter returns only matching entry."""
+        snapshot = export_scan_snapshot(scan_name="NO_START_SCAN", db_path=TEST_DB_PATH)
+        self.assertEqual(snapshot["scan_count"], 1)
+        self.assertEqual(snapshot["scans"][0]["scan_name"], "NO_START_SCAN")
+
+    # ------------------------------------------------------------------
+    # T4 — filter by intended_action (unique)
+    # ------------------------------------------------------------------
+    def test_t4_filter_by_intended_action_unique(self):
+        """T4: intended_action=REQUEUE_FAILED_ACTION returns exactly one entry."""
+        snapshot = export_scan_snapshot(intended_action="REQUEUE_FAILED_ACTION", db_path=TEST_DB_PATH)
+        self.assertEqual(snapshot["scan_count"], 1)
+        self.assertEqual(snapshot["scans"][0]["intended_action"], "REQUEUE_FAILED_ACTION")
+
+    # ------------------------------------------------------------------
+    # T5 — filter by intended_action (multiple matches)
+    # ------------------------------------------------------------------
+    def test_t5_filter_by_intended_action_multiple(self):
+        """T5: intended_action=NUDGE_PROGRESS returns 2 entries with current scans."""
+        snapshot = export_scan_snapshot(intended_action="NUDGE_PROGRESS", db_path=TEST_DB_PATH)
+        self.assertEqual(snapshot["scan_count"], 2)
+        for s in snapshot["scans"]:
+            self.assertEqual(s["intended_action"], "NUDGE_PROGRESS")
+
+
 if __name__ == "__main__":
     unittest.main()
