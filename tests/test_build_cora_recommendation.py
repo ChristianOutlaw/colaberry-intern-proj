@@ -219,8 +219,8 @@ class TestBuildCoraRecommendation(unittest.TestCase):
     # ------------------------------------------------------------------
     # T10 — Completed course, not hot → NO_ACTION
     # ------------------------------------------------------------------
-    def test_t10_completed_course_placeholder(self):
-        """T10: completion=100, not hot → COURSE_COMPLETED placeholder, LOW priority, no channel."""
+    def test_t10_completed_course_warm_review(self):
+        """T10: completion=100, not hot → WARM_REVIEW, LOW priority, no channel."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
@@ -228,10 +228,25 @@ class TestBuildCoraRecommendation(unittest.TestCase):
             last_activity_at=_iso(2),
             hot_signal="NOT_HOT",
         )
-        self.assertEqual(result["event_type"],          "COURSE_COMPLETED")
+        self.assertEqual(result["event_type"],          "WARM_REVIEW")
         self.assertEqual(result["priority"],            PRIORITY_LOW)
         self.assertIsNone(result["recommended_channel"])
         self.assertIn("COURSE_COMPLETE", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # T20 — Completed + not hot → WARM_REVIEW (never NO_ACTION or COURSE_COMPLETED)
+    # ------------------------------------------------------------------
+    def test_t20_completed_not_hot_is_warm_review(self):
+        """T20: completion=100, hot_signal=NOT_HOT → WARM_REVIEW, not NO_ACTION."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(1),
+            hot_signal="NOT_HOT",
+        )
+        self.assertEqual(result["event_type"], "WARM_REVIEW")
+        self.assertNotEqual(result["event_type"], EVENT_NO_ACTION)
 
     # ------------------------------------------------------------------
     # T11 — Output shape is always complete
