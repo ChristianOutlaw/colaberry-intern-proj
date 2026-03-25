@@ -1,423 +1,134 @@
 """
 tests/test_process_one_cory_sync_record.py
 
-Unit tests for execution/events/process_one_cory_sync_record.py.
+Focused unit tests for execution/events/process_one_cory_sync_record.py.
+Covers five edge cases not already exercised by test_run_cory_sync.py:
 
-Fast, deterministic, no network.  `now` always injected.
-Isolated SQLite file created and removed per test.
+    P4  — ghl mode, ghl_contact_id is NULL → NO_GHL_CONTACT_ID, row stays NEEDS_SYNC
+    P5  — ghl mode, ghl_contact_id is ""   → NO_GHL_CONTACT_ID, row stays NEEDS_SYNC
+    P6  — log_sink dispatcher raises       → row transitions to FAILED
+    P7  — webhook dispatcher raises        → row transitions to FAILED
+    P10 — non-CORY destination row         → NO_PENDING (CORY_ prefix filter enforced)
 
-Scenarios covered:
-    T1  — no pending Cory rows -> NO_PENDING
-    T2  — one CORY_BOOKING pending row -> marked SENT, ok=True, processed=True
-    T3  — ignores non-Cory NEEDS_SYNC rows (destination="GHL") -> NO_PENDING
-    T4  — processes oldest Cory row first when multiple exist
-    T5  — response_json stored correctly on the SENT row
-    T6  — second call after processing -> NO_PENDING
-    T7  — explicit dispatch_mode="dry_run" behaves identically to default
-    T8  — dispatch_mode="log_sink" writes file and marks row SENT
-    T9  — unknown dispatch_mode raises ValueError before touching DB
-    T10 — log_sink failure marks row FAILED and returns ok=False
-    T11 — stale SENT row exists: worker still succeeds, exactly one SENT row remains
-    T12 — mark_sync_record_sent returns failure: worker returns ok=False
-    T13 — webhook mode, no URL -> safe no-op, row stays NEEDS_SYNC, ok=True
-    T14 — webhook mode, mocked 200 success -> row becomes SENT
-    T15 — webhook mode, HTTPError raised -> row becomes FAILED, ok=False
+Uses an isolated database (tmp/test_process_one_cory_sync.db) and never
+touches the application database (tmp/app.db).
+
+All tests inject a fixed NOW_STR; datetime.now() is never called.
 """
 
-import json
 import os
 import sys
-import tempfile
 import unittest
-import urllib.error
-from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from execution.db.sqlite import connect, init_db                                      # noqa: E402
-from execution.events.process_one_cory_sync_record import process_one_cory_sync_record  # noqa: E402
+from execution.db.sqlite import connect, init_db
+from execution.events.process_one_cory_sync_record import process_one_cory_sync_record
 
-TEST_DB_PATH = str(REPO_ROOT / "tmp" / "test_process_one_cory_sync_record.db")
+TEST_DB_PATH = str(REPO_ROOT / "tmp" / "test_process_one_cory_sync.db")
 
-LEAD_ID  = "CORY_WORKER_TEST_LEAD"
-NOW      = datetime(2026, 3, 22, 19, 0, 0, tzinfo=timezone.utc)
-NOW_STR  = NOW.isoformat()
-_SEED_TS = "2026-03-22T18:00:00+00:00"
+LEAD_ID  = "PROC_CORY_TEST_LEAD"
+NOW_STR  = "2026-03-25T12:00:00+00:00"
+_SEED_TS = "2026-03-25T10:00:00+00:00"
 
 
 class TestProcessOneCorySyncRecord(unittest.TestCase):
 
     def setUp(self):
         (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
-        self.conn = connect(TEST_DB_PATH)
-        init_db(self.conn)
-        self.conn.execute(
-            "INSERT OR IGNORE INTO leads (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (LEAD_ID, "Worker Test Lead", _SEED_TS, _SEED_TS),
+        conn = connect(TEST_DB_PATH)
+        init_db(conn)
+        conn.execute(
+            "INSERT OR IGNORE INTO leads (id, name, ghl_contact_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (LEAD_ID, "Process Cory Test Lead", None, _SEED_TS, _SEED_TS),
         )
-        self.conn.commit()
+        conn.commit()
+        conn.close()
 
     def tearDown(self):
-        self.conn.close()
         if os.path.exists(TEST_DB_PATH):
             os.remove(TEST_DB_PATH)
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _call(self) -> dict:
-        return process_one_cory_sync_record(db_path=TEST_DB_PATH, now=NOW_STR)
-
-    def _seed(self, destination: str, created_at: str = _SEED_TS,
-              lead_id: str = LEAD_ID) -> None:
-        reason = destination.replace("CORY_", "")
-        self.conn.execute(
-            """
-            INSERT INTO sync_records
-                (lead_id, destination, status, reason, created_at, updated_at)
-            VALUES (?, ?, 'NEEDS_SYNC', ?, ?, ?)
-            """,
-            (lead_id, destination, reason, created_at, created_at),
+    def _seed(self, destination: str = "CORY_BOOKING") -> None:
+        conn = connect(TEST_DB_PATH)
+        conn.execute(
+            "INSERT INTO sync_records (lead_id, destination, status, reason, created_at, updated_at) VALUES (?, ?, 'NEEDS_SYNC', ?, ?, ?)",
+            (LEAD_ID, destination, destination.replace("CORY_", ""), _SEED_TS, _SEED_TS),
         )
-        self.conn.commit()
+        conn.commit()
+        conn.close()
 
-    def _rows(self, lead_id: str = LEAD_ID) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM sync_records WHERE lead_id = ?", (lead_id,)
-        ).fetchall()
-        return [dict(r) for r in rows]
+    def _row_status(self, destination: str = "CORY_BOOKING") -> str | None:
+        conn = connect(TEST_DB_PATH)
+        row = conn.execute(
+            "SELECT status FROM sync_records WHERE lead_id = ? AND destination = ?",
+            (LEAD_ID, destination),
+        ).fetchone()
+        conn.close()
+        return row["status"] if row else None
 
-    # ------------------------------------------------------------------
-    # T1 — no pending Cory rows -> NO_PENDING
-    # ------------------------------------------------------------------
-    def test_no_pending_returns_no_pending(self):
-        result = self._call()
+    def _call(self, dispatch_mode: str = "dry_run", **kwargs) -> dict:
+        return process_one_cory_sync_record(
+            db_path=TEST_DB_PATH,
+            now=NOW_STR,
+            dispatch_mode=dispatch_mode,
+            **kwargs,
+        )
 
-        self.assertTrue(result["ok"])
-        self.assertFalse(result["processed"])
-        self.assertEqual(result["reason"], "NO_PENDING")
-
-    # ------------------------------------------------------------------
-    # T2 — one CORY_BOOKING pending row -> marked SENT
-    # ------------------------------------------------------------------
-    def test_cory_booking_row_is_marked_sent(self):
+    def test_ghl_missing_contact_id_returns_error(self):
         self._seed("CORY_BOOKING")
-
-        result = self._call()
-
-        self.assertTrue(result["ok"])
-        self.assertTrue(result["processed"])
+        result = self._call(dispatch_mode="ghl", ghl_api_url="https://example.invalid/ghl")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "NO_GHL_CONTACT_ID")
         self.assertEqual(result["destination"], "CORY_BOOKING")
-        self.assertIn("sync_record_id", result)
+        self.assertEqual(self._row_status("CORY_BOOKING"), "NEEDS_SYNC")
 
-        rows = self._rows()
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["status"], "SENT")
-
-    # ------------------------------------------------------------------
-    # T3 — non-Cory NEEDS_SYNC rows are ignored
-    # ------------------------------------------------------------------
-    def test_non_cory_rows_are_ignored(self):
-        # Seed a GHL row — must not be touched.
-        self.conn.execute(
-            """
-            INSERT INTO sync_records
-                (lead_id, destination, status, reason, created_at, updated_at)
-            VALUES (?, 'GHL', 'NEEDS_SYNC', 'HOT_ENGAGED', ?, ?)
-            """,
-            (LEAD_ID, _SEED_TS, _SEED_TS),
-        )
-        self.conn.commit()
-
-        result = self._call()
-
-        self.assertTrue(result["ok"])
-        self.assertFalse(result["processed"])
-        self.assertEqual(result["reason"], "NO_PENDING")
-
-        # GHL row must remain NEEDS_SYNC
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "NEEDS_SYNC")
-        self.assertEqual(rows[0]["destination"], "GHL")
-
-    # ------------------------------------------------------------------
-    # T4 — oldest Cory row is processed first
-    # ------------------------------------------------------------------
-    def test_oldest_cory_row_processed_first(self):
-        # CORY_NUDGE seeded earlier → must be picked first
-        self._seed("CORY_NUDGE",   created_at="2026-03-22T10:00:00+00:00")
-        self._seed("CORY_BOOKING", created_at="2026-03-22T11:00:00+00:00")
-
-        result = self._call()
-
-        self.assertTrue(result["processed"])
-        self.assertEqual(result["destination"], "CORY_NUDGE")
-
-        # Only the older row should be SENT; the newer one stays NEEDS_SYNC
-        rows = sorted(self._rows(), key=lambda r: r["destination"])
-        sent_row   = next(r for r in rows if r["destination"] == "CORY_NUDGE")
-        pending_row = next(r for r in rows if r["destination"] == "CORY_BOOKING")
-        self.assertEqual(sent_row["status"],    "SENT")
-        self.assertEqual(pending_row["status"], "NEEDS_SYNC")
-
-    # ------------------------------------------------------------------
-    # T5 — response_json stored correctly on SENT row
-    # ------------------------------------------------------------------
-    def test_response_json_stored_on_sent_row(self):
+    def test_ghl_empty_string_contact_id_returns_error(self):
+        conn = connect(TEST_DB_PATH)
+        conn.execute("UPDATE leads SET ghl_contact_id = ? WHERE id = ?", ("", LEAD_ID))
+        conn.commit()
+        conn.close()
         self._seed("CORY_BOOKING")
+        result = self._call(dispatch_mode="ghl", ghl_api_url="https://example.invalid/ghl")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "NO_GHL_CONTACT_ID")
+        self.assertEqual(self._row_status("CORY_BOOKING"), "NEEDS_SYNC")
 
-        self._call()
-
-        rows = self._rows()
-        self.assertEqual(len(rows), 1)
-        stored = json.loads(rows[0]["response_json"])
-        self.assertFalse(stored["dispatched"])
-        self.assertEqual(stored["mode"],        "dry_run")
-        self.assertEqual(stored["destination"], "CORY_BOOKING")
-
-    # ------------------------------------------------------------------
-    # T6 — second call after processing -> NO_PENDING
-    # ------------------------------------------------------------------
-    def test_second_call_after_processing_returns_no_pending(self):
+    def test_log_sink_exception_marks_failed(self):
         self._seed("CORY_BOOKING")
-
-        first  = self._call()
-        second = self._call()
-
-        self.assertTrue(first["processed"])
-        self.assertFalse(second["processed"])
-        self.assertEqual(second["reason"], "NO_PENDING")
-
-    # ------------------------------------------------------------------
-    # T7 — explicit dispatch_mode="dry_run" behaves identically to default
-    # ------------------------------------------------------------------
-    def test_explicit_dry_run_mode_behaves_as_default(self):
-        self._seed("CORY_BOOKING")
-
-        result = process_one_cory_sync_record(
-            db_path=TEST_DB_PATH, now=NOW_STR, dispatch_mode="dry_run"
-        )
-
-        self.assertTrue(result["ok"])
-        self.assertTrue(result["processed"])
-
-        rows = self._rows()
-        stored = json.loads(rows[0]["response_json"])
-        self.assertFalse(stored["dispatched"])
-        self.assertEqual(stored["mode"], "dry_run")
-
-    # ------------------------------------------------------------------
-    # T8 — dispatch_mode="log_sink" writes file and marks row SENT
-    # ------------------------------------------------------------------
-    def test_log_sink_mode_writes_file_and_marks_sent(self):
-        self._seed("CORY_BOOKING")
-        tmpdir = tempfile.mkdtemp()
-
-        try:
-            result = process_one_cory_sync_record(
-                db_path=TEST_DB_PATH, now=NOW_STR,
-                dispatch_mode="log_sink", log_dir=tmpdir,
-            )
-
-            # Return value
-            self.assertTrue(result["ok"])
-            self.assertTrue(result["processed"])
-            self.assertEqual(result["destination"], "CORY_BOOKING")
-
-            # Row is SENT
-            rows = self._rows()
-            self.assertEqual(rows[0]["status"], "SENT")
-
-            # response_json stores the log_sink dispatcher result
-            stored = json.loads(rows[0]["response_json"])
-            self.assertTrue(stored["dispatched"])
-            self.assertEqual(stored["mode"], "log_sink")
-            self.assertIn("path", stored)
-
-            # The file actually exists on disk
-            self.assertTrue(os.path.isfile(stored["path"]))
-
-        finally:
-            import shutil
-            shutil.rmtree(tmpdir, ignore_errors=True)
-
-    # ------------------------------------------------------------------
-    # T9 — unknown dispatch_mode raises ValueError before touching DB
-    # ------------------------------------------------------------------
-    def test_unknown_dispatch_mode_raises_value_error(self):
-        self._seed("CORY_BOOKING")
-
-        with self.assertRaises(ValueError) as ctx:
-            process_one_cory_sync_record(
-                db_path=TEST_DB_PATH, now=NOW_STR, dispatch_mode="carrier_pigeon"
-            )
-
-        self.assertIn("carrier_pigeon", str(ctx.exception))
-
-        # Row must remain untouched
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "NEEDS_SYNC")
-
-    # ------------------------------------------------------------------
-    # T10 — log_sink failure marks row FAILED and returns ok=False
-    # ------------------------------------------------------------------
-    def test_log_sink_failure_marks_row_failed(self):
-        self._seed("CORY_BOOKING")
-
         with patch(
             "execution.events.process_one_cory_sync_record.dispatch_cory_log_sink",
-            side_effect=OSError("disk full"),
+            side_effect=RuntimeError("disk full"),
         ):
-            result = process_one_cory_sync_record(
-                db_path=TEST_DB_PATH, now=NOW_STR, dispatch_mode="log_sink"
-            )
-
+            result = self._call(dispatch_mode="log_sink", log_dir="/tmp/unused")
         self.assertFalse(result["ok"])
-        self.assertIn("error", result)
         self.assertIn("disk full", result["error"])
-
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "FAILED")
-
-
-    # ------------------------------------------------------------------
-    # T11 — stale SENT row present: worker succeeds, only one SENT row remains
-    # ------------------------------------------------------------------
-    def test_stale_sent_row_does_not_block_re_dispatch(self):
-        """A pre-existing SENT row must not prevent the new NEEDS_SYNC row from
-        being promoted; exactly one SENT row must remain afterward."""
-        # Stale SENT row left over from a previous dispatch cycle.
-        self.conn.execute(
-            """
-            INSERT INTO sync_records
-                (lead_id, destination, status, reason, created_at, updated_at)
-            VALUES (?, 'CORY_BOOKING', 'SENT', 'HOT_LEAD_BOOKING', ?, ?)
-            """,
-            (LEAD_ID, _SEED_TS, _SEED_TS),
-        )
-        self.conn.commit()
-        # Fresh NEEDS_SYNC row — the one the worker should promote.
-        self._seed("CORY_BOOKING", created_at="2026-03-22T18:30:00+00:00")
-
-        result = self._call()
-
-        self.assertTrue(result["ok"],       f"Expected ok=True, got {result}")
-        self.assertTrue(result["processed"], f"Expected processed=True, got {result}")
         self.assertEqual(result["destination"], "CORY_BOOKING")
+        self.assertEqual(self._row_status("CORY_BOOKING"), "FAILED")
 
-        rows = self._rows()
-        sent_rows = [r for r in rows if r["status"] == "SENT"]
-        self.assertEqual(len(sent_rows), 1, "Exactly one SENT row must remain")
-        self.assertEqual(sent_rows[0]["response_json"] is not None, True,
-                         "Promoted row must have response_json set")
-
-    # ------------------------------------------------------------------
-    # T12 — mark_sync_record_sent returns failure: worker surfaces ok=False
-    # ------------------------------------------------------------------
-    def test_mark_sent_failure_is_surfaced_as_worker_failure(self):
-        """If mark_sync_record_sent returns a non-success result the worker
-        must return ok=False with an explanatory error."""
+    def test_webhook_exception_marks_failed(self):
         self._seed("CORY_BOOKING")
-
         with patch(
-            "execution.events.process_one_cory_sync_record.mark_sync_record_sent",
-            return_value={"ok": False, "reason": "RECORD_NOT_FOUND"},
+            "execution.events.process_one_cory_sync_record.dispatch_cory_webhook",
+            side_effect=RuntimeError("connection refused"),
         ):
-            result = process_one_cory_sync_record(
-                db_path=TEST_DB_PATH, now=NOW_STR
-            )
-
-        self.assertFalse(result["ok"],   f"Expected ok=False, got {result}")
-        self.assertIn("error",  result)
-        self.assertIn("sync_record_id", result)
-        # Row must remain NEEDS_SYNC — the mock prevented the update.
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "NEEDS_SYNC")
-
-
-    # ------------------------------------------------------------------
-    # T13 — webhook mode, no URL -> safe no-op, row stays NEEDS_SYNC
-    # ------------------------------------------------------------------
-    def test_webhook_no_url_is_safe_no_op(self):
-        """webhook mode with no URL must leave the row NEEDS_SYNC and return ok=True."""
-        self._seed("CORY_BOOKING")
-
-        result = process_one_cory_sync_record(
-            db_path=TEST_DB_PATH, now=NOW_STR,
-            dispatch_mode="webhook",
-            webhook_url=None,
-        )
-
-        self.assertTrue(result["ok"],        f"Expected ok=True, got {result}")
-        self.assertFalse(result["processed"], f"Expected processed=False, got {result}")
-        self.assertEqual(result["reason"], "NO_URL")
-
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "NEEDS_SYNC",
-                         "Row must remain NEEDS_SYNC after a no-op webhook call")
-
-    # ------------------------------------------------------------------
-    # T14 — webhook mode, mocked 200 -> row becomes SENT
-    # ------------------------------------------------------------------
-    def test_webhook_success_marks_row_sent(self):
-        """webhook mode with a mocked 200 response must mark the row SENT."""
-        self._seed("CORY_BOOKING")
-
-        mock_resp = MagicMock()
-        mock_resp.status = 200
-        mock_resp.__enter__ = lambda s: mock_resp
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
-        with patch("urllib.request.urlopen", return_value=mock_resp):
-            result = process_one_cory_sync_record(
-                db_path=TEST_DB_PATH, now=NOW_STR,
-                dispatch_mode="webhook",
-                webhook_url="https://example.invalid/cory",
-            )
-
-        self.assertTrue(result["ok"],        f"Expected ok=True, got {result}")
-        self.assertTrue(result["processed"],  f"Expected processed=True, got {result}")
+            result = self._call(dispatch_mode="webhook", webhook_url="https://example.invalid/cory")
+        self.assertFalse(result["ok"])
+        self.assertIn("connection refused", result["error"])
         self.assertEqual(result["destination"], "CORY_BOOKING")
+        self.assertEqual(self._row_status("CORY_BOOKING"), "FAILED")
 
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "SENT")
-        stored = json.loads(rows[0]["response_json"])
-        self.assertTrue(stored["dispatched"])
-        self.assertEqual(stored["mode"], "webhook")
-        self.assertEqual(stored["http_status"], 200)
-
-    # ------------------------------------------------------------------
-    # T15 — webhook mode, HTTPError raised -> row becomes FAILED
-    # ------------------------------------------------------------------
-    def test_webhook_http_error_marks_row_failed(self):
-        """webhook mode raising HTTPError must mark the row FAILED and return ok=False."""
-        self._seed("CORY_BOOKING")
-
-        error = urllib.error.HTTPError(
-            url="https://example.invalid/cory",
-            code=500,
-            msg="Internal Server Error",
-            hdrs=None,
-            fp=None,
-        )
-        with patch("urllib.request.urlopen", side_effect=error):
-            result = process_one_cory_sync_record(
-                db_path=TEST_DB_PATH, now=NOW_STR,
-                dispatch_mode="webhook",
-                webhook_url="https://example.invalid/cory",
-            )
-
-        self.assertFalse(result["ok"],   f"Expected ok=False, got {result}")
-        self.assertIn("error",  result)
-        self.assertIn("sync_record_id", result)
-
-        rows = self._rows()
-        self.assertEqual(rows[0]["status"], "FAILED")
+    def test_non_cory_row_ignored_returns_no_pending(self):
+        self._seed("GHL")
+        result = self._call(dispatch_mode="dry_run")
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["processed"])
+        self.assertEqual(result["reason"], "NO_PENDING")
+        self.assertEqual(self._row_status("GHL"), "NEEDS_SYNC")
 
 
 if __name__ == "__main__":
