@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 # Event type labels
 EVENT_SEND_INVITE    = "SEND_INVITE"
-EVENT_HOT_BOOKING    = "HOT_LEAD_BOOKING"
+EVENT_HOT_BOOKING    = "READY_FOR_BOOKING"
 EVENT_REENGAGE       = "REENGAGE_STALLED_LEAD"
 EVENT_NUDGE_PROGRESS = "NUDGE_PROGRESS"
 EVENT_NO_ACTION      = "NO_ACTION"
@@ -193,6 +193,12 @@ def build_cora_recommendation(
         )
         requires_finalization = False
 
+    # Final label — only meaningful at course completion.
+    if completion_percent is not None and completion_percent >= 100.0:
+        final_label = "FINAL_HOT" if hot_signal == "HOT" else "FINAL_WARM"
+    else:
+        final_label = None
+
     return {
         "lead_id":             lead_id,
         "event_type":          event_type,
@@ -208,6 +214,7 @@ def build_cora_recommendation(
             "temperature_score":     temperature_score,
             "upstream_reason_codes": list(reason_codes),
             "requires_finalization": requires_finalization,
+            "final_label":           final_label,
         },
         "status":   "READY",
         "built_at": built_at,
