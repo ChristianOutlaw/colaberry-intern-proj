@@ -9,6 +9,7 @@ import gc
 import os
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -52,6 +53,8 @@ class TestRunAllScans(unittest.TestCase):
         self.assertEqual(result["scan_count"], 4)
         self.assertEqual(result["limit_used"], 100)
         self.assertEqual(len(result["results"]), 4)
+        self.assertIn("generated_at", result)
+        self.assertIsInstance(result["generated_at"], str)
         for scan in result["results"]:
             self.assertIn("scan_name", scan)
             self.assertIn("count", scan)
@@ -67,6 +70,12 @@ class TestRunAllScans(unittest.TestCase):
         self.assertEqual(result["limit_used"], 5)
         for scan in result["results"]:
             self.assertEqual(scan["limit_used"], 5)
+
+    def test_t2b_generated_at_is_parseable_utc(self):
+        """T2b: generated_at parses as a UTC ISO-8601 timestamp."""
+        result = run_all_scans(db_path=TEST_DB_PATH)
+        ts = datetime.fromisoformat(result["generated_at"].replace("Z", "+00:00"))
+        self.assertEqual(ts.tzinfo, timezone.utc)
 
     # ------------------------------------------------------------------
     # T3 — scan_name order is fixed
