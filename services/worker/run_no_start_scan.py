@@ -8,6 +8,7 @@ No side effects — does not dispatch nudges, enqueue actions, or write to DB.
 """
 
 from execution.scans.find_no_start_leads import find_no_start_leads
+from execution.scans.scan_registry import NO_START_SCAN
 
 
 def run_no_start_scan(limit: int = 100, db_path: str | None = None) -> dict:
@@ -23,7 +24,7 @@ def run_no_start_scan(limit: int = 100, db_path: str | None = None) -> dict:
     """
     rows = find_no_start_leads(limit=limit, db_path=db_path)
     return {
-        "scan_name": "NO_START_SCAN",
+        "scan_name": NO_START_SCAN,
         "count":     len(rows),
         "lead_ids":  [row["lead_id"] for row in rows],
     }

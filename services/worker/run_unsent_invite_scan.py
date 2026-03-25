@@ -8,6 +8,7 @@ No side effects — does not dispatch invites, enqueue actions, or write to DB.
 """
 
 from execution.scans.find_unsent_invite_leads import find_unsent_invite_leads
+from execution.scans.scan_registry import UNSENT_INVITE_SCAN
 
 
 def run_unsent_invite_scan(limit: int = 100, db_path: str | None = None) -> dict:
@@ -23,7 +24,7 @@ def run_unsent_invite_scan(limit: int = 100, db_path: str | None = None) -> dict
     """
     rows = find_unsent_invite_leads(limit=limit, db_path=db_path)
     return {
-        "scan_name": "UNSENT_INVITE_SCAN",
+        "scan_name": UNSENT_INVITE_SCAN,
         "count":     len(rows),
         "lead_ids":  [row["lead_id"] for row in rows],
     }
