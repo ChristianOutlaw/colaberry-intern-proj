@@ -25,7 +25,14 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
     rows = find_completion_finalization_leads(limit=limit, db_path=db_path)
     score_summary = {"HAS_SCORE": 0, "MISSING_SCORE": 0}
     fallback_final_label_summary = {"FINAL_COLD": 0, "FINAL_WARM": 0, "FINAL_HOT": 0}
-    enrichment_summary = {"INVITE_SENT_TRUE": 0, "INVITE_SENT_FALSE": 0}
+    enrichment_summary = {
+        "INVITE_SENT_TRUE":        0,
+        "INVITE_SENT_FALSE":       0,
+        "QUIZ_DATA_PRESENT":       0,
+        "QUIZ_DATA_MISSING":       0,
+        "REFLECTION_DATA_PRESENT": 0,
+        "REFLECTION_DATA_MISSING": 0,
+    }
     for row in rows:
         if row["score"] is None:
             score_summary["MISSING_SCORE"] += 1
@@ -44,6 +51,14 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
             enrichment_summary["INVITE_SENT_TRUE"] += 1
         else:
             enrichment_summary["INVITE_SENT_FALSE"] += 1
+        if row["has_quiz_data"] is True:
+            enrichment_summary["QUIZ_DATA_PRESENT"] += 1
+        else:
+            enrichment_summary["QUIZ_DATA_MISSING"] += 1
+        if row["has_reflection_data"] is True:
+            enrichment_summary["REFLECTION_DATA_PRESENT"] += 1
+        else:
+            enrichment_summary["REFLECTION_DATA_MISSING"] += 1
     return {
         "scan_name":                   "COMPLETION_FINALIZATION_SCAN",
         "count":                       len(rows),

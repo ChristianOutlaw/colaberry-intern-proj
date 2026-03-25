@@ -93,8 +93,13 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(fls["FINAL_WARM"], 0)
         self.assertEqual(fls["FINAL_HOT"],  0)
         self.assertIn("enrichment_summary", result)
-        self.assertEqual(result["enrichment_summary"]["INVITE_SENT_TRUE"], 0)
-        self.assertEqual(result["enrichment_summary"]["INVITE_SENT_FALSE"], 0)
+        es = result["enrichment_summary"]
+        self.assertEqual(es["INVITE_SENT_TRUE"], 0)
+        self.assertEqual(es["INVITE_SENT_FALSE"], 0)
+        self.assertEqual(es["QUIZ_DATA_PRESENT"], 0)
+        self.assertEqual(es["QUIZ_DATA_MISSING"], 0)
+        self.assertEqual(es["REFLECTION_DATA_PRESENT"], 0)
+        self.assertEqual(es["REFLECTION_DATA_MISSING"], 0)
 
     # ------------------------------------------------------------------
     # T2 — one completed lead -> count 1 and correct lead_id
@@ -118,6 +123,11 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertIn("enrichment_summary", result)
         es = result["enrichment_summary"]
         self.assertEqual(es["INVITE_SENT_TRUE"] + es["INVITE_SENT_FALSE"], result["count"])
+        self.assertEqual(es["QUIZ_DATA_PRESENT"] + es["QUIZ_DATA_MISSING"], result["count"])
+        self.assertEqual(es["REFLECTION_DATA_PRESENT"] + es["REFLECTION_DATA_MISSING"], result["count"])
+        self.assertEqual(es["INVITE_SENT_FALSE"], 1)
+        self.assertEqual(es["QUIZ_DATA_MISSING"], 1)
+        self.assertEqual(es["REFLECTION_DATA_MISSING"], 1)
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded
@@ -161,6 +171,8 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         es = result["enrichment_summary"]
         self.assertEqual(es["INVITE_SENT_TRUE"], 1)
         self.assertEqual(es["INVITE_SENT_FALSE"], 0)
+        self.assertEqual(es["QUIZ_DATA_MISSING"], 1)
+        self.assertEqual(es["REFLECTION_DATA_MISSING"], 1)
 
 
 if __name__ == "__main__":
