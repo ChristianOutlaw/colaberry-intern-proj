@@ -53,4 +53,7 @@ def find_completion_finalization_leads(
     conn = connect(db_path)
     rows = conn.execute(_SQL, (limit,)).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    # score=None: computing a reliable score requires invited_sent, quiz data,
+    # and reflection data not available in this query. Deferred to a future
+    # enrichment step that can safely join those fields.
+    return [{**dict(row), "score": None} for row in rows]

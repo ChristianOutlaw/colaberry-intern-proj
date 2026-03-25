@@ -89,6 +89,8 @@ class TestFindCompletionFinalizationLeads(unittest.TestCase):
         self.assertEqual(result[0]["completion_pct"], 100.0)
         self.assertIn("started_at", result[0])
         self.assertIn("last_activity_at", result[0])
+        self.assertIn("score", result[0])
+        self.assertIsNone(result[0]["score"])
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded
