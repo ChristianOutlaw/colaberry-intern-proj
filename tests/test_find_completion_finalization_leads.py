@@ -102,6 +102,8 @@ class TestFindCompletionFinalizationLeads(unittest.TestCase):
         self.assertIn("last_activity_at", result[0])
         self.assertIn("score", result[0])
         self.assertIsNone(result[0]["score"])
+        self.assertIn("has_quiz_data", result[0])
+        self.assertIsNone(result[0]["has_quiz_data"])
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded

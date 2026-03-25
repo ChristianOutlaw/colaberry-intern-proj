@@ -60,4 +60,17 @@ def find_completion_finalization_leads(
     # score=None: computing a reliable score requires invited_sent, quiz data,
     # and reflection data not available in this query. Deferred to a future
     # enrichment step that can safely join those fields.
-    return [{**dict(row), "invite_sent": bool(row["invite_sent"]), "score": None} for row in rows]
+    #
+    # has_quiz_data=None: no quiz_scores or quiz_attempts table exists in the
+    # current schema. compute_lead_temperature accepts avg_quiz_score and
+    # avg_quiz_attempts as caller-supplied values but there is no DB table to
+    # query. Deferred until a quiz storage table is added to the schema.
+    return [
+        {
+            **dict(row),
+            "invite_sent":   bool(row["invite_sent"]),
+            "score":         None,
+            "has_quiz_data": None,
+        }
+        for row in rows
+    ]
