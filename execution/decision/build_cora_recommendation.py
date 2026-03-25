@@ -129,50 +129,60 @@ def build_cora_recommendation(
 
     # ------------------------------------------------------------------
     # Decision tree — evaluated in priority order; first match wins.
+    # Five rules; NUDGE_START_CLASS is no longer a top-level event —
+    # not-started leads fall through to NUDGE_PROGRESS (INVITED_NO_START).
     # See directives/CORA_RECOMMENDATION_EVENTS.md for rationale.
     # ------------------------------------------------------------------
 
     if not invite_sent:
+        # Rule 1 — no invite exists yet.
         event_type = EVENT_SEND_INVITE
         priority   = PRIORITY_LOW
         channel    = CHANNEL_EMAIL
         evt_codes  = ["NOT_INVITED"]
 
-    elif completion_percent is None or completion_percent == 0.0:
-        event_type = EVENT_NUDGE_START_CLASS
-        priority   = PRIORITY_MEDIUM
-        channel    = CHANNEL_EMAIL
-        evt_codes  = ["INVITED_NO_START"]
-
     elif hot_signal == "HOT":
-        # HOT signal takes precedence over staleness: an engaged lead
-        # needs a booking call, not a re-engagement sequence.
+        # Rule 2 — HOT signal takes precedence over staleness: an engaged
+        # lead needs a booking call, not a re-engagement sequence.
         event_type = EVENT_HOT_BOOKING
         priority   = PRIORITY_HIGH
         channel    = CHANNEL_CALL
         evt_codes  = ["HOT_SIGNAL_ACTIVE"]
 
-    elif completion_percent < 100.0 and (
-        days_inactive is None or days_inactive > STALL_DAYS
+    elif (
+        completion_percent is not None
+        and completion_percent > 0.0
+        and completion_percent < 100.0
+        and (days_inactive is None or days_inactive > STALL_DAYS)
     ):
+        # Rule 3 — started but stalled.  Guard requires completion_percent > 0
+        # so None / 0.0 (not-started) never reaches this branch, avoiding a
+        # TypeError on None < 100.0 comparisons.
         event_type = EVENT_REENGAGE
         priority   = PRIORITY_HIGH
         channel    = CHANNEL_CALL
         evt_codes  = ["ACTIVITY_STALLED"]
 
-    elif completion_percent < 100.0:
-        # Active learner: started, within STALL_DAYS, not hot.
-        event_type = EVENT_NUDGE_PROGRESS
-        priority   = PRIORITY_MEDIUM
-        channel    = CHANNEL_EMAIL
-        evt_codes  = ["ACTIVE_LEARNER"]
-
-    else:
-        # completion_percent == 100.0 and not hot — course is done.
+    elif completion_percent is not None and completion_percent >= 100.0:
+        # Rule 4 — course complete, hot signal not active.
         event_type = EVENT_NO_ACTION
         priority   = PRIORITY_LOW
         channel    = None
         evt_codes  = ["COURSE_COMPLETE"]
+
+    else:
+        # Rule 5 — NUDGE_PROGRESS: catch-all for all invited leads not matched
+        # above.  Covers two sub-states distinguished by reason_codes:
+        #   INVITED_NO_START  — completion_percent is None or 0.0 (not started)
+        #   ACTIVE_LEARNER    — 0 < completion_percent < 100, within STALL_DAYS
+        event_type = EVENT_NUDGE_PROGRESS
+        priority   = PRIORITY_MEDIUM
+        channel    = CHANNEL_EMAIL
+        evt_codes  = (
+            ["INVITED_NO_START"]
+            if completion_percent is None or completion_percent == 0.0
+            else ["ACTIVE_LEARNER"]
+        )
 
     return {
         "lead_id":             lead_id,

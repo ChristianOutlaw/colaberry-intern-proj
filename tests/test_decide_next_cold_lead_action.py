@@ -62,12 +62,12 @@ class TestDecideNextColdLeadAction(unittest.TestCase):
     # ------------------------------------------------------------------
     # Test 3 — invite sent but no progress recorded
     # ------------------------------------------------------------------
-    def test_nudge_start_class_when_invite_sent_but_no_progress(self):
-        """Must return NUDGE_START_CLASS when invite sent but course not started."""
+    def test_nudge_progress_when_invite_sent_but_no_progress(self):
+        """Must return NUDGE_PROGRESS when invite sent but course not started."""
         upsert_lead("L1", db_path=TEST_DB_PATH)
         mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
         action = decide_next_cold_lead_action("L1", db_path=TEST_DB_PATH)
-        self.assertEqual(action, "NUDGE_START_CLASS")
+        self.assertEqual(action, "NUDGE_PROGRESS")
 
     # ------------------------------------------------------------------
     # Test 4 — started but not complete

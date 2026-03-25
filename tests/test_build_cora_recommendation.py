@@ -26,7 +26,6 @@ from execution.decision.build_cora_recommendation import (  # noqa: E402
     EVENT_HOT_BOOKING,
     EVENT_NO_ACTION,
     EVENT_NUDGE_PROGRESS,
-    EVENT_NUDGE_START_CLASS,
     EVENT_REENGAGE,
     EVENT_SEND_INVITE,
     PRIORITY_HIGH,
@@ -78,10 +77,10 @@ class TestBuildCoraRecommendation(unittest.TestCase):
         self.assertIn("NOT_INVITED", result["reason_codes"])
 
     # ------------------------------------------------------------------
-    # T2 — Invited, completion None → NUDGE_START_CLASS
+    # T2 — Invited, completion None → NUDGE_PROGRESS (INVITED_NO_START)
     # ------------------------------------------------------------------
     def test_t2_invited_not_started_completion_none(self):
-        """T2: invited, completion_percent=None → NUDGE_START_CLASS."""
+        """T2: invited, completion_percent=None → NUDGE_PROGRESS with INVITED_NO_START."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
@@ -89,16 +88,16 @@ class TestBuildCoraRecommendation(unittest.TestCase):
             last_activity_at=None,
             hot_signal="NOT_HOT",
         )
-        self.assertEqual(result["event_type"],          EVENT_NUDGE_START_CLASS)
+        self.assertEqual(result["event_type"],          EVENT_NUDGE_PROGRESS)
         self.assertEqual(result["priority"],            PRIORITY_MEDIUM)
         self.assertEqual(result["recommended_channel"], CHANNEL_EMAIL)
         self.assertIn("INVITED_NO_START", result["reason_codes"])
 
     # ------------------------------------------------------------------
-    # T3 — Invited, completion 0.0 → NUDGE_START_CLASS
+    # T3 — Invited, completion 0.0 → NUDGE_PROGRESS (INVITED_NO_START)
     # ------------------------------------------------------------------
     def test_t3_invited_not_started_completion_zero(self):
-        """T3: invited, completion_percent=0.0 → NUDGE_START_CLASS (not started)."""
+        """T3: invited, completion_percent=0.0 → NUDGE_PROGRESS with INVITED_NO_START."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
@@ -106,7 +105,7 @@ class TestBuildCoraRecommendation(unittest.TestCase):
             last_activity_at=None,
             hot_signal="NOT_HOT",
         )
-        self.assertEqual(result["event_type"], EVENT_NUDGE_START_CLASS)
+        self.assertEqual(result["event_type"], EVENT_NUDGE_PROGRESS)
         self.assertIn("INVITED_NO_START", result["reason_codes"])
 
     # ------------------------------------------------------------------

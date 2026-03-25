@@ -20,8 +20,8 @@ def decide_next_cold_lead_action(
     Return values:
         "NO_LEAD"            — lead_id does not exist in the database.
         "SEND_INVITE"        — lead exists but no course invite has been sent.
-        "NUDGE_START_CLASS"  — invite sent but lead has not started the course.
-        "NUDGE_PROGRESS"     — lead has started but has not completed the course.
+        "NUDGE_PROGRESS"     — invite sent but lead has not started the course,
+                               OR lead has started but has not completed it.
         "READY_FOR_BOOKING"  — lead has completed the course (completion_pct >= 100).
 
     Args:
@@ -40,7 +40,7 @@ def decide_next_cold_lead_action(
     current_section = status["course_state"]["current_section"]
 
     if current_section is None:
-        return "NUDGE_START_CLASS"
+        return "NUDGE_PROGRESS"
 
     if completion_pct is not None and completion_pct < 100:
         return "NUDGE_PROGRESS"

@@ -74,17 +74,18 @@ class TestGetCoraRecommendation(unittest.TestCase):
         self.assertIn("NOT_INVITED", rec["reason_codes"])
 
     # ------------------------------------------------------------------
-    # T2 — invite sent, course not started → NUDGE_START_CLASS
+    # T2 — invite sent, course not started → NUDGE_PROGRESS (INVITED_NO_START)
     # ------------------------------------------------------------------
-    def test_nudge_start_class_when_invited_not_started(self):
+    def test_nudge_progress_when_invited_not_started(self):
         upsert_lead("L1", db_path=TEST_DB_PATH)
         mark_course_invite_sent("I1", "L1", db_path=TEST_DB_PATH)
 
         rec = get_cora_recommendation("L1", now=_NOW, db_path=TEST_DB_PATH)
 
-        self.assertEqual(rec["event_type"], "NUDGE_START_CLASS")
+        self.assertEqual(rec["event_type"], "NUDGE_PROGRESS")
         self.assertEqual(rec["priority"], "MEDIUM")
         self.assertEqual(rec["recommended_channel"], "EMAIL")
+        self.assertIn("INVITED_NO_START", rec["reason_codes"])
 
     # ------------------------------------------------------------------
     # T3 — hot signal active (invite + ≥25% + activity within 7 days)
