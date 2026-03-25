@@ -60,7 +60,8 @@ class TestRunAllScans(unittest.TestCase):
             "SEND_INVITE":           1,
             "NUDGE_PROGRESS":        2,
             "REQUEUE_FAILED_ACTION": 1,
-            "UNKNOWN":               1,
+            "FINALIZE_LEAD_SCORE":   1,
+            "UNKNOWN":               0,
         })
         for scan in result["results"]:
             self.assertIn("scan_name", scan)
@@ -98,11 +99,11 @@ class TestRunAllScans(unittest.TestCase):
             "NUDGE_PROGRESS",
             "REQUEUE_FAILED_ACTION",
             "NUDGE_PROGRESS",
-            None,   # COMPLETION_FINALIZATION_SCAN not yet mapped -> UNKNOWN
+            "FINALIZE_LEAD_SCORE",
         ])
         self.assertEqual(
             set(result["action_summary"].keys()),
-            {"SEND_INVITE", "NUDGE_PROGRESS", "REQUEUE_FAILED_ACTION", "UNKNOWN"},
+            {"SEND_INVITE", "NUDGE_PROGRESS", "REQUEUE_FAILED_ACTION", "FINALIZE_LEAD_SCORE", "UNKNOWN"},
         )
 
 

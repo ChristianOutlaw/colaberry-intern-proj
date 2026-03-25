@@ -29,6 +29,9 @@ class TestMapScanToIntendedAction(unittest.TestCase):
     def test_stale_progress_scan_maps_to_nudge_progress(self):
         self.assertEqual(map_scan_to_intended_action("STALE_PROGRESS_SCAN"), "NUDGE_PROGRESS")
 
+    def test_completion_finalization_scan_maps_to_finalize_lead_score(self):
+        self.assertEqual(map_scan_to_intended_action("COMPLETION_FINALIZATION_SCAN"), "FINALIZE_LEAD_SCORE")
+
     def test_unknown_scan_name_returns_none(self):
         self.assertIsNone(map_scan_to_intended_action("UNKNOWN_SCAN"))
 
