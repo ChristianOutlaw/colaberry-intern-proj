@@ -166,7 +166,9 @@ def build_cora_recommendation(
 
     elif completion_percent is not None and completion_percent >= 100.0:
         # Rule 4 — course complete, hot signal not active.
-        event_type = EVENT_NO_ACTION
+        # Placeholder: COURSE_COMPLETED signals that finalization is needed.
+        # FINALIZE_LEAD_SCORE → WARM_REVIEW / READY_FOR_BOOKING will replace this.
+        event_type = "COURSE_COMPLETED"
         priority   = PRIORITY_LOW
         channel    = None
         evt_codes  = ["COURSE_COMPLETE"]

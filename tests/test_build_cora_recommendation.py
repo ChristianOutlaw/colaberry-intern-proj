@@ -219,8 +219,8 @@ class TestBuildCoraRecommendation(unittest.TestCase):
     # ------------------------------------------------------------------
     # T10 — Completed course, not hot → NO_ACTION
     # ------------------------------------------------------------------
-    def test_t10_completed_course_no_action(self):
-        """T10: completion=100, not hot → NO_ACTION, LOW priority, no channel."""
+    def test_t10_completed_course_placeholder(self):
+        """T10: completion=100, not hot → COURSE_COMPLETED placeholder, LOW priority, no channel."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
@@ -228,7 +228,7 @@ class TestBuildCoraRecommendation(unittest.TestCase):
             last_activity_at=_iso(2),
             hot_signal="NOT_HOT",
         )
-        self.assertEqual(result["event_type"],          EVENT_NO_ACTION)
+        self.assertEqual(result["event_type"],          "COURSE_COMPLETED")
         self.assertEqual(result["priority"],            PRIORITY_LOW)
         self.assertIsNone(result["recommended_channel"])
         self.assertIn("COURSE_COMPLETE", result["reason_codes"])
