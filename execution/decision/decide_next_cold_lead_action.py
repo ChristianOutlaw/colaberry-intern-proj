@@ -37,12 +37,11 @@ def decide_next_cold_lead_action(
         return "SEND_INVITE"
 
     completion_pct = status["course_state"]["completion_pct"]
-    current_section = status["course_state"]["current_section"]
 
-    if current_section is None:
+    if completion_pct is None or completion_pct == 0.0:
         return "NUDGE_PROGRESS"
 
-    if completion_pct is not None and completion_pct < 100:
+    if completion_pct < 100:
         return "NUDGE_PROGRESS"
 
     return "READY_FOR_BOOKING"
