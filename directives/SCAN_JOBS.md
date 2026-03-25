@@ -57,6 +57,18 @@ states. They do not dispatch outreach, mutate lead state, or enqueue actions.
   - `score_summary` is derived from each returned row's `score` field
   - With current implementation, rows return `score=None` until safe score enrichment (requiring `invited_sent`, quiz data, and reflection data) is added in a future step
   - This metadata is read-only and does not execute finalization
+  - `fallback_final_label_summary`:
+    ```python
+    {
+        "FINAL_COLD": int,
+        "FINAL_WARM": int,
+        "FINAL_HOT":  int,
+    }
+    ```
+  - Derived from the same fallback logic used by `finalize_lead_score` when `score` is missing:
+    `hot_signal == "HOT"` → `FINAL_HOT`, otherwise → `FINAL_WARM`
+  - With the current scan row shape, candidates fall into `FINAL_WARM` because scan rows carry no `hot_signal` field and `score` is currently `None`; `FINAL_HOT` or `FINAL_COLD` become reachable once score or hot_signal enrichment is added
+  - Read-only metadata only — does not execute finalization or assign persistent final labels
 - **Notes:**
   - Read-only candidate scan only
   - No persistent finalized flag exists in the current schema
@@ -259,7 +271,7 @@ The following test files cover this layer:
 | `tests/test_requeue_failed_action.py` | FAILED → NEEDS_SYNC transition, guard cases |
 | `tests/test_failed_scan_requeue_integration.py` | Scan → requeue boundary end-to-end |
 | `tests/test_find_completion_finalization_leads.py` | SQL selection for COMPLETION_FINALIZATION_SCAN (completed leads only, limit) |
-| `tests/test_run_completion_finalization_scan.py` | Worker summary shape, exclusion of incomplete leads, limit, score_summary values |
+| `tests/test_run_completion_finalization_scan.py` | Worker summary shape, exclusion of incomplete leads, limit, score_summary values, fallback_final_label_summary counts |
 | `tests/test_run_all_scans.py` | Aggregator shape (5 scans), limit propagation, fixed scan order, intended_action presence, generated_at parseability, action_summary including FINALIZE_LEAD_SCORE |
 | `tests/test_export_scan_snapshot.py` | Snapshot shape, filter by scan_name, filter by intended_action, filtered scan_count behavior |
 
