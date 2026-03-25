@@ -39,28 +39,41 @@ states. They do not dispatch outreach, mutate lead state, or enqueue actions.
 - **Enrichment:** each row carries `stale_progress_threshold` (see Threshold Classifiers below)
 - **Summary field:** `threshold_counts` — counts by `INACTIVE_48H / INACTIVE_4D / INACTIVE_7D / NONE`
 
+### COMPLETION_FINALIZATION_SCAN
+- **Source:** `execution/scans/find_completion_finalization_leads.py`
+- **Worker:** `services/worker/run_completion_finalization_scan.py`
+- **Selection rule:** `course_state.started_at IS NOT NULL` + `course_state.completion_pct >= 100`
+- **Returns:** `lead_id, name, email, phone, completion_pct, started_at, last_activity_at, current_section`
+- **Intended action:** `FINALIZE_LEAD_SCORE` — read-only metadata only; does not execute finalization
+- **Notes:**
+  - Read-only candidate scan only
+  - No persistent finalized flag exists in the current schema
+  - No finalization execution happens in the scan or worker
+
 ---
 
 ## Aggregator Worker
 
 ### run_all_scans
 - **Worker:** `services/worker/run_all_scans.py`
-- Calls all four scan workers in fixed order and returns one combined summary.
+- Calls all five scan workers in fixed order and returns one combined summary.
 - Fixed result order:
   1. `UNSENT_INVITE_SCAN`
   2. `NO_START_SCAN`
   3. `FAILED_DISPATCH_RETRY_SCAN`
   4. `STALE_PROGRESS_SCAN`
+  5. `COMPLETION_FINALIZATION_SCAN`
 - **Summary shape:**
   ```python
   {
-      "scan_count":   4,
+      "scan_count":   5,
       "limit_used":   int,
       "generated_at": str,   # UTC ISO-8601 timestamp, e.g. "2026-03-25T12:00:00Z"
       "action_summary": {
           "SEND_INVITE":           int,
           "NUDGE_PROGRESS":        int,
           "REQUEUE_FAILED_ACTION": int,
+          "FINALIZE_LEAD_SCORE":   int,
           "UNKNOWN":               int,
       },
       "results": [ ... ],   # one entry per scan, in fixed order
@@ -195,7 +208,7 @@ These are **pure functions** — no DB access, no dispatch.
 
 - **Source:** `execution/scans/scan_registry.py`
 - Canonical constants: `UNSENT_INVITE_SCAN`, `NO_START_SCAN`,
-  `FAILED_DISPATCH_RETRY_SCAN`, `STALE_PROGRESS_SCAN`
+  `FAILED_DISPATCH_RETRY_SCAN`, `STALE_PROGRESS_SCAN`, `COMPLETION_FINALIZATION_SCAN`
 - Helper: `is_known_scan_name(name: str) -> bool`
 - All worker wrappers import scan names from this registry — no hardcoded strings.
 
@@ -233,7 +246,9 @@ The following test files cover this layer:
 | `tests/test_scan_worker_smoke.py` | Cross-worker smoke: all four workers importable and callable |
 | `tests/test_requeue_failed_action.py` | FAILED → NEEDS_SYNC transition, guard cases |
 | `tests/test_failed_scan_requeue_integration.py` | Scan → requeue boundary end-to-end |
-| `tests/test_run_all_scans.py` | Aggregator shape, limit propagation, fixed scan order, intended_action presence, generated_at parseability, action_summary shape and values |
+| `tests/test_find_completion_finalization_leads.py` | SQL selection for COMPLETION_FINALIZATION_SCAN (completed leads only, limit) |
+| `tests/test_run_completion_finalization_scan.py` | Worker summary shape, exclusion of incomplete leads, limit |
+| `tests/test_run_all_scans.py` | Aggregator shape (5 scans), limit propagation, fixed scan order, intended_action presence, generated_at parseability, action_summary including FINALIZE_LEAD_SCORE |
 | `tests/test_export_scan_snapshot.py` | Snapshot shape, filter by scan_name, filter by intended_action, filtered scan_count behavior |
 
 A change to scan selection logic, worker summary shape, threshold buckets, or
