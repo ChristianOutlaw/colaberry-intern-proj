@@ -57,9 +57,19 @@ states. They do not dispatch outreach, mutate lead state, or enqueue actions.
       "scan_count":   4,
       "limit_used":   int,
       "generated_at": str,   # UTC ISO-8601 timestamp, e.g. "2026-03-25T12:00:00Z"
-      "results":      [ ... ],   # one entry per scan, in fixed order
+      "action_summary": {
+          "SEND_INVITE":           int,
+          "NUDGE_PROGRESS":        int,
+          "REQUEUE_FAILED_ACTION": int,
+          "UNKNOWN":               int,
+      },
+      "results": [ ... ],   # one entry per scan, in fixed order
   }
   ```
+- **`action_summary` notes:**
+  - Derived from each nested result's `intended_action` field
+  - Counts scan result categories (one per scan), not leads or records
+  - Read-only metadata only — does not dispatch, enqueue, or retry anything
 - **Each nested result entry includes at minimum:**
   - `scan_name` — canonical constant from scan registry
   - `count` — number of qualifying rows returned
@@ -187,7 +197,7 @@ The following test files cover this layer:
 | `tests/test_scan_worker_smoke.py` | Cross-worker smoke: all four workers importable and callable |
 | `tests/test_requeue_failed_action.py` | FAILED → NEEDS_SYNC transition, guard cases |
 | `tests/test_failed_scan_requeue_integration.py` | Scan → requeue boundary end-to-end |
-| `tests/test_run_all_scans.py` | Aggregator shape, limit propagation, fixed scan order, intended_action presence, generated_at parseability |
+| `tests/test_run_all_scans.py` | Aggregator shape, limit propagation, fixed scan order, intended_action presence, generated_at parseability, action_summary shape and values |
 
 A change to scan selection logic, worker summary shape, threshold buckets, or
 requeue behavior must be accompanied by passing tests from the relevant files
