@@ -196,6 +196,9 @@ def build_cora_recommendation(
         requires_finalization = False
 
     # Final label — only meaningful at course completion.
+    # TODO: FINAL_COLD requires finalized scoring layer — temperature_signal is
+    #       pre-finalization (MODE B, reflection not scored); unsafe to emit
+    #       FINAL_COLD until finalize_lead_score produces a reliable signal.
     if completion_percent is not None and completion_percent >= 100.0:
         final_label = "FINAL_HOT" if hot_signal == "HOT" else "FINAL_WARM"
     else:
