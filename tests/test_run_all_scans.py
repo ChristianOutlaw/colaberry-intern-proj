@@ -55,6 +55,12 @@ class TestRunAllScans(unittest.TestCase):
         self.assertEqual(len(result["results"]), 4)
         self.assertIn("generated_at", result)
         self.assertIsInstance(result["generated_at"], str)
+        self.assertEqual(result["action_summary"], {
+            "SEND_INVITE":           1,
+            "NUDGE_PROGRESS":        2,
+            "REQUEUE_FAILED_ACTION": 1,
+            "UNKNOWN":               0,
+        })
         for scan in result["results"]:
             self.assertIn("scan_name", scan)
             self.assertIn("count", scan)
@@ -92,6 +98,10 @@ class TestRunAllScans(unittest.TestCase):
             "REQUEUE_FAILED_ACTION",
             "NUDGE_PROGRESS",
         ])
+        self.assertEqual(
+            set(result["action_summary"].keys()),
+            {"SEND_INVITE", "NUDGE_PROGRESS", "REQUEUE_FAILED_ACTION", "UNKNOWN"},
+        )
 
 
 if __name__ == "__main__":
