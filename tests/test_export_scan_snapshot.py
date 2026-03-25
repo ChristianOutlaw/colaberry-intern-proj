@@ -44,10 +44,17 @@ class TestExportScanSnapshot(unittest.TestCase):
         """T1: empty DB → correct type, scan_count, and presence of key fields."""
         snapshot = export_scan_snapshot(db_path=TEST_DB_PATH)
         self.assertEqual(snapshot["type"], "SCAN_SNAPSHOT")
-        self.assertEqual(snapshot["scan_count"], 4)
+        self.assertEqual(snapshot["scan_count"], 5)
         self.assertIn("generated_at", snapshot)
         self.assertIn("action_summary", snapshot)
-        self.assertEqual(len(snapshot["scans"]), 4)
+        self.assertEqual(len(snapshot["scans"]), 5)
+        self.assertEqual(snapshot["action_summary"], {
+            "SEND_INVITE":           1,
+            "NUDGE_PROGRESS":        2,
+            "REQUEUE_FAILED_ACTION": 1,
+            "FINALIZE_LEAD_SCORE":   1,
+            "UNKNOWN":               0,
+        })
 
     # ------------------------------------------------------------------
     # T2 — scans matches run_all_scans results
