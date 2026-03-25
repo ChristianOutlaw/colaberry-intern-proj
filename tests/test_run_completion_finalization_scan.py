@@ -76,6 +76,11 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertIn("score_summary", result)
         self.assertEqual(result["score_summary"]["HAS_SCORE"], 0)
         self.assertEqual(result["score_summary"]["MISSING_SCORE"], 0)
+        self.assertIn("fallback_final_label_summary", result)
+        fls = result["fallback_final_label_summary"]
+        self.assertEqual(fls["FINAL_COLD"], 0)
+        self.assertEqual(fls["FINAL_WARM"], 0)
+        self.assertEqual(fls["FINAL_HOT"],  0)
 
     # ------------------------------------------------------------------
     # T2 — one completed lead -> count 1 and correct lead_id
@@ -90,6 +95,12 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertIn("score_summary", result)
         self.assertEqual(result["score_summary"]["HAS_SCORE"] + result["score_summary"]["MISSING_SCORE"], result["count"])
         self.assertEqual(result["score_summary"]["MISSING_SCORE"], 1)
+        self.assertIn("fallback_final_label_summary", result)
+        fls = result["fallback_final_label_summary"]
+        self.assertEqual(sum(fls.values()), result["count"])
+        # scan rows have no hot_signal; current fallback lands all in FINAL_WARM
+        self.assertEqual(fls["FINAL_WARM"], 1)
+        self.assertEqual(fls["FINAL_HOT"],  0)
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded
@@ -115,6 +126,8 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(len(result["lead_ids"]), 2)
         self.assertEqual(result["limit_used"], 2)
         self.assertEqual(result["score_summary"]["HAS_SCORE"] + result["score_summary"]["MISSING_SCORE"], result["count"])
+        fls = result["fallback_final_label_summary"]
+        self.assertEqual(sum(fls.values()), result["count"])
 
 
 if __name__ == "__main__":
