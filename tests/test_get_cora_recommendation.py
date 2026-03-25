@@ -217,6 +217,14 @@ class TestGetCoraRecommendation(unittest.TestCase):
         self.assertGreaterEqual(payload["temperature_score"], 0)
         self.assertLessEqual(payload["temperature_score"], 100)
 
+        # upstream_reason_codes must include temperature component codes.
+        # QUIZ_UNKNOWN is always present when avg_quiz_score is None (not yet
+        # instrumented), making it a reliable sentinel for temperature codes.
+        self.assertIn(
+            "QUIZ_UNKNOWN", payload["upstream_reason_codes"],
+            "upstream_reason_codes must include temperature component codes",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

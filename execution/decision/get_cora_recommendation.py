@@ -81,10 +81,13 @@ def get_cora_recommendation(
         current_section=cs["current_section"],
     )
 
-    # hot_lead["reason"] is a single reason-code string in v1; wrap in list.
+    # upstream_reason_codes: hot-signal reason first (if present), then the
+    # full set of temperature component codes so Cora workers can see why
+    # the score is what it is without needing to re-run the scoring engine.
     reason_codes: list[str] = (
         [hot_lead["reason"]] if hot_lead.get("reason") else []
     )
+    reason_codes = reason_codes + temp_result["reason_codes"]
 
     return build_cora_recommendation(
         now=now,
