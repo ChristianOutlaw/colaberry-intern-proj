@@ -77,6 +77,42 @@ states. They do not dispatch outreach, mutate lead state, or enqueue actions.
   - `intended_action` — read-only metadata derived from `map_scan_to_intended_action`;
     does not dispatch or enqueue actions
 
+### export_scan_snapshot
+- **Worker:** `services/worker/export_scan_snapshot.py`
+- Calls `run_all_scans` once and returns results shaped for external consumption.
+- **Signature:**
+  ```python
+  def export_scan_snapshot(
+      limit: int = 100,
+      db_path: str | None = None,
+      scan_name: str | None = None,
+      intended_action: str | None = None,
+  ) -> dict
+  ```
+- **Optional filters:**
+  - `scan_name` — if provided, only entries where `entry["scan_name"] == scan_name` are kept
+  - `intended_action` — if provided, only entries where `entry["intended_action"] == intended_action` are kept
+  - Both filters apply when both are provided
+  - `scan_count` reflects the filtered number of scan entries
+  - `scans` reflects the filtered list
+  - `action_summary` remains unchanged (reflects the full unfiltered run)
+  - Filtering is read-only and does not dispatch, enqueue, or retry anything
+- **Snapshot shape:**
+  ```python
+  {
+      "type":           "SCAN_SNAPSHOT",
+      "generated_at":   str,   # UTC ISO-8601 timestamp
+      "scan_count":     int,   # filtered count
+      "action_summary": {      # unfiltered — reflects full run_all_scans output
+          "SEND_INVITE":           int,
+          "NUDGE_PROGRESS":        int,
+          "REQUEUE_FAILED_ACTION": int,
+          "UNKNOWN":               int,
+      },
+      "scans": [ ... ],        # filtered list of scan result entries
+  }
+  ```
+
 ---
 
 ## Worker Summary Shape (all individual workers)
@@ -198,6 +234,7 @@ The following test files cover this layer:
 | `tests/test_requeue_failed_action.py` | FAILED → NEEDS_SYNC transition, guard cases |
 | `tests/test_failed_scan_requeue_integration.py` | Scan → requeue boundary end-to-end |
 | `tests/test_run_all_scans.py` | Aggregator shape, limit propagation, fixed scan order, intended_action presence, generated_at parseability, action_summary shape and values |
+| `tests/test_export_scan_snapshot.py` | Snapshot shape, filter by scan_name, filter by intended_action, filtered scan_count behavior |
 
 A change to scan selection logic, worker summary shape, threshold buckets, or
 requeue behavior must be accompanied by passing tests from the relevant files
