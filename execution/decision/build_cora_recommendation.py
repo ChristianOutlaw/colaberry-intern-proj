@@ -17,12 +17,11 @@ from datetime import datetime, timezone
 # ---------------------------------------------------------------------------
 
 # Event type labels
-EVENT_SEND_INVITE       = "SEND_INVITE"
-EVENT_NUDGE_START_CLASS = "NUDGE_START_CLASS"
-EVENT_HOT_BOOKING       = "HOT_LEAD_BOOKING"
-EVENT_REENGAGE          = "REENGAGE_STALLED_LEAD"
-EVENT_NUDGE_PROGRESS    = "NUDGE_PROGRESS"
-EVENT_NO_ACTION         = "NO_ACTION"
+EVENT_SEND_INVITE    = "SEND_INVITE"
+EVENT_HOT_BOOKING    = "HOT_LEAD_BOOKING"
+EVENT_REENGAGE       = "REENGAGE_STALLED_LEAD"
+EVENT_NUDGE_PROGRESS = "NUDGE_PROGRESS"
+EVENT_NO_ACTION      = "NO_ACTION"
 
 # Priority tiers
 PRIORITY_HIGH   = "HIGH"
