@@ -52,6 +52,17 @@ def _seed_course_state(
     conn.close()
 
 
+def _seed_invite(lead_id: str, sent_at: str | None = _TS_CREATED) -> None:
+    conn = connect(TEST_DB_PATH)
+    conn.execute(
+        "INSERT INTO course_invites (id, lead_id, course_id, sent_at)"
+        " VALUES (?, ?, ?, ?)",
+        (f"inv-{lead_id}", lead_id, "FREE_INTRO_AI_V0", sent_at),
+    )
+    conn.commit()
+    conn.close()
+
+
 class TestFindCompletionFinalizationLeads(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -101,6 +112,29 @@ class TestFindCompletionFinalizationLeads(unittest.TestCase):
         _seed_course_state("lead-b", completion_pct=50.0)
         result = find_completion_finalization_leads(db_path=TEST_DB_PATH)
         self.assertEqual(result, [])
+
+    # ------------------------------------------------------------------
+    # T5 — completed lead with no invite -> invite_sent == False
+    # ------------------------------------------------------------------
+    def test_t5_no_invite_returns_invite_sent_false(self):
+        """T5: completed lead, no invite row -> invite_sent=False."""
+        _seed_lead("lead-c")
+        _seed_course_state("lead-c", completion_pct=100.0)
+        result = find_completion_finalization_leads(db_path=TEST_DB_PATH)
+        self.assertEqual(len(result), 1)
+        self.assertFalse(result[0]["invite_sent"])
+
+    # ------------------------------------------------------------------
+    # T6 — completed lead with sent invite -> invite_sent == True
+    # ------------------------------------------------------------------
+    def test_t6_sent_invite_returns_invite_sent_true(self):
+        """T6: completed lead with sent invite -> invite_sent=True."""
+        _seed_lead("lead-d")
+        _seed_course_state("lead-d", completion_pct=100.0)
+        _seed_invite("lead-d")
+        result = find_completion_finalization_leads(db_path=TEST_DB_PATH)
+        self.assertEqual(len(result), 1)
+        self.assertTrue(result[0]["invite_sent"])
 
     # ------------------------------------------------------------------
     # T4 — limit respected

@@ -22,7 +22,11 @@ _SQL = """
            cs.completion_pct,
            cs.started_at,
            cs.last_activity_at,
-           cs.current_section
+           cs.current_section,
+           CASE WHEN EXISTS (
+               SELECT 1 FROM course_invites ci
+               WHERE ci.lead_id = l.id AND ci.sent_at IS NOT NULL
+           ) THEN 1 ELSE 0 END AS invite_sent
     FROM   leads l
     JOIN   course_state cs ON cs.lead_id = l.id
     WHERE  cs.started_at IS NOT NULL
@@ -56,4 +60,4 @@ def find_completion_finalization_leads(
     # score=None: computing a reliable score requires invited_sent, quiz data,
     # and reflection data not available in this query. Deferred to a future
     # enrichment step that can safely join those fields.
-    return [{**dict(row), "score": None} for row in rows]
+    return [{**dict(row), "invite_sent": bool(row["invite_sent"]), "score": None} for row in rows]
