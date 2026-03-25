@@ -27,7 +27,7 @@ want to determine what Cora should do next. Inputs can come from `get_lead_statu
 | Field | Type | Description |
 |-------|------|-------------|
 | `lead_id` | `str` | Unique lead identifier (passed through) |
-| `event_type` | `str` | One of the six v1 event types (see below) |
+| `event_type` | `str` | One of the five v1 event types (see below) |
 | `priority` | `str` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` |
 | `reason_codes` | `list[str]` | Event-driving codes for this recommendation |
 | `recommended_channel` | `str \| None` | `"EMAIL"` \| `"CALL"` \| `None` |
@@ -42,11 +42,16 @@ want to determine what Cora should do next. Inputs can come from `get_lead_statu
 | Event Type | Trigger Condition | Priority | Channel |
 |------------|------------------|----------|---------|
 | `SEND_INVITE` | No course invite sent | `LOW` | `EMAIL` |
-| `NUDGE_START_CLASS` | Invited, course not started | `MEDIUM` | `EMAIL` |
 | `HOT_LEAD_BOOKING` | Hot signal active | `HIGH` | `CALL` |
-| `REENGAGE_STALLED_LEAD` | Started, inactive > 14 days | `HIGH` | `CALL` |
-| `NUDGE_PROGRESS` | In progress, recently active, not hot | `MEDIUM` | `EMAIL` |
+| `REENGAGE_STALLED_LEAD` | Started (`completion_percent > 0`), inactive > 14 days | `HIGH` | `CALL` |
+| `NUDGE_PROGRESS` | Invited; course not yet started **or** actively in progress, not hot | `MEDIUM` | `EMAIL` |
 | `NO_ACTION` | Course complete, not hot | `LOW` | `None` |
+
+> **Note — `NUDGE_START_CLASS` removed (v1 revision):** The no-start state
+> (invited, `completion_percent` is `None` or `0.0`) is no longer a separate
+> top-level event.  It is handled by `NUDGE_PROGRESS` with reason code
+> `INVITED_NO_START`.  Use `reason_codes` to distinguish not-started leads
+> from actively-progressing ones inside the same action family.
 
 ---
 
@@ -58,28 +63,28 @@ Rules are evaluated in this exact order. First match wins.
    - priority: `LOW`, channel: `EMAIL`
    - reason_codes: `["NOT_INVITED"]`
 
-2. **`NUDGE_START_CLASS`** — `invite_sent == True` AND `completion_percent` is `None`
-   or `0.0`
-   - priority: `MEDIUM`, channel: `EMAIL`
-   - reason_codes: `["INVITED_NO_START"]`
-
-3. **`HOT_LEAD_BOOKING`** — `hot_signal == "HOT"`
+2. **`HOT_LEAD_BOOKING`** — `hot_signal == "HOT"`
    - priority: `HIGH`, channel: `CALL`
    - reason_codes: `["HOT_SIGNAL_ACTIVE"]`
    - Note: takes precedence over REENGAGE even if activity is stale, because the
      hot signal already encodes the 7-day window.
 
-4. **`REENGAGE_STALLED_LEAD`** — `completion_percent > 0` AND `completion_percent < 100`
+3. **`REENGAGE_STALLED_LEAD`** — `completion_percent > 0` AND `completion_percent < 100`
    AND (`last_activity_at` is `None` OR days since last activity > `STALL_DAYS`)
    - priority: `HIGH`, channel: `CALL`
    - reason_codes: `["ACTIVITY_STALLED"]`
+   - **Guard:** this rule requires `completion_percent > 0`.  Leads whose
+     `completion_percent` is `None` or `0.0` fall through to `NUDGE_PROGRESS`.
 
-5. **`NUDGE_PROGRESS`** — `completion_percent > 0` AND `completion_percent < 100`
-   (activity within `STALL_DAYS` implied — rules 1–4 did not match)
+4. **`NUDGE_PROGRESS`** — catch-all for all invited leads not yet matched above
    - priority: `MEDIUM`, channel: `EMAIL`
-   - reason_codes: `["ACTIVE_LEARNER"]`
+   - Covers two sub-states, distinguished by `reason_codes`:
+     - **Not started** (`completion_percent` is `None` or `0.0`):
+       reason_codes: `["INVITED_NO_START"]`
+     - **Actively progressing** (`0 < completion_percent < 100`, within `STALL_DAYS`):
+       reason_codes: `["ACTIVE_LEARNER"]`
 
-6. **`NO_ACTION`** — all other cases (typically `completion_percent == 100`)
+5. **`NO_ACTION`** — `completion_percent == 100` (and hot signal not active)
    - priority: `LOW`, channel: `None`
    - reason_codes: `["COURSE_COMPLETE"]` or `["NO_QUALIFYING_STATE"]`
 
@@ -100,10 +105,10 @@ week of grace after the HOT window closes before escalating to a re-engagement c
 | Code | Emitted When |
 |------|-------------|
 | `NOT_INVITED` | No course invite exists |
-| `INVITED_NO_START` | Invite sent, no course progress |
+| `INVITED_NO_START` | Invite sent, `completion_percent` is `None` or `0.0` — sub-reason within `NUDGE_PROGRESS` |
 | `HOT_SIGNAL_ACTIVE` | Binary hot signal is `"HOT"` |
-| `ACTIVITY_STALLED` | Active learner with no recent activity |
-| `ACTIVE_LEARNER` | In-progress lead with recent activity |
+| `ACTIVITY_STALLED` | Started lead with no recent activity (> `STALL_DAYS`) |
+| `ACTIVE_LEARNER` | In-progress lead with recent activity — sub-reason within `NUDGE_PROGRESS` |
 | `COURSE_COMPLETE` | Completion is 100% |
 | `NO_QUALIFYING_STATE` | None of the above rules matched |
 
@@ -130,17 +135,17 @@ personalise or validate the outreach. It is read-only and never written to the D
 
 ## Test Matrix
 
-| # | invite_sent | completion_pct | hot_signal | days_inactive | Expected event_type |
-|---|-------------|----------------|------------|---------------|---------------------|
-| T1 | False | None | NOT_HOT | None | SEND_INVITE |
-| T2 | True | None | NOT_HOT | None | NUDGE_START_CLASS |
-| T3 | True | 0.0 | NOT_HOT | None | NUDGE_START_CLASS |
-| T4 | True | 33.0 | HOT | 9 | HOT_LEAD_BOOKING |
-| T5 | True | 33.0 | NOT_HOT | 20 | REENGAGE_STALLED_LEAD |
-| T6 | True | 33.0 | NOT_HOT | None | REENGAGE_STALLED_LEAD |
-| T7 | True | 33.0 | NOT_HOT | 5 | NUDGE_PROGRESS |
-| T8 | True | 100.0 | NOT_HOT | 2 | NO_ACTION |
-| T9 | True | 90.0 | HOT | 25 | HOT_LEAD_BOOKING (HOT beats stale) |
+| # | invite_sent | completion_pct | hot_signal | days_inactive | Expected event_type | reason_code |
+|---|-------------|----------------|------------|---------------|---------------------|-------------|
+| T1 | False | None | NOT_HOT | None | SEND_INVITE | NOT_INVITED |
+| T2 | True | None | NOT_HOT | None | NUDGE_PROGRESS | INVITED_NO_START |
+| T3 | True | 0.0 | NOT_HOT | None | NUDGE_PROGRESS | INVITED_NO_START |
+| T4 | True | 33.0 | HOT | 9 | HOT_LEAD_BOOKING | HOT_SIGNAL_ACTIVE |
+| T5 | True | 33.0 | NOT_HOT | 20 | REENGAGE_STALLED_LEAD | ACTIVITY_STALLED |
+| T6 | True | 33.0 | NOT_HOT | None | REENGAGE_STALLED_LEAD | ACTIVITY_STALLED |
+| T7 | True | 33.0 | NOT_HOT | 5 | NUDGE_PROGRESS | ACTIVE_LEARNER |
+| T8 | True | 100.0 | NOT_HOT | 2 | NO_ACTION | COURSE_COMPLETE |
+| T9 | True | 90.0 | HOT | 25 | HOT_LEAD_BOOKING | HOT_SIGNAL_ACTIVE (HOT beats stale) |
 
 ---
 
