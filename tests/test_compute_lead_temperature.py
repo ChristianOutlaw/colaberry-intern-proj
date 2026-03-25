@@ -192,10 +192,11 @@ class TestComputeLeadTemperature(unittest.TestCase):
         # completion: int(70 * 40/100) = 28
         # recency:    40 days > 30 → 0 (ACTIVITY_DORMANT)
         # quiz:       int(75 * 20/100) = 15
-        # reflection: MEDIUM → 9
+        # reflection: MEDIUM → 0 (MODE B: not scored)
         # retry:      0
-        # raw = 52 → WARM
-        # Without stale: 28+25+15+9 = 77 → HOT — confirms dormancy matters
+        # velocity:   no started_at → 5 (VELOCITY_UNKNOWN)
+        # raw = 28+0+15+0+5 = 48 → WARM
+        # Without stale: 28+25+15+0+5 = 73 → HOT — confirms dormancy matters
         result = compute_lead_temperature(
             now=_NOW,
             invited_sent=True,
@@ -230,10 +231,11 @@ class TestComputeLeadTemperature(unittest.TestCase):
         # completion: int(65 * 40/100) = 26
         # recency:    4 days ≤ 7 → 25
         # quiz:       int(70 * 20/100) = 14
-        # reflection: MEDIUM → 9
+        # reflection: MEDIUM → 0 (MODE B: not scored)
         # retry:      4.5 > 3.5 → -15 (RETRY_HIGH)
-        # raw = 26+25+14+9-15 = 59 → WARM
-        # Without penalty: 74 → HOT
+        # velocity:   no started_at → 5 (VELOCITY_UNKNOWN)
+        # raw = 26+25+14+0+5-15 = 55 → WARM
+        # Without penalty: 26+25+14+0+5 = 70 → HOT
         result = compute_lead_temperature(
             now=_NOW,
             invited_sent=True,
@@ -265,13 +267,14 @@ class TestComputeLeadTemperature(unittest.TestCase):
     # T8 — HIGH vs LOW reflection tips the HOT/WARM boundary
     # ------------------------------------------------------------------
     def test_t8_reflection_high_tips_to_hot(self):
-        """T8: HIGH reflection scores 15 vs LOW scores 3 — 12-pt swing changes classification."""
+        """T8: MODE B — reflection not scored; HIGH and LOW both yield same score (WARM)."""
         # completion: int(55 * 40/100) = 22
         # recency:    4 days → 25
         # quiz:       int(70 * 20/100) = 14
         # velocity:   no started_at → 5 (VELOCITY_UNKNOWN)
-        # HIGH: 22+25+14+15+5 = 81 → HOT
-        # LOW:  22+25+14+3+5  = 69 → WARM
+        # reflection: 0 (MODE B: not scored regardless of confidence)
+        # HIGH: 22+25+14+0+5 = 66 → WARM
+        # LOW:  22+25+14+0+5 = 66 → WARM
         shared = dict(
             now=_NOW,
             invited_sent=True,
@@ -284,14 +287,14 @@ class TestComputeLeadTemperature(unittest.TestCase):
         result_high = compute_lead_temperature(**shared, reflection_confidence="HIGH")
         result_low  = compute_lead_temperature(**shared, reflection_confidence="LOW")
 
-        self.assertEqual(result_high["signal"], "HOT")
+        self.assertEqual(result_high["signal"], "WARM")
         self.assertIn("REFLECTION_HIGH", result_high["reason_codes"])
 
         self.assertEqual(result_low["signal"], "WARM")
         self.assertIn("REFLECTION_LOW", result_low["reason_codes"])
 
-        # Confirm the point spread is exactly 12 (15 - 3)
-        self.assertEqual(result_high["score"] - result_low["score"], 12)
+        # Confirm zero point spread under MODE B (scores are identical)
+        self.assertEqual(result_high["score"] - result_low["score"], 0)
 
     # ------------------------------------------------------------------
     # T9 — Output shape is always complete and valid
