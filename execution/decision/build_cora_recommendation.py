@@ -12,6 +12,8 @@ that a future Cora worker can consume to trigger the appropriate action.
 
 from datetime import datetime, timezone
 
+from execution.leads.finalize_lead_score import finalize_lead_score
+
 # ---------------------------------------------------------------------------
 # Locked constants — v1 (see directives/CORA_RECOMMENDATION_EVENTS.md)
 # ---------------------------------------------------------------------------
@@ -199,23 +201,28 @@ def build_cora_recommendation(
     else:
         final_label = None
 
+    result_payload = {
+        "completion_percent":    completion_percent,
+        "current_section":       current_section,
+        "days_inactive":         days_inactive,
+        "hot_signal":            hot_signal,
+        "temperature_signal":    temperature_signal,
+        "temperature_score":     temperature_score,
+        "upstream_reason_codes": list(reason_codes),
+        "requires_finalization": requires_finalization,
+        "final_label":           final_label,
+    }
+
+    if requires_finalization:
+        result_payload = finalize_lead_score(lead_id, result_payload)
+
     return {
         "lead_id":             lead_id,
         "event_type":          event_type,
         "priority":            priority,
         "reason_codes":        evt_codes,
         "recommended_channel": channel,
-        "payload": {
-            "completion_percent":    completion_percent,
-            "current_section":       current_section,
-            "days_inactive":         days_inactive,
-            "hot_signal":            hot_signal,
-            "temperature_signal":    temperature_signal,
-            "temperature_score":     temperature_score,
-            "upstream_reason_codes": list(reason_codes),
-            "requires_finalization": requires_finalization,
-            "final_label":           final_label,
-        },
-        "status":   "READY",
-        "built_at": built_at,
+        "payload":             result_payload,
+        "status":              "READY",
+        "built_at":            built_at,
     }

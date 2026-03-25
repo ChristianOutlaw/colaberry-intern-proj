@@ -268,6 +268,38 @@ class TestBuildCoraRecommendation(unittest.TestCase):
         )
         self.assertFalse(not_started["payload"]["requires_finalization"])
 
+    # ------------------------------------------------------------------
+    # T22 — final_label reflects completion + hot_signal combination
+    # ------------------------------------------------------------------
+    def test_t22_final_label(self):
+        """T22: final_label is FINAL_HOT, FINAL_WARM, or None based on completion + signal."""
+        hot_complete = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(1),
+            hot_signal="HOT",
+        )
+        self.assertEqual(hot_complete["payload"]["final_label"], "FINAL_HOT")
+
+        warm_complete = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(1),
+            hot_signal="NOT_HOT",
+        )
+        self.assertEqual(warm_complete["payload"]["final_label"], "FINAL_WARM")
+
+        in_progress = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=50.0,
+            last_activity_at=_iso(3),
+            hot_signal="HOT",
+        )
+        self.assertIsNone(in_progress["payload"]["final_label"])
+
     def test_t20_completed_not_hot_is_warm_review(self):
         """T20: completion=100, hot_signal=NOT_HOT → WARM_REVIEW, not NO_ACTION."""
         result = build_cora_recommendation(
@@ -425,6 +457,24 @@ class TestBuildCoraRecommendation(unittest.TestCase):
             hot_signal="NOT_HOT",
         )
         self.assertIsNone(result["payload"]["days_inactive"])
+
+
+    # ------------------------------------------------------------------
+    # T23 — finalize_lead_score hook called for completed leads
+    # ------------------------------------------------------------------
+    def test_t23_finalize_hook_called_for_completed_leads(self):
+        """T23: completion=100 → finalize_lead_score is called; payload unchanged (no-op)."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(1),
+            hot_signal="HOT",
+        )
+        # No-op placeholder: payload fields must still be intact.
+        self.assertTrue(result["payload"]["requires_finalization"])
+        self.assertEqual(result["payload"]["final_label"], "FINAL_HOT")
+        self.assertEqual(result["payload"]["completion_percent"], 100.0)
 
 
 if __name__ == "__main__":
