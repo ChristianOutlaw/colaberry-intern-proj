@@ -100,6 +100,12 @@ class TestFindNoStartLeads(unittest.TestCase):
         result = find_no_start_leads(db_path=TEST_DB_PATH)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["lead_id"], "lead-a")
+        self.assertIn("no_start_threshold", result[0])
+        threshold = result[0]["no_start_threshold"]
+        self.assertTrue(
+            threshold is None or threshold in ("NO_START_24H", "NO_START_72H", "NO_START_7D"),
+            f"unexpected threshold value: {threshold!r}",
+        )
 
     # ------------------------------------------------------------------
     # T3a — excluded once course_state.started_at is set
