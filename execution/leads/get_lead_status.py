@@ -59,7 +59,8 @@ def get_lead_status(
             return dict(_EMPTY_STATUS)  # shallow copy is safe — nested dicts are recreated below
 
         invite_count = conn.execute(
-            "SELECT COUNT(*) FROM course_invites WHERE lead_id = ?", (lead_id,)
+            "SELECT COUNT(*) FROM course_invites WHERE lead_id = ? AND sent_at IS NOT NULL",
+            (lead_id,),
         ).fetchone()[0]
 
         cs = conn.execute(

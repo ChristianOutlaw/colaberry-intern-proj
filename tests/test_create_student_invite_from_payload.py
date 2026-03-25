@@ -265,6 +265,32 @@ class TestCreateStudentInviteFromPayload(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_student_invite_from_payload(None, db_path=TEST_DB_PATH)  # type: ignore[arg-type]
 
+    # ------------------------------------------------------------------
+    # Test 11 — generation does not set sent_at (invite generated != sent)
+    # ------------------------------------------------------------------
+    def test_generation_does_not_set_sent_at(self):
+        """After create_student_invite_from_payload the invite row must have
+        sent_at = NULL.  Generating the link is not the same as sending it."""
+        create_student_invite_from_payload(
+            "L1",
+            invite_id="INV1",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT sent_at FROM course_invites WHERE id = ?", ("INV1",)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Invite row must exist after generation")
+        self.assertIsNone(
+            row["sent_at"],
+            "sent_at must be NULL after generation — invite generated != invite sent",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

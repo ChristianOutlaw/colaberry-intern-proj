@@ -240,6 +240,54 @@ class TestMarkCourseInviteSent(unittest.TestCase):
 
         self.assertEqual(count, 1, "Duplicate invite must not create a second enrollment row")
 
+    # ------------------------------------------------------------------
+    # Test 11 — marks an existing generated row (sent_at=NULL) as sent
+    # ------------------------------------------------------------------
+    def test_marks_existing_generated_row_as_sent(self):
+        """mark_course_invite_sent must UPDATE a generated row (sent_at=NULL) rather
+        than inserting a duplicate.  This covers the path where
+        create_student_invite_from_payload created the row first."""
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        # Simulate a generated (not yet sent) invite row: insert with sent_at = NULL.
+        conn = connect(TEST_DB_PATH)
+        try:
+            conn.execute(
+                "INSERT INTO course_invites (id, lead_id, course_id, token) "
+                "VALUES (?, ?, ?, ?)",
+                ("I1", "L1", "FREE_INTRO_AI_V0", "tok-existing"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Now record delivery.
+        mark_course_invite_sent(
+            "I1", "L1",
+            sent_at="2026-03-24T10:00:00+00:00",
+            channel="email",
+            db_path=TEST_DB_PATH,
+        )
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM course_invites WHERE id = ?", ("I1",)
+            ).fetchone()[0]
+            row = conn.execute(
+                "SELECT sent_at, channel, token FROM course_invites WHERE id = ?",
+                ("I1",),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertEqual(count, 1, "Must not create a duplicate row")
+        self.assertEqual(row["sent_at"], "2026-03-24T10:00:00+00:00",
+                         "sent_at must be set after mark_course_invite_sent")
+        self.assertEqual(row["channel"], "email")
+        self.assertEqual(row["token"], "tok-existing",
+                         "token must be preserved from the generated row")
+
 
 if __name__ == "__main__":
     unittest.main()

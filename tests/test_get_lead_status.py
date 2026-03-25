@@ -173,6 +173,38 @@ class TestGetLeadStatus(unittest.TestCase):
         self.assertIsNone(hl["score"])
         self.assertEqual(hl["reason"], "HOT_ENGAGED")
 
+    # ------------------------------------------------------------------
+    # Test 6 — invite row with sent_at=NULL does not count as invite_sent
+    # ------------------------------------------------------------------
+    def test_invite_sent_false_when_sent_at_is_null(self):
+        """invite_sent must be False when an invite row exists but sent_at is NULL.
+
+        A generated invite (sent_at = NULL) must not satisfy the invite gate —
+        only a delivered invite (sent_at IS NOT NULL) counts as sent.
+        """
+        upsert_lead("L1", db_path=TEST_DB_PATH)
+
+        conn = connect(TEST_DB_PATH)
+        try:
+            conn.execute(
+                "INSERT INTO course_invites (id, lead_id, sent_at, channel, metadata_json) "
+                "VALUES (?, ?, ?, ?, ?)",
+                ("I1", "L1", None, None, None),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        status = get_lead_status("L1", db_path=TEST_DB_PATH)
+
+        self.assertTrue(status["lead_exists"])
+        self.assertFalse(
+            status["invite_sent"],
+            "invite_sent must be False when the invite row has sent_at = NULL",
+        )
+        self.assertEqual(status["hot_lead"]["signal"], "NOT_HOT")
+        self.assertEqual(status["hot_lead"]["reason"], "NOT_INVITED")
+
 
 if __name__ == "__main__":
     unittest.main()

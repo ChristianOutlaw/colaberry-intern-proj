@@ -53,12 +53,25 @@ def mark_course_invite_sent(
         init_db(conn)
 
         existing = conn.execute(
-            "SELECT id FROM course_invites WHERE id = ?", (invite_id,)
+            "SELECT id, sent_at FROM course_invites WHERE id = ?", (invite_id,)
         ).fetchone()
 
         if existing is not None:
-            return  # idempotent — already recorded
+            if existing["sent_at"] is not None:
+                return  # already sent — idempotent no-op
 
+            # Row exists with sent_at = NULL (generated but not yet sent).
+            # Update to record delivery without creating a duplicate row.
+            if sent_at is None:
+                sent_at = _utc_now()
+            conn.execute(
+                "UPDATE course_invites SET sent_at = ?, channel = ? WHERE id = ?",
+                (sent_at, channel, invite_id),
+            )
+            conn.commit()
+            return
+
+        # No row exists yet — insert a complete sent invite row (direct-call path).
         if sent_at is None:
             sent_at = _utc_now()
 

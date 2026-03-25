@@ -12,7 +12,7 @@ Returns a dict ready for the caller to send as an invite link.
 import secrets
 
 from execution.db.sqlite import connect, init_db
-from execution.leads.mark_course_invite_sent import mark_course_invite_sent
+from execution.leads.upsert_enrollment import upsert_enrollment
 from execution.leads.upsert_lead import upsert_lead
 
 
@@ -68,19 +68,25 @@ def create_student_invite_from_payload(
     # Step 1: Ensure the lead row exists; update any supplied optional fields.
     upsert_lead(lead_id, phone=phone, email=email, name=name, db_path=db_path)
 
-    # Step 2: Create the invite.  mark_course_invite_sent calls upsert_enrollment
-    #         internally, so enrollment is guaranteed before this returns.
-    mark_course_invite_sent(
-        invite_id,
-        lead_id,
-        course_id=course_id,
-        db_path=db_path,
-    )
+    # Step 2: Ensure enrollment exists.
+    upsert_enrollment(lead_id, course_id=course_id, db_path=db_path)
 
-    # Step 3: Read the token back from the invite row (generated inside mark_course_invite_sent).
+    # Step 3: Insert an invite row with a token but without sent_at (generated, not yet
+    #         sent).  INSERT OR IGNORE preserves idempotency: re-calling with the same
+    #         invite_id skips the INSERT and the token read-back below returns the
+    #         existing value.
+    _token_candidate = secrets.token_urlsafe(32)
     conn = connect(db_path)
     try:
         init_db(conn)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO course_invites (id, lead_id, course_id, token)
+            VALUES (?, ?, ?, ?)
+            """,
+            (invite_id, lead_id, course_id, _token_candidate),
+        )
+        conn.commit()
         row = conn.execute(
             "SELECT token FROM course_invites WHERE id = ?",
             (invite_id,),
