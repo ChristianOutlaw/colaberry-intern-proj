@@ -101,7 +101,7 @@ def build_cora_recommendation(
     Returns:
         dict with keys:
             lead_id              (str)       Echoed from input.
-            event_type           (str)       One of the six v1 event types.
+            event_type           (str)       One of the five v1 event types.
             priority             (str)       "HIGH" | "MEDIUM" | "LOW"
             reason_codes         (list[str]) Event-driving codes for this recommendation.
             recommended_channel  (str|None)  "EMAIL" | "CALL" | None
