@@ -8,6 +8,7 @@ No side effects — does not finalize leads, dispatch actions, or write to DB.
 """
 
 from execution.scans.find_completion_finalization_leads import find_completion_finalization_leads
+from execution.leads.can_compute_final_score import can_compute_final_score
 
 
 def run_completion_finalization_scan(limit: int = 100, db_path: str | None = None) -> dict:
@@ -25,6 +26,7 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
     rows = find_completion_finalization_leads(limit=limit, db_path=db_path)
     score_summary = {"HAS_SCORE": 0, "MISSING_SCORE": 0}
     fallback_final_label_summary = {"FINAL_COLD": 0, "FINAL_WARM": 0, "FINAL_HOT": 0}
+    can_compute_score_summary = {"READY": 0, "NOT_READY": 0}
     enrichment_summary = {
         "INVITE_SENT_TRUE":        0,
         "INVITE_SENT_FALSE":       0,
@@ -59,6 +61,10 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
             enrichment_summary["REFLECTION_DATA_PRESENT"] += 1
         else:
             enrichment_summary["REFLECTION_DATA_MISSING"] += 1
+        if can_compute_final_score(row):
+            can_compute_score_summary["READY"] += 1
+        else:
+            can_compute_score_summary["NOT_READY"] += 1
     return {
         "scan_name":                   "COMPLETION_FINALIZATION_SCAN",
         "count":                       len(rows),
@@ -67,4 +73,5 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
         "score_summary":               score_summary,
         "fallback_final_label_summary": fallback_final_label_summary,
         "enrichment_summary":          enrichment_summary,
+        "can_compute_score_summary":   can_compute_score_summary,
     }

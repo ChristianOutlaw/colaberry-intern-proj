@@ -100,6 +100,9 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(es["QUIZ_DATA_MISSING"], 0)
         self.assertEqual(es["REFLECTION_DATA_PRESENT"], 0)
         self.assertEqual(es["REFLECTION_DATA_MISSING"], 0)
+        self.assertIn("can_compute_score_summary", result)
+        self.assertEqual(result["can_compute_score_summary"]["READY"], 0)
+        self.assertEqual(result["can_compute_score_summary"]["NOT_READY"], 0)
 
     # ------------------------------------------------------------------
     # T2 — one completed lead -> count 1 and correct lead_id
@@ -128,6 +131,11 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(es["INVITE_SENT_FALSE"], 1)
         self.assertEqual(es["QUIZ_DATA_MISSING"], 1)
         self.assertEqual(es["REFLECTION_DATA_MISSING"], 1)
+        self.assertIn("can_compute_score_summary", result)
+        ccs = result["can_compute_score_summary"]
+        self.assertEqual(ccs["READY"] + ccs["NOT_READY"], result["count"])
+        self.assertEqual(ccs["READY"], 0)
+        self.assertEqual(ccs["NOT_READY"], 1)
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded
@@ -173,6 +181,8 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(es["INVITE_SENT_FALSE"], 0)
         self.assertEqual(es["QUIZ_DATA_MISSING"], 1)
         self.assertEqual(es["REFLECTION_DATA_MISSING"], 1)
+        self.assertEqual(result["can_compute_score_summary"]["READY"], 0)
+        self.assertEqual(result["can_compute_score_summary"]["NOT_READY"], 1)
 
 
 if __name__ == "__main__":
