@@ -135,20 +135,22 @@ def build_cora_recommendation(
 
     if not invite_sent:
         # Rule 1 — no invite exists yet.
-        event_type = EVENT_SEND_INVITE
-        priority   = PRIORITY_LOW
-        channel    = CHANNEL_EMAIL
-        evt_codes  = ["NOT_INVITED"]
+        event_type            = EVENT_SEND_INVITE
+        priority              = PRIORITY_LOW
+        channel               = CHANNEL_EMAIL
+        evt_codes             = ["NOT_INVITED"]
+        requires_finalization = False
 
     elif hot_signal == "HOT" and completion_percent is not None and completion_percent >= 100.0:
         # Rule 2 — HOT signal AND full course completion → booking call.
         # Spec hard rule: READY_FOR_BOOKING requires 100% course completion.
         # A lead at partial completion with a hot signal is still in progress
         # and must be nudged, not booked.
-        event_type = EVENT_HOT_BOOKING
-        priority   = PRIORITY_HIGH
-        channel    = CHANNEL_CALL
-        evt_codes  = ["HOT_SIGNAL_ACTIVE"]
+        event_type            = EVENT_HOT_BOOKING
+        priority              = PRIORITY_HIGH
+        channel               = CHANNEL_CALL
+        evt_codes             = ["HOT_SIGNAL_ACTIVE"]
+        requires_finalization = True
 
     elif (
         completion_percent is not None
@@ -159,34 +161,37 @@ def build_cora_recommendation(
         # Rule 3 — started but stalled.  Guard requires completion_percent > 0
         # so None / 0.0 (not-started) never reaches this branch, avoiding a
         # TypeError on None < 100.0 comparisons.
-        event_type = EVENT_REENGAGE
-        priority   = PRIORITY_HIGH
-        channel    = CHANNEL_CALL
-        evt_codes  = ["ACTIVITY_STALLED"]
+        event_type            = EVENT_REENGAGE
+        priority              = PRIORITY_HIGH
+        channel               = CHANNEL_CALL
+        evt_codes             = ["ACTIVITY_STALLED"]
+        requires_finalization = False
 
     elif completion_percent is not None and completion_percent >= 100.0:
         # Rule 4 — course complete, hot signal not active → WARM_REVIEW.
         # The lead finished but did not meet final-hot criteria; route to
         # human review rather than discarding. FINALIZE_LEAD_SCORE scoring
         # will gate this more precisely in the next step.
-        event_type = "WARM_REVIEW"
-        priority   = PRIORITY_LOW
-        channel    = None
-        evt_codes  = ["COURSE_COMPLETE"]
+        event_type            = "WARM_REVIEW"
+        priority              = PRIORITY_LOW
+        channel               = None
+        evt_codes             = ["COURSE_COMPLETE"]
+        requires_finalization = True
 
     else:
         # Rule 5 — NUDGE_PROGRESS: catch-all for all invited leads not matched
         # above.  Covers two sub-states distinguished by reason_codes:
         #   INVITED_NO_START  — completion_percent is None or 0.0 (not started)
         #   ACTIVE_LEARNER    — 0 < completion_percent < 100, within STALL_DAYS
-        event_type = EVENT_NUDGE_PROGRESS
-        priority   = PRIORITY_MEDIUM
-        channel    = CHANNEL_EMAIL
-        evt_codes  = (
+        event_type            = EVENT_NUDGE_PROGRESS
+        priority              = PRIORITY_MEDIUM
+        channel               = CHANNEL_EMAIL
+        evt_codes             = (
             ["INVITED_NO_START"]
             if completion_percent is None or completion_percent == 0.0
             else ["ACTIVE_LEARNER"]
         )
+        requires_finalization = False
 
     return {
         "lead_id":             lead_id,
@@ -202,6 +207,7 @@ def build_cora_recommendation(
             "temperature_signal":    temperature_signal,
             "temperature_score":     temperature_score,
             "upstream_reason_codes": list(reason_codes),
+            "requires_finalization": requires_finalization,
         },
         "status":   "READY",
         "built_at": built_at,

@@ -236,6 +236,38 @@ class TestBuildCoraRecommendation(unittest.TestCase):
     # ------------------------------------------------------------------
     # T20 — Completed + not hot → WARM_REVIEW (never NO_ACTION or COURSE_COMPLETED)
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # T21 — requires_finalization flag set correctly by completion state
+    # ------------------------------------------------------------------
+    def test_t21_requires_finalization_flag(self):
+        """T21: completion=100 → requires_finalization=True; <100 → False."""
+        completed = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(1),
+            hot_signal="NOT_HOT",
+        )
+        self.assertTrue(completed["payload"]["requires_finalization"])
+
+        in_progress = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=50.0,
+            last_activity_at=_iso(3),
+            hot_signal="NOT_HOT",
+        )
+        self.assertFalse(in_progress["payload"]["requires_finalization"])
+
+        not_started = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=None,
+            last_activity_at=None,
+            hot_signal="NOT_HOT",
+        )
+        self.assertFalse(not_started["payload"]["requires_finalization"])
+
     def test_t20_completed_not_hot_is_warm_review(self):
         """T20: completion=100, hot_signal=NOT_HOT → WARM_REVIEW, not NO_ACTION."""
         result = build_cora_recommendation(
