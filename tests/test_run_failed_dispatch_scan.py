@@ -73,6 +73,7 @@ class TestRunFailedDispatchScan(unittest.TestCase):
         self.assertEqual(result["scan_name"], "FAILED_DISPATCH_RETRY_SCAN")
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["record_ids"], [])
+        self.assertEqual(result["limit_used"], 100)
 
     # ------------------------------------------------------------------
     # T2 — one FAILED record → count 1 and correct record id
@@ -111,6 +112,7 @@ class TestRunFailedDispatchScan(unittest.TestCase):
         result = run_failed_dispatch_scan(limit=2, db_path=TEST_DB_PATH)
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["record_ids"]), 2)
+        self.assertEqual(result["limit_used"], 2)
 
 
 if __name__ == "__main__":

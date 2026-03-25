@@ -77,6 +77,7 @@ class TestRunStaleProgressScan(unittest.TestCase):
         self.assertEqual(result["scan_name"], "STALE_PROGRESS_SCAN")
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["lead_ids"], [])
+        self.assertEqual(result["limit_used"], 100)
 
     # ------------------------------------------------------------------
     # T2 — one qualifying stale-progress lead → count 1 and correct lead_id
@@ -111,6 +112,7 @@ class TestRunStaleProgressScan(unittest.TestCase):
         result = run_stale_progress_scan(limit=2, db_path=TEST_DB_PATH)
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["lead_ids"]), 2)
+        self.assertEqual(result["limit_used"], 2)
 
 
 if __name__ == "__main__":

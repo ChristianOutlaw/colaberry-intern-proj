@@ -27,4 +27,5 @@ def run_failed_dispatch_scan(limit: int = 100, db_path: str | None = None) -> di
         "scan_name":  FAILED_DISPATCH_RETRY_SCAN,
         "count":      len(rows),
         "record_ids": [row["id"] for row in rows],
+        "limit_used": limit,
     }

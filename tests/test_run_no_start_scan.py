@@ -80,6 +80,7 @@ class TestRunNoStartScan(unittest.TestCase):
         self.assertEqual(result["scan_name"], "NO_START_SCAN")
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["lead_ids"], [])
+        self.assertEqual(result["limit_used"], 100)
 
     # ------------------------------------------------------------------
     # T2 — one qualifying no-start lead → count 1 and correct lead_id
@@ -115,6 +116,7 @@ class TestRunNoStartScan(unittest.TestCase):
         result = run_no_start_scan(limit=2, db_path=TEST_DB_PATH)
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["lead_ids"]), 2)
+        self.assertEqual(result["limit_used"], 2)
 
 
 if __name__ == "__main__":

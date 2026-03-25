@@ -26,5 +26,6 @@ def run_no_start_scan(limit: int = 100, db_path: str | None = None) -> dict:
     return {
         "scan_name": NO_START_SCAN,
         "count":     len(rows),
-        "lead_ids":  [row["lead_id"] for row in rows],
+        "lead_ids":   [row["lead_id"] for row in rows],
+        "limit_used": limit,
     }

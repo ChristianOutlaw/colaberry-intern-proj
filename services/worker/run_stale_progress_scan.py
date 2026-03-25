@@ -26,5 +26,6 @@ def run_stale_progress_scan(limit: int = 100, db_path: str | None = None) -> dic
     return {
         "scan_name": STALE_PROGRESS_SCAN,
         "count":     len(rows),
-        "lead_ids":  [row["lead_id"] for row in rows],
+        "lead_ids":   [row["lead_id"] for row in rows],
+        "limit_used": limit,
     }
