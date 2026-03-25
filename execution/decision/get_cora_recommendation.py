@@ -9,16 +9,17 @@ Directive: directives/CORA_RECOMMENDATION_EVENTS.md
 Pure read-only — no database writes occur here.  Combines get_lead_status
 with build_cora_recommendation using today's available signals.
 
-Three inputs are not yet instrumented and are passed as None explicitly;
-build_cora_recommendation handles absence gracefully:
-    avg_quiz_score       — quiz scores not yet persisted to DB
-    avg_quiz_attempts    — quiz attempts not yet persisted to DB
+Three temperature inputs are not yet instrumented and are passed as None;
+compute_lead_temperature handles absence gracefully (neutral half-credit):
+    avg_quiz_score        — quiz scores not yet persisted to DB
+    avg_quiz_attempts     — quiz attempts not yet persisted to DB
     reflection_confidence — not yet derived from stored reflection text
 """
 
 from datetime import datetime, timezone
 
 from execution.decision.build_cora_recommendation import build_cora_recommendation
+from execution.leads.compute_lead_temperature import compute_lead_temperature
 from execution.leads.get_lead_status import get_lead_status
 
 
@@ -65,6 +66,21 @@ def get_cora_recommendation(
     cs       = status["course_state"]
     hot_lead = status["hot_lead"]
 
+    # Compute temperature score from signals available today.
+    # avg_quiz_score, avg_quiz_attempts, and reflection_confidence are not yet
+    # persisted to the DB; each receives a neutral half-credit in the engine.
+    temp_result = compute_lead_temperature(
+        now=now,
+        invited_sent=status["invite_sent"],
+        completion_percent=cs["completion_pct"],
+        last_activity_at=cs["last_activity_at"],
+        started_at=cs["started_at"],
+        avg_quiz_score=None,         # not yet instrumented
+        avg_quiz_attempts=None,      # not yet instrumented
+        reflection_confidence=None,  # not yet instrumented
+        current_section=cs["current_section"],
+    )
+
     # hot_lead["reason"] is a single reason-code string in v1; wrap in list.
     reason_codes: list[str] = (
         [hot_lead["reason"]] if hot_lead.get("reason") else []
@@ -78,7 +94,7 @@ def get_cora_recommendation(
         current_section=cs["current_section"],
         last_activity_at=cs["last_activity_at"],
         hot_signal=hot_lead["signal"] or "NOT_HOT",
-        temperature_signal=None,    # not yet instrumented
-        temperature_score=None,     # not yet instrumented
+        temperature_signal=temp_result["signal"],
+        temperature_score=temp_result["score"],
         reason_codes=reason_codes,
     )

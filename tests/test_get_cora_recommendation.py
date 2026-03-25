@@ -190,7 +190,7 @@ class TestGetCoraRecommendation(unittest.TestCase):
         )
 
     # ------------------------------------------------------------------
-    # T8 — output shape is complete and valid
+    # T8 — output shape is complete and valid; temperature fields populated
     # ------------------------------------------------------------------
     def test_output_shape_is_complete(self):
         upsert_lead("L1", db_path=TEST_DB_PATH)
@@ -206,6 +206,16 @@ class TestGetCoraRecommendation(unittest.TestCase):
         self.assertEqual(rec["status"], "READY")
         self.assertIsInstance(rec["reason_codes"], list)
         self.assertIsInstance(rec["payload"], dict)
+
+        # Temperature fields must be populated — never None.
+        payload = rec["payload"]
+        self.assertIn(
+            payload["temperature_signal"], {"HOT", "WARM", "COLD"},
+            "temperature_signal must be HOT, WARM, or COLD",
+        )
+        self.assertIsInstance(payload["temperature_score"], int)
+        self.assertGreaterEqual(payload["temperature_score"], 0)
+        self.assertLessEqual(payload["temperature_score"], 100)
 
 
 if __name__ == "__main__":
