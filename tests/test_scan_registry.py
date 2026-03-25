@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from execution.scans.scan_registry import (
+    COMPLETION_FINALIZATION_SCAN,
     FAILED_DISPATCH_RETRY_SCAN,
     NO_START_SCAN,
     SCAN_NAMES,
@@ -30,6 +31,7 @@ class TestScanRegistry(unittest.TestCase):
         self.assertTrue(is_known_scan_name(NO_START_SCAN))
         self.assertTrue(is_known_scan_name(FAILED_DISPATCH_RETRY_SCAN))
         self.assertTrue(is_known_scan_name(STALE_PROGRESS_SCAN))
+        self.assertTrue(is_known_scan_name(COMPLETION_FINALIZATION_SCAN))
 
     def test_t2_unknown_name_returns_false(self):
         """T2: an unregistered name returns False."""
@@ -37,12 +39,13 @@ class TestScanRegistry(unittest.TestCase):
         self.assertFalse(is_known_scan_name(""))
 
     def test_t3_registry_contains_exactly_implemented_scans(self):
-        """T3: SCAN_NAMES contains exactly the four currently implemented scans."""
+        """T3: SCAN_NAMES contains exactly the five currently implemented scans."""
         expected = {
             "UNSENT_INVITE_SCAN",
             "NO_START_SCAN",
             "FAILED_DISPATCH_RETRY_SCAN",
             "STALE_PROGRESS_SCAN",
+            "COMPLETION_FINALIZATION_SCAN",
         }
         self.assertEqual(SCAN_NAMES, expected)
 
