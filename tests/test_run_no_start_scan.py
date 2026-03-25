@@ -81,6 +81,12 @@ class TestRunNoStartScan(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["lead_ids"], [])
         self.assertEqual(result["limit_used"], 100)
+        tc = result["threshold_counts"]
+        self.assertIn("threshold_counts", result)
+        self.assertEqual(tc["NO_START_24H"], 0)
+        self.assertEqual(tc["NO_START_72H"], 0)
+        self.assertEqual(tc["NO_START_7D"],  0)
+        self.assertEqual(tc["NONE"],         0)
 
     # ------------------------------------------------------------------
     # T2 — one qualifying no-start lead → count 1 and correct lead_id
@@ -92,6 +98,7 @@ class TestRunNoStartScan(unittest.TestCase):
         result = run_no_start_scan(db_path=TEST_DB_PATH)
         self.assertEqual(result["count"], 1)
         self.assertIn("lead-a", result["lead_ids"])
+        self.assertEqual(sum(result["threshold_counts"].values()), result["count"])
 
     # ------------------------------------------------------------------
     # T3 — excluded once progress evidence exists
@@ -117,6 +124,7 @@ class TestRunNoStartScan(unittest.TestCase):
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["lead_ids"]), 2)
         self.assertEqual(result["limit_used"], 2)
+        self.assertEqual(sum(result["threshold_counts"].values()), result["count"])
 
 
 if __name__ == "__main__":

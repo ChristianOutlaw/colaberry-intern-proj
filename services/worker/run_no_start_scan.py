@@ -23,9 +23,14 @@ def run_no_start_scan(limit: int = 100, db_path: str | None = None) -> dict:
         }
     """
     rows = find_no_start_leads(limit=limit, db_path=db_path)
+    threshold_counts = {"NO_START_24H": 0, "NO_START_72H": 0, "NO_START_7D": 0, "NONE": 0}
+    for row in rows:
+        key = row["no_start_threshold"] or "NONE"
+        threshold_counts[key] = threshold_counts.get(key, 0) + 1
     return {
-        "scan_name": NO_START_SCAN,
-        "count":     len(rows),
-        "lead_ids":   [row["lead_id"] for row in rows],
-        "limit_used": limit,
+        "scan_name":        NO_START_SCAN,
+        "count":            len(rows),
+        "lead_ids":         [row["lead_id"] for row in rows],
+        "limit_used":       limit,
+        "threshold_counts": threshold_counts,
     }
