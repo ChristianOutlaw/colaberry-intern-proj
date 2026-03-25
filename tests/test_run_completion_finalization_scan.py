@@ -17,6 +17,17 @@ sys.path.insert(0, str(REPO_ROOT))
 from execution.db.sqlite import connect, init_db
 from services.worker.run_completion_finalization_scan import run_completion_finalization_scan
 
+
+def _seed_invite(lead_id: str) -> None:
+    conn = connect(TEST_DB_PATH)
+    conn.execute(
+        "INSERT INTO course_invites (id, lead_id, course_id, sent_at)"
+        " VALUES (?, ?, ?, ?)",
+        (f"inv-{lead_id}", lead_id, "FREE_INTRO_AI_V0", _TS_CREATED),
+    )
+    conn.commit()
+    conn.close()
+
 TEST_DB_PATH = str(REPO_ROOT / "tmp" / "test_run_completion_finalization_scan.db")
 
 _TS_CREATED  = "2026-01-01T00:00:00Z"
@@ -81,6 +92,9 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(fls["FINAL_COLD"], 0)
         self.assertEqual(fls["FINAL_WARM"], 0)
         self.assertEqual(fls["FINAL_HOT"],  0)
+        self.assertIn("enrichment_summary", result)
+        self.assertEqual(result["enrichment_summary"]["INVITE_SENT_TRUE"], 0)
+        self.assertEqual(result["enrichment_summary"]["INVITE_SENT_FALSE"], 0)
 
     # ------------------------------------------------------------------
     # T2 — one completed lead -> count 1 and correct lead_id
@@ -101,6 +115,9 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         # scan rows have no hot_signal; current fallback lands all in FINAL_WARM
         self.assertEqual(fls["FINAL_WARM"], 1)
         self.assertEqual(fls["FINAL_HOT"],  0)
+        self.assertIn("enrichment_summary", result)
+        es = result["enrichment_summary"]
+        self.assertEqual(es["INVITE_SENT_TRUE"] + es["INVITE_SENT_FALSE"], result["count"])
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded
@@ -128,6 +145,22 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(result["score_summary"]["HAS_SCORE"] + result["score_summary"]["MISSING_SCORE"], result["count"])
         fls = result["fallback_final_label_summary"]
         self.assertEqual(sum(fls.values()), result["count"])
+
+
+    # ------------------------------------------------------------------
+    # T5 — completed lead with sent invite -> INVITE_SENT_TRUE == 1
+    # ------------------------------------------------------------------
+    def test_t5_invite_sent_counted_in_enrichment_summary(self):
+        """T5: completed lead with sent invite -> enrichment_summary INVITE_SENT_TRUE=1."""
+        _seed_lead("lead-e")
+        _seed_course_state("lead-e", completion_pct=100.0)
+        _seed_invite("lead-e")
+        result = run_completion_finalization_scan(db_path=TEST_DB_PATH)
+        self.assertEqual(result["count"], 1)
+        self.assertIn("enrichment_summary", result)
+        es = result["enrichment_summary"]
+        self.assertEqual(es["INVITE_SENT_TRUE"], 1)
+        self.assertEqual(es["INVITE_SENT_FALSE"], 0)
 
 
 if __name__ == "__main__":

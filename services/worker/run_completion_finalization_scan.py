@@ -25,6 +25,7 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
     rows = find_completion_finalization_leads(limit=limit, db_path=db_path)
     score_summary = {"HAS_SCORE": 0, "MISSING_SCORE": 0}
     fallback_final_label_summary = {"FINAL_COLD": 0, "FINAL_WARM": 0, "FINAL_HOT": 0}
+    enrichment_summary = {"INVITE_SENT_TRUE": 0, "INVITE_SENT_FALSE": 0}
     for row in rows:
         if row["score"] is None:
             score_summary["MISSING_SCORE"] += 1
@@ -39,6 +40,10 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
             from execution.leads.classify_final_lead_label import classify_final_lead_label
             label = classify_final_lead_label(row["score"])
             fallback_final_label_summary[label] += 1
+        if row["invite_sent"]:
+            enrichment_summary["INVITE_SENT_TRUE"] += 1
+        else:
+            enrichment_summary["INVITE_SENT_FALSE"] += 1
     return {
         "scan_name":                   "COMPLETION_FINALIZATION_SCAN",
         "count":                       len(rows),
@@ -46,4 +51,5 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
         "limit_used":                  limit,
         "score_summary":               score_summary,
         "fallback_final_label_summary": fallback_final_label_summary,
+        "enrichment_summary":          enrichment_summary,
     }
