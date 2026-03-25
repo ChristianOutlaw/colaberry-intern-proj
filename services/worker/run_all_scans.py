@@ -12,6 +12,7 @@ from services.worker.run_unsent_invite_scan import run_unsent_invite_scan
 from services.worker.run_no_start_scan import run_no_start_scan
 from services.worker.run_failed_dispatch_scan import run_failed_dispatch_scan
 from services.worker.run_stale_progress_scan import run_stale_progress_scan
+from services.worker.run_completion_finalization_scan import run_completion_finalization_scan
 
 
 def _with_intended_action(result: dict) -> dict:
@@ -41,13 +42,14 @@ def run_all_scans(limit: int = 100, db_path: str | None = None) -> dict:
         _with_intended_action(run_no_start_scan(limit=limit, db_path=db_path)),
         _with_intended_action(run_failed_dispatch_scan(limit=limit, db_path=db_path)),
         _with_intended_action(run_stale_progress_scan(limit=limit, db_path=db_path)),
+        _with_intended_action(run_completion_finalization_scan(limit=limit, db_path=db_path)),
     ]
     action_summary = {"SEND_INVITE": 0, "NUDGE_PROGRESS": 0, "REQUEUE_FAILED_ACTION": 0, "UNKNOWN": 0}
     for r in results:
         key = r["intended_action"] or "UNKNOWN"
         action_summary[key] = action_summary.get(key, 0) + 1
     return {
-        "scan_count":     4,
+        "scan_count":     5,
         "limit_used":     limit,
         "generated_at":   generated_at,
         "action_summary": action_summary,

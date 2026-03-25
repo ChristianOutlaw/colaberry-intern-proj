@@ -25,6 +25,7 @@ _EXPECTED_SCAN_NAMES = [
     "NO_START_SCAN",
     "FAILED_DISPATCH_RETRY_SCAN",
     "STALE_PROGRESS_SCAN",
+    "COMPLETION_FINALIZATION_SCAN",
 ]
 
 
@@ -50,16 +51,16 @@ class TestRunAllScans(unittest.TestCase):
     def test_t1_empty_db_shape(self):
         """T1: empty DB → scan_count=4, limit_used=100, results has 4 items."""
         result = run_all_scans(db_path=TEST_DB_PATH)
-        self.assertEqual(result["scan_count"], 4)
+        self.assertEqual(result["scan_count"], 5)
         self.assertEqual(result["limit_used"], 100)
-        self.assertEqual(len(result["results"]), 4)
+        self.assertEqual(len(result["results"]), 5)
         self.assertIn("generated_at", result)
         self.assertIsInstance(result["generated_at"], str)
         self.assertEqual(result["action_summary"], {
             "SEND_INVITE":           1,
             "NUDGE_PROGRESS":        2,
             "REQUEUE_FAILED_ACTION": 1,
-            "UNKNOWN":               0,
+            "UNKNOWN":               1,
         })
         for scan in result["results"]:
             self.assertIn("scan_name", scan)
@@ -97,6 +98,7 @@ class TestRunAllScans(unittest.TestCase):
             "NUDGE_PROGRESS",
             "REQUEUE_FAILED_ACTION",
             "NUDGE_PROGRESS",
+            None,   # COMPLETION_FINALIZATION_SCAN not yet mapped -> UNKNOWN
         ])
         self.assertEqual(
             set(result["action_summary"].keys()),
