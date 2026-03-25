@@ -46,7 +46,6 @@ STUDENT_PORTAL_BASE_URL = os.environ.get(
 # Human-readable labels for Cora recommendation event types (see directives/CORA_RECOMMENDATION_EVENTS.md).
 _CORA_EVENT_LABELS: dict[str, str] = {
     "SEND_INVITE":           "Send course invite",
-    "NUDGE_START_CLASS":     "Nudge to start class",
     "HOT_LEAD_BOOKING":      "Schedule booking call",
     "REENGAGE_STALLED_LEAD": "Re-engage stalled lead",
     "NUDGE_PROGRESS":        "Nudge to continue progress",
@@ -536,7 +535,7 @@ with right_col:
                         st.success(_cora_line)
                     elif _ce == "REENGAGE_STALLED_LEAD":
                         st.error(_cora_line)
-                    elif _ce in ("NUDGE_PROGRESS", "NUDGE_START_CLASS"):
+                    elif _ce == "NUDGE_PROGRESS":
                         st.warning(_cora_line)
                     else:
                         st.info(_cora_line)
