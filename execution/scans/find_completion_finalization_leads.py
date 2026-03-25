@@ -26,7 +26,11 @@ _SQL = """
            CASE WHEN EXISTS (
                SELECT 1 FROM course_invites ci
                WHERE ci.lead_id = l.id AND ci.sent_at IS NOT NULL
-           ) THEN 1 ELSE 0 END AS invite_sent
+           ) THEN 1 ELSE 0 END AS invite_sent,
+           CASE WHEN EXISTS (
+               SELECT 1 FROM reflection_responses rr
+               WHERE rr.lead_id = l.id
+           ) THEN 1 ELSE 0 END AS has_reflection_data
     FROM   leads l
     JOIN   course_state cs ON cs.lead_id = l.id
     WHERE  cs.started_at IS NOT NULL
@@ -68,9 +72,10 @@ def find_completion_finalization_leads(
     return [
         {
             **dict(row),
-            "invite_sent":   bool(row["invite_sent"]),
-            "score":         None,
-            "has_quiz_data": None,
+            "invite_sent":        bool(row["invite_sent"]),
+            "score":              None,
+            "has_quiz_data":      None,
+            "has_reflection_data": bool(row["has_reflection_data"]),
         }
         for row in rows
     ]
