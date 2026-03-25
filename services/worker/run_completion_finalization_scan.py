@@ -23,9 +23,16 @@ def run_completion_finalization_scan(limit: int = 100, db_path: str | None = Non
         }
     """
     rows = find_completion_finalization_leads(limit=limit, db_path=db_path)
+    score_summary = {"HAS_SCORE": 0, "MISSING_SCORE": 0}
+    for row in rows:
+        if row["score"] is None:
+            score_summary["MISSING_SCORE"] += 1
+        else:
+            score_summary["HAS_SCORE"] += 1
     return {
-        "scan_name":  "COMPLETION_FINALIZATION_SCAN",
-        "count":      len(rows),
-        "lead_ids":   [row["lead_id"] for row in rows],
-        "limit_used": limit,
+        "scan_name":    "COMPLETION_FINALIZATION_SCAN",
+        "count":        len(rows),
+        "lead_ids":     [row["lead_id"] for row in rows],
+        "limit_used":   limit,
+        "score_summary": score_summary,
     }

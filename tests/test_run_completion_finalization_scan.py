@@ -73,6 +73,9 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["lead_ids"], [])
         self.assertEqual(result["limit_used"], 100)
+        self.assertIn("score_summary", result)
+        self.assertEqual(result["score_summary"]["HAS_SCORE"], 0)
+        self.assertEqual(result["score_summary"]["MISSING_SCORE"], 0)
 
     # ------------------------------------------------------------------
     # T2 — one completed lead -> count 1 and correct lead_id
@@ -84,6 +87,9 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         result = run_completion_finalization_scan(db_path=TEST_DB_PATH)
         self.assertEqual(result["count"], 1)
         self.assertIn("lead-a", result["lead_ids"])
+        self.assertIn("score_summary", result)
+        self.assertEqual(result["score_summary"]["HAS_SCORE"] + result["score_summary"]["MISSING_SCORE"], result["count"])
+        self.assertEqual(result["score_summary"]["MISSING_SCORE"], 1)
 
     # ------------------------------------------------------------------
     # T3 — incomplete lead -> excluded
@@ -108,6 +114,7 @@ class TestRunCompletionFinalizationScan(unittest.TestCase):
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["lead_ids"]), 2)
         self.assertEqual(result["limit_used"], 2)
+        self.assertEqual(result["score_summary"]["HAS_SCORE"] + result["score_summary"]["MISSING_SCORE"], result["count"])
 
 
 if __name__ == "__main__":
