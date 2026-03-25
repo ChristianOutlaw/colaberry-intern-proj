@@ -112,11 +112,11 @@ class TestBuildCoraRecommendation(unittest.TestCase):
     # T4 — HOT signal → HOT_LEAD_BOOKING
     # ------------------------------------------------------------------
     def test_t4_hot_lead_gets_booking_event(self):
-        """T4: hot_signal=HOT → HOT_LEAD_BOOKING, HIGH priority, CALL channel."""
+        """T4: hot_signal=HOT + 100% completion → HOT_LEAD_BOOKING, HIGH priority, CALL channel."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
-            completion_percent=33.0,
+            completion_percent=100.0,
             last_activity_at=_iso(3),
             hot_signal="HOT",
         )
@@ -129,15 +129,29 @@ class TestBuildCoraRecommendation(unittest.TestCase):
     # T5 — HOT beats stale: HOT_LEAD_BOOKING even with stale activity
     # ------------------------------------------------------------------
     def test_t5_hot_signal_beats_stale_activity(self):
-        """T5: hot_signal=HOT with 25-day stale activity → HOT_LEAD_BOOKING, not REENGAGE."""
+        """T5: hot_signal=HOT + 100% completion with stale activity → HOT_LEAD_BOOKING, not REENGAGE."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
-            completion_percent=33.0,
+            completion_percent=100.0,
             last_activity_at=_iso(25),
             hot_signal="HOT",
         )
         self.assertEqual(result["event_type"], EVENT_HOT_BOOKING)
+
+    # ------------------------------------------------------------------
+    # T19 — HOT signal without 100% completion must NOT trigger booking
+    # ------------------------------------------------------------------
+    def test_t19_hot_signal_partial_completion_no_booking(self):
+        """T19: hot_signal=HOT but completion=25% → must NOT return HOT_LEAD_BOOKING."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=25.0,
+            last_activity_at=_iso(3),
+            hot_signal="HOT",
+        )
+        self.assertNotEqual(result["event_type"], EVENT_HOT_BOOKING)
 
     # ------------------------------------------------------------------
     # T6 — Stalled lead (> STALL_DAYS inactive) → REENGAGE_STALLED_LEAD

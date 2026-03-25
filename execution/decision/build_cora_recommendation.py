@@ -140,9 +140,11 @@ def build_cora_recommendation(
         channel    = CHANNEL_EMAIL
         evt_codes  = ["NOT_INVITED"]
 
-    elif hot_signal == "HOT":
-        # Rule 2 — HOT signal takes precedence over staleness: an engaged
-        # lead needs a booking call, not a re-engagement sequence.
+    elif hot_signal == "HOT" and completion_percent is not None and completion_percent >= 100.0:
+        # Rule 2 — HOT signal AND full course completion → booking call.
+        # Spec hard rule: READY_FOR_BOOKING requires 100% course completion.
+        # A lead at partial completion with a hot signal is still in progress
+        # and must be nudged, not booked.
         event_type = EVENT_HOT_BOOKING
         priority   = PRIORITY_HIGH
         channel    = CHANNEL_CALL
