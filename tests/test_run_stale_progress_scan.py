@@ -78,6 +78,12 @@ class TestRunStaleProgressScan(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["lead_ids"], [])
         self.assertEqual(result["limit_used"], 100)
+        tc = result["threshold_counts"]
+        self.assertIn("threshold_counts", result)
+        self.assertEqual(tc["INACTIVE_48H"], 0)
+        self.assertEqual(tc["INACTIVE_4D"],  0)
+        self.assertEqual(tc["INACTIVE_7D"],  0)
+        self.assertEqual(tc["NONE"],         0)
 
     # ------------------------------------------------------------------
     # T2 — one qualifying stale-progress lead → count 1 and correct lead_id
@@ -89,6 +95,8 @@ class TestRunStaleProgressScan(unittest.TestCase):
         result = run_stale_progress_scan(db_path=TEST_DB_PATH)
         self.assertEqual(result["count"], 1)
         self.assertIn("lead-a", result["lead_ids"])
+        self.assertIn("threshold_counts", result)
+        self.assertEqual(sum(result["threshold_counts"].values()), result["count"])
 
     # ------------------------------------------------------------------
     # T3 — completed lead excluded
@@ -113,6 +121,7 @@ class TestRunStaleProgressScan(unittest.TestCase):
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["lead_ids"]), 2)
         self.assertEqual(result["limit_used"], 2)
+        self.assertEqual(sum(result["threshold_counts"].values()), result["count"])
 
 
 if __name__ == "__main__":

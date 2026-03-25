@@ -23,9 +23,14 @@ def run_stale_progress_scan(limit: int = 100, db_path: str | None = None) -> dic
         }
     """
     rows = find_stale_progress_leads(limit=limit, db_path=db_path)
+    threshold_counts = {"INACTIVE_48H": 0, "INACTIVE_4D": 0, "INACTIVE_7D": 0, "NONE": 0}
+    for row in rows:
+        key = row["stale_progress_threshold"] or "NONE"
+        threshold_counts[key] = threshold_counts.get(key, 0) + 1
     return {
-        "scan_name": STALE_PROGRESS_SCAN,
-        "count":     len(rows),
-        "lead_ids":   [row["lead_id"] for row in rows],
-        "limit_used": limit,
+        "scan_name":        STALE_PROGRESS_SCAN,
+        "count":            len(rows),
+        "lead_ids":         [row["lead_id"] for row in rows],
+        "limit_used":       limit,
+        "threshold_counts": threshold_counts,
     }
