@@ -56,6 +56,7 @@ class TestRunAllScans(unittest.TestCase):
             self.assertIn("scan_name", scan)
             self.assertIn("count", scan)
             self.assertEqual(scan["count"], 0)
+            self.assertIn("intended_action", scan)
 
     # ------------------------------------------------------------------
     # T2 — custom limit propagates to all nested results
@@ -71,10 +72,17 @@ class TestRunAllScans(unittest.TestCase):
     # T3 — scan_name order is fixed
     # ------------------------------------------------------------------
     def test_t3_scan_name_order(self):
-        """T3: results appear in the canonical fixed order."""
+        """T3: results appear in the canonical fixed order with correct intended_actions."""
         result = run_all_scans(db_path=TEST_DB_PATH)
         actual_names = [scan["scan_name"] for scan in result["results"]]
         self.assertEqual(actual_names, _EXPECTED_SCAN_NAMES)
+        actual_actions = [scan["intended_action"] for scan in result["results"]]
+        self.assertEqual(actual_actions, [
+            "SEND_INVITE",
+            "NUDGE_PROGRESS",
+            "REQUEUE_FAILED_ACTION",
+            "NUDGE_PROGRESS",
+        ])
 
 
 if __name__ == "__main__":
