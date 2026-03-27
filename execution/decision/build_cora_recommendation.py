@@ -13,6 +13,7 @@ that a future Cora worker can consume to trigger the appropriate action.
 from datetime import datetime, timezone
 
 from execution.leads.finalize_lead_score import finalize_lead_score
+from execution.scans.classify_stale_progress_threshold import classify_stale_progress_threshold
 
 # ---------------------------------------------------------------------------
 # Locked constants — v1 (see directives/CORA_RECOMMENDATION_EVENTS.md)
@@ -182,17 +183,18 @@ def build_cora_recommendation(
 
     else:
         # Rule 5 — NUDGE_PROGRESS: catch-all for all invited leads not matched
-        # above.  Covers two sub-states distinguished by reason_codes:
+        # above.  Covers sub-states distinguished by reason_codes:
         #   INVITED_NO_START  — completion_percent is None or 0.0 (not started)
-        #   ACTIVE_LEARNER    — 0 < completion_percent < 100, within STALL_DAYS
+        #   INACTIVE_48H/4D/7D — started, inactive past threshold (spec subtypes)
+        #   ACTIVE_LEARNER    — started, active within 48 h (below stale threshold)
         event_type            = EVENT_NUDGE_PROGRESS
         priority              = PRIORITY_MEDIUM
         channel               = CHANNEL_EMAIL
-        evt_codes             = (
-            ["INVITED_NO_START"]
-            if completion_percent is None or completion_percent == 0.0
-            else ["ACTIVE_LEARNER"]
-        )
+        if completion_percent is None or completion_percent == 0.0:
+            evt_codes = ["INVITED_NO_START"]
+        else:
+            stale_subtype = classify_stale_progress_threshold(last_activity_at, now_utc)
+            evt_codes = [stale_subtype] if stale_subtype is not None else ["ACTIVE_LEARNER"]
         requires_finalization = False
 
     result_payload = {

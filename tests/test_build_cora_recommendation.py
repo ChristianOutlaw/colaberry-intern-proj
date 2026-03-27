@@ -189,7 +189,7 @@ class TestBuildCoraRecommendation(unittest.TestCase):
     # T8 — In-progress, recently active, not hot → NUDGE_PROGRESS
     # ------------------------------------------------------------------
     def test_t8_active_warm_lead_nudge_progress(self):
-        """T8: started, activity within STALL_DAYS, not hot → NUDGE_PROGRESS, MEDIUM, EMAIL."""
+        """T8: started, activity 5 days ago (>= 4d threshold) → NUDGE_PROGRESS, INACTIVE_4D."""
         result = build_cora_recommendation(
             **_BASE,
             invite_sent=True,
@@ -200,7 +200,52 @@ class TestBuildCoraRecommendation(unittest.TestCase):
         self.assertEqual(result["event_type"],          EVENT_NUDGE_PROGRESS)
         self.assertEqual(result["priority"],            PRIORITY_MEDIUM)
         self.assertEqual(result["recommended_channel"], CHANNEL_EMAIL)
+        self.assertIn("INACTIVE_4D", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # T8b — NUDGE_PROGRESS subtype: ACTIVE_LEARNER (< 48 h)
+    # ------------------------------------------------------------------
+    def test_t8b_active_learner_below_48h(self):
+        """Started, activity 1 day ago (24h < 48h threshold) → ACTIVE_LEARNER subtype."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=10.0,
+            last_activity_at=_iso(1),
+            hot_signal="NOT_HOT",
+        )
+        self.assertEqual(result["event_type"], EVENT_NUDGE_PROGRESS)
         self.assertIn("ACTIVE_LEARNER", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # T8c — NUDGE_PROGRESS subtype: INACTIVE_48H (exactly 2 days)
+    # ------------------------------------------------------------------
+    def test_t8c_inactive_48h_subtype(self):
+        """Started, activity exactly 2 days ago → INACTIVE_48H subtype."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=10.0,
+            last_activity_at=_iso(2),
+            hot_signal="NOT_HOT",
+        )
+        self.assertEqual(result["event_type"], EVENT_NUDGE_PROGRESS)
+        self.assertIn("INACTIVE_48H", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # T8d — NUDGE_PROGRESS subtype: INACTIVE_7D (8 days)
+    # ------------------------------------------------------------------
+    def test_t8d_inactive_7d_subtype(self):
+        """Started, activity 8 days ago → INACTIVE_7D subtype."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=10.0,
+            last_activity_at=_iso(8),
+            hot_signal="NOT_HOT",
+        )
+        self.assertEqual(result["event_type"], EVENT_NUDGE_PROGRESS)
+        self.assertIn("INACTIVE_7D", result["reason_codes"])
 
     # ------------------------------------------------------------------
     # T9 — Exactly at boundary: STALL_DAYS days inactive → NUDGE_PROGRESS (not REENGAGE)
