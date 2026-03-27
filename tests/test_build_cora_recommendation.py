@@ -27,6 +27,7 @@ from execution.decision.build_cora_recommendation import (  # noqa: E402
     EVENT_NO_ACTION,
     EVENT_NUDGE_PROGRESS,
     EVENT_REENGAGE,
+    EVENT_REENGAGE_COMPLETED,
     EVENT_SEND_INVITE,
     PRIORITY_HIGH,
     PRIORITY_LOW,
@@ -277,6 +278,38 @@ class TestBuildCoraRecommendation(unittest.TestCase):
         self.assertEqual(result["priority"],            PRIORITY_LOW)
         self.assertIsNone(result["recommended_channel"])
         self.assertIn("COURSE_COMPLETE", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # T10b — Scenario A: completed + stale (> STALL_DAYS) → REENGAGE_COMPLETED
+    # ------------------------------------------------------------------
+    def test_t10b_completed_gone_stale_reengage_completed(self):
+        """Scenario A: completion=100, not hot, inactive > STALL_DAYS → REENGAGE_COMPLETED."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(STALL_DAYS + 1),
+            hot_signal="NOT_HOT",
+        )
+        self.assertEqual(result["event_type"],          EVENT_REENGAGE_COMPLETED)
+        self.assertEqual(result["priority"],            PRIORITY_MEDIUM)
+        self.assertEqual(result["recommended_channel"], CHANNEL_EMAIL)
+        self.assertIn("COMPLETED_GONE_STALE", result["reason_codes"])
+
+    # ------------------------------------------------------------------
+    # T10c — Scenario B: completed + not stale → WARM_REVIEW, not REENGAGE_COMPLETED
+    # ------------------------------------------------------------------
+    def test_t10c_completed_not_stale_stays_warm_review(self):
+        """Scenario B: completion=100, not hot, inactive <= STALL_DAYS → WARM_REVIEW only."""
+        result = build_cora_recommendation(
+            **_BASE,
+            invite_sent=True,
+            completion_percent=100.0,
+            last_activity_at=_iso(STALL_DAYS),
+            hot_signal="NOT_HOT",
+        )
+        self.assertNotEqual(result["event_type"], EVENT_REENGAGE_COMPLETED)
+        self.assertEqual(result["event_type"], "WARM_REVIEW")
 
     # ------------------------------------------------------------------
     # T20 — Completed + not hot → WARM_REVIEW (never NO_ACTION or COURSE_COMPLETED)

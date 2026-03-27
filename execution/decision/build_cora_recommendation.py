@@ -22,9 +22,10 @@ from execution.scans.classify_stale_progress_threshold import classify_stale_pro
 # Event type labels
 EVENT_SEND_INVITE    = "SEND_INVITE"
 EVENT_HOT_BOOKING    = "READY_FOR_BOOKING"
-EVENT_REENGAGE       = "REENGAGE_STALLED_LEAD"
-EVENT_NUDGE_PROGRESS = "NUDGE_PROGRESS"
-EVENT_NO_ACTION      = "NO_ACTION"
+EVENT_REENGAGE            = "REENGAGE_STALLED_LEAD"
+EVENT_REENGAGE_COMPLETED  = "REENGAGE_COMPLETED"
+EVENT_NUDGE_PROGRESS      = "NUDGE_PROGRESS"
+EVENT_NO_ACTION           = "NO_ACTION"
 
 # Priority tiers
 PRIORITY_HIGH   = "HIGH"
@@ -170,8 +171,23 @@ def build_cora_recommendation(
         evt_codes             = ["ACTIVITY_STALLED"]
         requires_finalization = False
 
+    elif (
+        completion_percent is not None
+        and completion_percent >= 100.0
+        and days_inactive is not None
+        and days_inactive > STALL_DAYS
+    ):
+        # Rule 4a — course complete + gone stale → re-engage the completed learner.
+        # Uses the same STALL_DAYS threshold as REENGAGE_STALLED_LEAD so behaviour
+        # is consistent across the two re-engagement branches.
+        event_type            = EVENT_REENGAGE_COMPLETED
+        priority              = PRIORITY_MEDIUM
+        channel               = CHANNEL_EMAIL
+        evt_codes             = ["COMPLETED_GONE_STALE"]
+        requires_finalization = True
+
     elif completion_percent is not None and completion_percent >= 100.0:
-        # Rule 4 — course complete, hot signal not active → WARM_REVIEW.
+        # Rule 4b — course complete, hot signal not active, not yet stale → WARM_REVIEW.
         # The lead finished but did not meet final-hot criteria; route to
         # human review rather than discarding. FINALIZE_LEAD_SCORE scoring
         # will gate this more precisely in the next step.
