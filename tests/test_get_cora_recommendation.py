@@ -23,12 +23,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from execution.db.sqlite import connect, init_db                              # noqa: E402
-from execution.leads.upsert_lead import upsert_lead                           # noqa: E402
-from execution.leads.mark_course_invite_sent import mark_course_invite_sent   # noqa: E402
-from execution.progress.record_progress_event import record_progress_event    # noqa: E402
-from execution.progress.compute_course_state import compute_course_state      # noqa: E402
-from execution.decision.get_cora_recommendation import get_cora_recommendation  # noqa: E402
+from execution.db.sqlite import connect, init_db                                          # noqa: E402
+from execution.leads.upsert_lead import upsert_lead                                       # noqa: E402
+from execution.leads.create_student_invite_from_payload import create_student_invite_from_payload  # noqa: E402
+from execution.leads.mark_course_invite_sent import mark_course_invite_sent               # noqa: E402
+from execution.progress.record_progress_event import record_progress_event                # noqa: E402
+from execution.progress.compute_course_state import compute_course_state                  # noqa: E402
+from execution.decision.get_cora_recommendation import get_cora_recommendation            # noqa: E402
 
 # Fixed reference time used by all tests (matches repo convention).
 _NOW = datetime(2026, 2, 25, 12, 0, 0, tzinfo=timezone.utc)
@@ -224,6 +225,78 @@ class TestGetCoraRecommendation(unittest.TestCase):
             "QUIZ_UNKNOWN", payload["upstream_reason_codes"],
             "upstream_reason_codes must include temperature component codes",
         )
+
+
+    # ------------------------------------------------------------------
+    # T9 — Regression: invite generated (sent_at IS NULL) != invite sent
+    #
+    # Scenario A: invite row exists but sent_at IS NULL → SEND_INVITE
+    # Scenario B: same invite after mark_course_invite_sent → NUDGE_PROGRESS
+    #
+    # This pins the business rule from spec §5:
+    #   "invite generated is NOT the same as invite sent"
+    #   "get_lead_status keys invite_sent off sent_at IS NOT NULL"
+    # ------------------------------------------------------------------
+    def test_generated_invite_not_sent_still_returns_send_invite(self):
+        """Scenario A: invite row exists with sent_at IS NULL → SEND_INVITE, not NUDGE_PROGRESS."""
+        # create_student_invite_from_payload inserts an invite row with sent_at = NULL.
+        # mark_course_invite_sent is deliberately NOT called.
+        create_student_invite_from_payload(
+            lead_id="L9",
+            invite_id="INV9",
+            db_path=TEST_DB_PATH,
+        )
+
+        rec = get_cora_recommendation("L9", now=_NOW, db_path=TEST_DB_PATH)
+
+        # Prove the invite row exists but has sent_at = NULL.
+        conn = connect(TEST_DB_PATH)
+        row = conn.execute(
+            "SELECT sent_at FROM course_invites WHERE id = ?", ("INV9",)
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(row, "invite row must exist")
+        self.assertIsNone(row["sent_at"], "sent_at must be NULL — invite generated, not sent")
+
+        # Recommendation must treat this as uninvited.
+        self.assertEqual(
+            rec["event_type"], "SEND_INVITE",
+            "invite generated (sent_at IS NULL) must still produce SEND_INVITE",
+        )
+        self.assertIn("NOT_INVITED", rec["reason_codes"])
+
+    def test_after_mark_sent_transitions_away_from_send_invite(self):
+        """Scenario B: same invite after mark_course_invite_sent → no longer SEND_INVITE."""
+        create_student_invite_from_payload(
+            lead_id="L9b",
+            invite_id="INV9b",
+            db_path=TEST_DB_PATH,
+        )
+
+        # Confirm SEND_INVITE before marking sent (Scenario A state).
+        rec_before = get_cora_recommendation("L9b", now=_NOW, db_path=TEST_DB_PATH)
+        self.assertEqual(rec_before["event_type"], "SEND_INVITE")
+
+        # Now mark the invite as sent.
+        mark_course_invite_sent("INV9b", "L9b", db_path=TEST_DB_PATH)
+
+        # Prove sent_at is now populated.
+        conn = connect(TEST_DB_PATH)
+        row = conn.execute(
+            "SELECT sent_at FROM course_invites WHERE id = ?", ("INV9b",)
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(row["sent_at"], "sent_at must be set after mark_course_invite_sent")
+
+        # Recommendation must no longer be SEND_INVITE.
+        rec_after = get_cora_recommendation("L9b", now=_NOW, db_path=TEST_DB_PATH)
+        self.assertNotEqual(
+            rec_after["event_type"], "SEND_INVITE",
+            "after mark_course_invite_sent, event_type must not be SEND_INVITE",
+        )
+        # Invited but course not started → NUDGE_PROGRESS.
+        self.assertEqual(rec_after["event_type"], "NUDGE_PROGRESS")
+        self.assertIn("INVITED_NO_START", rec_after["reason_codes"])
 
 
 if __name__ == "__main__":
