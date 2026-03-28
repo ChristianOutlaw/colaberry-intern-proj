@@ -23,8 +23,11 @@ T10 — invite_id has GHL_INTAKE_ prefix
 import os
 import sys
 import unittest
+import urllib.error
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -214,6 +217,8 @@ class TestProcessGhlLeadIntake(unittest.TestCase):
             "ok", "app_lead_id", "matched_by",
             "course_link_generated", "invite_id",
             "invite_generated_at", "message",
+            "writeback_attempted", "writeback_ok",
+            "writeback_status_code", "writeback_message",
         }
         for key in required_keys:
             self.assertIn(key, result, f"Key '{key}' missing from success response")
@@ -228,7 +233,11 @@ class TestProcessGhlLeadIntake(unittest.TestCase):
             db_path=TEST_DB,
         )
 
-        required_keys = {"ok", "app_lead_id", "matched_by", "course_link_generated", "message"}
+        required_keys = {
+            "ok", "app_lead_id", "matched_by", "course_link_generated", "message",
+            "writeback_attempted", "writeback_ok",
+            "writeback_status_code", "writeback_message",
+        }
         for key in required_keys:
             self.assertIn(key, result, f"Key '{key}' missing from failure response")
         self.assertFalse(result["ok"])
@@ -261,6 +270,81 @@ class TestProcessGhlLeadIntake(unittest.TestCase):
                 now=None,
                 db_path=TEST_DB,
             )
+
+    # ------------------------------------------------------------------
+    # T12 — full success path: writeback_ok=True when GHL returns 200
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t12_writeback_ok_true_on_200(self, mock_urlopen):
+        # Lead has ghl_contact_id so write_ghl_contact_fields can send.
+        resp = MagicMock()
+        resp.status = 200
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+
+        result = process_ghl_lead_intake(
+            {"phone": "1112223333", "ghl_contact_id": "GHL_T12"},
+            now=_FIXED_NOW,
+            base_url=_BASE_URL,
+            ghl_api_url="http://ghl.test/contacts/update",
+            db_path=TEST_DB,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["writeback_attempted"])
+        self.assertTrue(result["writeback_ok"])
+        self.assertEqual(result["writeback_status_code"], 200)
+        mock_urlopen.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # T13 — writeback failure: GHL returns 422 → writeback_ok=False, ok still True
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t13_writeback_fail_does_not_hide_failure(self, mock_urlopen):
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            url="http://ghl.test/contacts/update",
+            code=422,
+            msg="Unprocessable Entity",
+            hdrs=None,
+            fp=BytesIO(b""),
+        )
+
+        result = process_ghl_lead_intake(
+            {"phone": "4445556667", "ghl_contact_id": "GHL_T13"},
+            now=_FIXED_NOW,
+            base_url=_BASE_URL,
+            ghl_api_url="http://ghl.test/contacts/update",
+            db_path=TEST_DB,
+        )
+
+        # Intake itself succeeded — lead matched and invite generated.
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["course_link_generated"])
+        # Writeback was attempted but failed — must be surfaced, not hidden.
+        self.assertTrue(result["writeback_attempted"])
+        self.assertFalse(result["writeback_ok"])
+        self.assertEqual(result["writeback_status_code"], 422)
+        self.assertIn("422", result["writeback_message"])
+
+    # ------------------------------------------------------------------
+    # T14 — matcher failure → writeback_attempted=False, writeback_ok=False
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t14_matcher_failure_writeback_not_attempted(self, mock_urlopen):
+        result = process_ghl_lead_intake(
+            {},   # no identity fields — matcher will reject
+            now=_FIXED_NOW,
+            ghl_api_url="http://ghl.test/contacts/update",
+            db_path=TEST_DB,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["writeback_attempted"])
+        self.assertFalse(result["writeback_ok"])
+        self.assertIsNone(result["writeback_status_code"])
+        # No HTTP call must have been made.
+        mock_urlopen.assert_not_called()
 
 
 if __name__ == "__main__":

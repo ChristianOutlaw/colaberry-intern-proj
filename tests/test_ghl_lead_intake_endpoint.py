@@ -23,7 +23,10 @@ T10 — invalid JSON returns 400 (tested via HTTP layer simulation)
 import os
 import sys
 import unittest
+import urllib.error
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -32,7 +35,9 @@ if str(REPO_ROOT) not in sys.path:
 from execution.db.sqlite import connect, init_db                                  # noqa: E402
 from services.webhook.ghl_lead_intake_endpoint import _handle_ghl_intake_request  # noqa: E402
 
-TEST_DB = str(REPO_ROOT / "tmp" / "test_ghl_lead_intake.db")
+TEST_DB  = str(REPO_ROOT / "tmp" / "test_ghl_lead_intake.db")
+_NOW     = "2026-03-27T12:00:00+00:00"
+_GHL_URL = "http://ghl.test/contacts/update"
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +255,80 @@ class TestHandleGhlIntakeRequest(unittest.TestCase):
         # (400, {"error": "Request body must be valid JSON"}).
         # The handler function itself is only called with valid dicts,
         # so this test documents the contract without needing an HTTP server.
+
+    # ------------------------------------------------------------------
+    # T11 — full success path: writeback_ok=True appears in response
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t11_full_success_path_writeback_ok_true(self, mock_urlopen):
+        resp = MagicMock()
+        resp.status = 200
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+
+        body = {"phone": "5550001112", "ghl_contact_id": "GHL_T11"}
+        status, response = _handle_ghl_intake_request(
+            body,
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            db_path=TEST_DB,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertTrue(response["ok"])
+        self.assertIn("writeback_ok", response)
+        self.assertTrue(response["writeback_ok"])
+        self.assertIn("app_lead_id", response)
+        self.assertIn("matched_by", response)
+        mock_urlopen.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # T12 — writeback failure path: writeback_ok=False in response
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t12_writeback_failure_surfaced_in_response(self, mock_urlopen):
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            url=_GHL_URL, code=500, msg="Internal Server Error",
+            hdrs=None, fp=BytesIO(b""),
+        )
+
+        body = {"phone": "5550001113", "ghl_contact_id": "GHL_T12"}
+        status, response = _handle_ghl_intake_request(
+            body,
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            db_path=TEST_DB,
+        )
+
+        # HTTP status is still 200 — the intake body signals the failure.
+        self.assertEqual(status, 200)
+        # Lead was matched/created and invite generated — intake ok=True.
+        self.assertTrue(response["ok"])
+        # Writeback failed — must be visible to caller.
+        self.assertFalse(response["writeback_ok"])
+
+    # ------------------------------------------------------------------
+    # T13 — matcher failure path: ok=False, no writeback attempted
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t13_matcher_failure_no_writeback(self, mock_urlopen):
+        body = {}  # no identity fields
+
+        status, response = _handle_ghl_intake_request(
+            body,
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            db_path=TEST_DB,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertFalse(response["ok"])
+        self.assertIn("message", response)
+        # writeback_ok is not in the failure response shape.
+        self.assertNotIn("writeback_ok", response)
+        # No HTTP call must have been made.
+        mock_urlopen.assert_not_called()
 
 
 if __name__ == "__main__":
