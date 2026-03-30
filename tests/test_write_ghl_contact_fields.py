@@ -152,6 +152,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     # ------------------------------------------------------------------
     # T4 — stored ghl_contact_id path → used directly, no lookup call
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t4"})
     @patch("execution.leads.sync_ghl_contact_id.sync_ghl_contact_id")
     @patch("urllib.request.urlopen")
     def test_t4_stored_ghl_contact_id_skips_lookup(self, mock_urlopen, mock_sync):
@@ -173,6 +174,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     # ------------------------------------------------------------------
     # T5 — successful HTTP send → ok=True, sent=True, status_code echoed
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t5"})
     @patch("urllib.request.urlopen")
     def test_t5_successful_send_returns_ok_true(self, mock_urlopen):
         _seed_lead("L_T5", phone="5550000005", ghl_contact_id="GHL_T5")
@@ -195,6 +197,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     # ------------------------------------------------------------------
     # T6 — HTTP 4xx from GHL API → ok=False, sent=False, status_code set
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t6"})
     @patch("urllib.request.urlopen")
     def test_t6_http_error_returns_ok_false_with_status_code(self, mock_urlopen):
         _seed_lead("L_T6", phone="5550000006", ghl_contact_id="GHL_T6")
@@ -219,6 +222,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     # ------------------------------------------------------------------
     # T7 — network URLError → ok=False, sent=False, status_code=None
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t7"})
     @patch("urllib.request.urlopen")
     def test_t7_url_error_returns_ok_false_no_status_code(self, mock_urlopen):
         _seed_lead("L_T7", phone="5550000007", ghl_contact_id="GHL_T7")
@@ -259,6 +263,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     # ------------------------------------------------------------------
     # T9 — return shape has all required keys on success path
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t9"})
     @patch("urllib.request.urlopen")
     def test_t9_success_return_shape(self, mock_urlopen):
         _seed_lead("L_T9", phone="5550000009", ghl_contact_id="GHL_T9")
@@ -290,6 +295,29 @@ class TestWriteGhlContactFields(unittest.TestCase):
         for key in _REQUIRED_KEYS:
             self.assertIn(key, result, f"Missing key: {key!r}")
         self.assertFalse(result["ok"])
+        mock_urlopen.assert_not_called()
+
+
+    # ------------------------------------------------------------------
+    # T11 — GHL_API_KEY absent → explicit error, no HTTP call
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t11_missing_api_key_returns_explicit_error(self, mock_urlopen):
+        _seed_lead("L_T11", phone="5550000011", ghl_contact_id="GHL_T11")
+        env_without_key = {k: v for k, v in os.environ.items() if k != "GHL_API_KEY"}
+
+        with patch.dict(os.environ, env_without_key, clear=True):
+            result = write_ghl_contact_fields(
+                "L_T11",
+                now=_NOW,
+                ghl_api_url=_GHL_URL,
+                db_path=TEST_DB,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["sent"])
+        self.assertIsNone(result["status_code"])
+        self.assertIn("GHL_API_KEY", result["message"])
         mock_urlopen.assert_not_called()
 
 

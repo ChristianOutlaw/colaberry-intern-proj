@@ -38,6 +38,7 @@ Return shape
 """
 
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -164,7 +165,25 @@ def write_ghl_contact_fields(
         }
 
     # ------------------------------------------------------------------
-    # 4. POST the canonical payload to GHL.
+    # 4. Resolve GHL API key — fail explicitly if absent.
+    #
+    #    The key must be supplied at runtime via the GHL_API_KEY environment
+    #    variable.  It must never be hardcoded.  If it is missing, we return
+    #    an error rather than silently sending an unauthenticated request.
+    # ------------------------------------------------------------------
+    api_key = os.environ.get("GHL_API_KEY")
+    if not api_key:
+        return {
+            "ok":             False,
+            "app_lead_id":    app_lead_id,
+            "ghl_contact_id": ghl_contact_id,
+            "sent":           False,
+            "status_code":    None,
+            "message":        "GHL_API_KEY environment variable is not set.",
+        }
+
+    # ------------------------------------------------------------------
+    # 5. POST the canonical payload to GHL.
     #
     #    The body wraps the field payload with the target ghl_contact_id so
     #    the receiving endpoint always has full context in a single request.
@@ -180,6 +199,7 @@ def write_ghl_contact_fields(
         url=str(ghl_api_url).strip(),
         data=body,
         headers={
+            "Authorization":  f"Bearer {api_key}",
             "Content-Type":   _CONTENT_TYPE,
             "Content-Length": str(len(body)),
         },

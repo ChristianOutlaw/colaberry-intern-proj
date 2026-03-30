@@ -259,6 +259,7 @@ class TestHandleGhlIntakeRequest(unittest.TestCase):
     # ------------------------------------------------------------------
     # T11 — full success path: writeback_ok=True appears in response
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t11"})
     @patch("urllib.request.urlopen")
     def test_t11_full_success_path_writeback_ok_true(self, mock_urlopen):
         resp = MagicMock()

@@ -274,6 +274,7 @@ class TestProcessGhlLeadIntake(unittest.TestCase):
     # ------------------------------------------------------------------
     # T12 — full success path: writeback_ok=True when GHL returns 200
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t12"})
     @patch("urllib.request.urlopen")
     def test_t12_writeback_ok_true_on_200(self, mock_urlopen):
         # Lead has ghl_contact_id so write_ghl_contact_fields can send.
@@ -300,6 +301,7 @@ class TestProcessGhlLeadIntake(unittest.TestCase):
     # ------------------------------------------------------------------
     # T13 — writeback failure: GHL returns 422 → writeback_ok=False, ok still True
     # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t13"})
     @patch("urllib.request.urlopen")
     def test_t13_writeback_fail_does_not_hide_failure(self, mock_urlopen):
         mock_urlopen.side_effect = urllib.error.HTTPError(
