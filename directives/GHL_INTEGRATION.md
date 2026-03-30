@@ -352,6 +352,37 @@ begins in the affected areas. They are not blockers for the directive itself.
 
 ---
 
+## Outbound Authentication (unresolved)
+
+The GHL contact-update API requires authentication on every outbound request.
+This has not yet been confirmed for this deployment.
+
+**Current state of the code:**
+`execution/ghl/write_ghl_contact_fields.py` sends `Content-Type` and
+`Content-Length` headers only. No `Authorization` header or API key is
+included. The function will fail with an authentication error when pointed
+at a real GHL API endpoint.
+
+**What must be confirmed before implementation:**
+
+| Item | Status |
+|---|---|
+| Header name (e.g. `Authorization`, `X-API-Key`) | Unconfirmed |
+| Credential format (e.g. `Bearer <token>`, raw key) | Unconfirmed |
+| How the credential is supplied at runtime (env var, config) | Unconfirmed |
+
+**What must NOT happen:**
+Credentials must not be hardcoded in source files or committed to the
+repository. Once the format is confirmed, the credential must be injected
+via an environment variable and documented in `/config`.
+
+**Blocking impact:**
+No real GHL writeback (Step 4) can succeed until this is resolved.
+All existing tests pass because they mock the HTTP layer. The gap will
+only surface on a live GHL account.
+
+---
+
 ## Non-Goals (v1)
 
 - **Building or replacing GHL's internal messaging workflows.** Our application
