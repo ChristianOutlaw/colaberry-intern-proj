@@ -365,6 +365,40 @@ class TestWriteGhlContactFields(unittest.TestCase):
 
 
     # ------------------------------------------------------------------
+    # T14 — successful send → sync_records row is SENT
+    # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t14"})
+    @patch("urllib.request.urlopen")
+    def test_t14_successful_send_persists_sent_sync_record(self, mock_urlopen):
+        _seed_lead("L_T14", phone="5550000014", ghl_contact_id="GHL_T14")
+        _seed_invite("L_T14", "INV_T14", token="tok-t14")
+        mock_urlopen.return_value = _make_mock_response(200)
+
+        write_ghl_contact_fields(
+            "L_T14",
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            db_path=TEST_DB,
+        )
+
+        conn = connect(TEST_DB)
+        try:
+            row = conn.execute(
+                """
+                SELECT destination, status
+                FROM sync_records
+                WHERE lead_id = ?
+                """,
+                ("L_T14",),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected a sync_records row for L_T14")
+        self.assertEqual(row["destination"], "GHL_WRITEBACK")
+        self.assertEqual(row["status"],      "SENT")
+
+    # ------------------------------------------------------------------
     # T13 — failed HTTP send → sync_records row is FAILED with error set
     # ------------------------------------------------------------------
     @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t13"})
