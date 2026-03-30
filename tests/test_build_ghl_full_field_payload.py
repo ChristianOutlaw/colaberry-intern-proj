@@ -24,6 +24,7 @@ T13 — booking_ready=False for new lead with no progress
 T14 — action fields present: intended_action, action_status, action_completed
 T15 — determinism: same db state + same now → identical payload
 T16 — ghl_contact_id stored in payload when present on lead
+T17 — invite_generated_at populated from course_invites.generated_at; independent of sent_at
 """
 
 import os
@@ -94,16 +95,18 @@ def _seed_invite(
     token: str,
     sent_at: str | None = None,
     channel: str | None = None,
+    generated_at: str | None = None,
 ):
     conn = connect(TEST_DB)
     try:
         init_db(conn)
         conn.execute(
             """
-            INSERT OR IGNORE INTO course_invites (id, lead_id, token, sent_at, channel)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO course_invites
+                (id, lead_id, token, sent_at, channel, generated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (invite_id, lead_id, token, sent_at, channel),
+            (invite_id, lead_id, token, sent_at, channel, generated_at),
         )
         conn.commit()
     finally:
@@ -416,6 +419,29 @@ class TestBuildGhlFullFieldPayload(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["payload"]["ghl_contact_id"], "GHL_T16_ID")
+
+
+    # ------------------------------------------------------------------
+    # T17 — invite_generated_at from course_invites.generated_at;
+    #        independent of invite_sent_at
+    # ------------------------------------------------------------------
+    def test_t17_invite_generated_at_populated_and_independent_of_sent_at(self):
+        _seed_lead("L_T17", phone="5550004444")
+        _seed_invite(
+            "L_T17", "INV_T17", token="tok_t17",
+            generated_at="2026-03-01T09:00:00+00:00",
+            sent_at="2026-03-01T10:00:00+00:00",
+        )
+
+        result = build_ghl_full_field_payload(
+            "L_T17", now=_NOW, base_url=_BASE_URL, db_path=TEST_DB
+        )
+
+        self.assertTrue(result["ok"])
+        p = result["payload"]
+        self.assertEqual(p["invite_generated_at"], "2026-03-01T09:00:00+00:00")
+        self.assertEqual(p["invite_sent_at"],      "2026-03-01T10:00:00+00:00")
+        self.assertNotEqual(p["invite_generated_at"], p["invite_sent_at"])
 
 
 if __name__ == "__main__":
