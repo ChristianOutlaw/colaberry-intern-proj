@@ -321,6 +321,26 @@ class TestWriteGhlContactFields(unittest.TestCase):
 
 
     # ------------------------------------------------------------------
+    # T12 — no invite exists → writeback blocked, ok=False, no HTTP call
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t12_no_invite_blocks_writeback(self, mock_urlopen):
+        _seed_lead("L_T12", phone="5550000012", ghl_contact_id="GHL_T12")
+        # Intentionally no _seed_invite call — guard must fire.
+
+        result = write_ghl_contact_fields(
+            "L_T12",
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            db_path=TEST_DB,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["sent"])
+        self.assertIn("course_link not yet generated", result["message"])
+        mock_urlopen.assert_not_called()
+
+    # ------------------------------------------------------------------
     # T11 — GHL_API_KEY absent → explicit error, no HTTP call
     # ------------------------------------------------------------------
     @patch("urllib.request.urlopen")
