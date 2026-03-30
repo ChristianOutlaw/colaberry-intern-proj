@@ -130,12 +130,12 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
             (app_lead_id,),
         ).fetchone()[0]
 
-        # Most recent sent sync record for action history.
-        sync_sent = conn.execute(
+        # Most recent sync record of any status — used to derive action state.
+        sync_latest = conn.execute(
             """
-            SELECT updated_at
+            SELECT status, updated_at
             FROM sync_records
-            WHERE lead_id = ? AND status = 'SENT'
+            WHERE lead_id = ?
             ORDER BY updated_at DESC
             LIMIT 1
             """,
@@ -152,7 +152,7 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
         "invite_sent_count": invite_sent_count,
         "progress_count":    progress_count,
         "reflection_count":  reflection_count,
-        "sync_sent":         dict(sync_sent) if sync_sent else None,
+        "sync_latest":       dict(sync_latest) if sync_latest else None,
     }
 
 
@@ -213,7 +213,7 @@ def build_ghl_full_field_payload(
     invite_sent     = data["invite_sent_count"] > 0
     has_quiz_data   = data["progress_count"] > 0
     has_reflection  = data["reflection_count"] > 0
-    sync_sent       = data["sync_sent"]
+    sync_latest     = data["sync_latest"]
 
     # ------------------------------------------------------------------
     # 2. Derive course_link from the latest invite token.
@@ -307,7 +307,27 @@ def build_ghl_full_field_payload(
         invite_channel = invite.get("channel")
 
     # ------------------------------------------------------------------
-    # 8. Assemble the full canonical payload.
+    # 8. Derive action / operational state from the most recent sync record.
+    # ------------------------------------------------------------------
+    if sync_latest is None:
+        action_status: str        = "PENDING"
+        action_completed: bool    = False
+        action_completed_at: str | None = None
+        last_action_sent_at: str | None = None
+    elif sync_latest["status"] == "SENT":
+        action_status       = "SENT"
+        action_completed    = True
+        action_completed_at = sync_latest["updated_at"]
+        last_action_sent_at = sync_latest["updated_at"]
+    else:
+        # FAILED or any other non-SENT status.
+        action_status       = sync_latest["status"]
+        action_completed    = False
+        action_completed_at = None
+        last_action_sent_at = sync_latest["updated_at"]
+
+    # ------------------------------------------------------------------
+    # 9. Assemble the full canonical payload.
     # ------------------------------------------------------------------
     payload = {
         # ---- Group A: Identity / Linking --------------------------------
@@ -338,10 +358,10 @@ def build_ghl_full_field_payload(
 
         # ---- Group E: Action / Operational ------------------------------
         "intended_action":     intended_action,
-        "action_status":       "PENDING",     # pending until a writeback confirms send
-        "action_completed":    False,
-        "action_completed_at": None,
-        "last_action_sent_at": sync_sent["updated_at"] if sync_sent else None,
+        "action_status":       action_status,
+        "action_completed":    action_completed,
+        "action_completed_at": action_completed_at,
+        "last_action_sent_at": last_action_sent_at,
     }
 
     return {"ok": True, "payload": payload}
