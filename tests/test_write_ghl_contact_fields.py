@@ -435,5 +435,73 @@ class TestWriteGhlContactFields(unittest.TestCase):
         self.assertTrue(len(row["error"]) > 0)
 
 
+    # ------------------------------------------------------------------
+    # T15 — no ghl_contact_id → early-exit FAILED row persisted
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t15_no_ghl_contact_id_persists_failed_sync_record(self, mock_urlopen):
+        _seed_lead("L_T15", phone="5550000015")  # no ghl_contact_id
+        _seed_invite("L_T15", "INV_T15", token="tok-t15")
+
+        result = write_ghl_contact_fields(
+            "L_T15",
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            ghl_lookup_url=None,
+            db_path=TEST_DB,
+        )
+
+        self.assertFalse(result["ok"])
+        mock_urlopen.assert_not_called()
+
+        conn = connect(TEST_DB)
+        try:
+            row = conn.execute(
+                "SELECT destination, status, error FROM sync_records WHERE lead_id = ?",
+                ("L_T15",),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected a sync_records row for L_T15")
+        self.assertEqual(row["destination"], "GHL_WRITEBACK")
+        self.assertEqual(row["status"],      "FAILED")
+        self.assertIn("No ghl_contact_id resolved", row["error"])
+
+    # ------------------------------------------------------------------
+    # T16 — GHL_API_KEY absent → early-exit FAILED row persisted
+    # ------------------------------------------------------------------
+    @patch("urllib.request.urlopen")
+    def test_t16_missing_api_key_persists_failed_sync_record(self, mock_urlopen):
+        _seed_lead("L_T16", phone="5550000016", ghl_contact_id="GHL_T16")
+        _seed_invite("L_T16", "INV_T16", token="tok-t16")
+        env_without_key = {k: v for k, v in os.environ.items() if k != "GHL_API_KEY"}
+
+        with patch.dict(os.environ, env_without_key, clear=True):
+            result = write_ghl_contact_fields(
+                "L_T16",
+                now=_NOW,
+                ghl_api_url=_GHL_URL,
+                db_path=TEST_DB,
+            )
+
+        self.assertFalse(result["ok"])
+        mock_urlopen.assert_not_called()
+
+        conn = connect(TEST_DB)
+        try:
+            row = conn.execute(
+                "SELECT destination, status, error FROM sync_records WHERE lead_id = ?",
+                ("L_T16",),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected a sync_records row for L_T16")
+        self.assertEqual(row["destination"], "GHL_WRITEBACK")
+        self.assertEqual(row["status"],      "FAILED")
+        self.assertIn("GHL_API_KEY environment variable is not set", row["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

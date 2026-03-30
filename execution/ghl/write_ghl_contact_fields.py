@@ -52,6 +52,35 @@ from execution.leads.sync_ghl_contact_id import sync_ghl_contact_id
 _CONTENT_TYPE          = "application/json"
 _DESTINATION_WRITEBACK = "GHL_WRITEBACK"
 _STATUS_NEEDS_SYNC     = "NEEDS_SYNC"
+_STATUS_FAILED         = "FAILED"
+
+
+def _persist_early_exit_failed(app_lead_id: str, error: str, now: str, db_path) -> None:
+    """Write a FAILED sync_records row for an early-exit writeback failure.
+
+    Uses the same DELETE-before-INSERT pattern as the NEEDS_SYNC step so
+    any prior row (NEEDS_SYNC, SENT, or FAILED) is replaced cleanly.
+    Called only for the two cases where a real writeback was intended but
+    could not proceed: missing ghl_contact_id and missing GHL_API_KEY.
+    """
+    _c = connect(db_path)
+    try:
+        init_db(_c)
+        _c.execute(
+            "DELETE FROM sync_records WHERE lead_id = ? AND destination = ?",
+            (app_lead_id, _DESTINATION_WRITEBACK),
+        )
+        _c.execute(
+            """
+            INSERT INTO sync_records
+                (lead_id, destination, status, error, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (app_lead_id, _DESTINATION_WRITEBACK, _STATUS_FAILED, error, now, now),
+        )
+        _c.commit()
+    finally:
+        _c.close()
 
 
 def write_ghl_contact_fields(
@@ -164,6 +193,12 @@ def write_ghl_contact_fields(
             ghl_contact_id = sync_result.get("ghl_contact_id") or None
 
     if ghl_contact_id is None:
+        _persist_early_exit_failed(
+            app_lead_id,
+            "No ghl_contact_id resolved — cannot identify GHL contact endpoint.",
+            now,
+            db_path,
+        )
         return {
             "ok":             False,
             "app_lead_id":    app_lead_id,
@@ -199,6 +234,12 @@ def write_ghl_contact_fields(
     # ------------------------------------------------------------------
     api_key = os.environ.get("GHL_API_KEY")
     if not api_key:
+        _persist_early_exit_failed(
+            app_lead_id,
+            "GHL_API_KEY environment variable is not set — request not sent.",
+            now,
+            db_path,
+        )
         return {
             "ok":             False,
             "app_lead_id":    app_lead_id,
