@@ -118,7 +118,27 @@ def write_ghl_contact_fields(
     field_payload = build_result["payload"]
 
     # ------------------------------------------------------------------
-    # 2. Resolve ghl_contact_id.
+    # 2. Guard: block send when course_link has not been generated yet.
+    #
+    #    invite_ready is derived from course_link in build_ghl_full_field_payload
+    #    (invite_ready = course_link is not None).  Sending to GHL before a
+    #    course_link exists would write invite_ready=False with a null link —
+    #    correct per the schema but premature: the directive requires the full
+    #    handshake (link generated → writeback → GHL sends) to complete in order.
+    #    Blocking here enforces that constraint at the transport boundary.
+    # ------------------------------------------------------------------
+    if not field_payload.get("course_link"):
+        return {
+            "ok":             False,
+            "app_lead_id":    app_lead_id,
+            "ghl_contact_id": None,
+            "sent":           False,
+            "status_code":    None,
+            "message":        "Writeback blocked: course_link not yet generated for this lead.",
+        }
+
+    # ------------------------------------------------------------------
+    # 3. Resolve ghl_contact_id.
     #
     #    Preferred: already stored on the lead (present in the built payload).
     #    Fallback:  call sync_ghl_contact_id when a lookup URL is configured.

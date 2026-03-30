@@ -72,6 +72,23 @@ def _seed_lead(
         conn.close()
 
 
+def _seed_invite(lead_id: str, invite_id: str, token: str = "test-token") -> None:
+    """Insert a minimal course_invites row so course_link can be generated."""
+    conn = connect(TEST_DB)
+    try:
+        init_db(conn)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO course_invites (id, lead_id, token)
+            VALUES (?, ?, ?)
+            """,
+            (invite_id, lead_id, token),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _make_mock_response(status: int = 200) -> MagicMock:
     """Build a context-manager-compatible mock HTTP response."""
     resp = MagicMock()
@@ -157,6 +174,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_t4_stored_ghl_contact_id_skips_lookup(self, mock_urlopen, mock_sync):
         _seed_lead("L_T4", phone="5550000004", ghl_contact_id="GHL_STORED_T4")
+        _seed_invite("L_T4", "INV_T4", token="tok-t4")
         mock_urlopen.return_value = _make_mock_response(200)
 
         result = write_ghl_contact_fields(
@@ -178,6 +196,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_t5_successful_send_returns_ok_true(self, mock_urlopen):
         _seed_lead("L_T5", phone="5550000005", ghl_contact_id="GHL_T5")
+        _seed_invite("L_T5", "INV_T5", token="tok-t5")
         mock_urlopen.return_value = _make_mock_response(200)
 
         result = write_ghl_contact_fields(
@@ -201,6 +220,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_t6_http_error_returns_ok_false_with_status_code(self, mock_urlopen):
         _seed_lead("L_T6", phone="5550000006", ghl_contact_id="GHL_T6")
+        _seed_invite("L_T6", "INV_T6", token="tok-t6")
         mock_urlopen.side_effect = urllib.error.HTTPError(
             url=_GHL_URL, code=422, msg="Unprocessable Entity",
             hdrs=None, fp=BytesIO(b""),
@@ -226,6 +246,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_t7_url_error_returns_ok_false_no_status_code(self, mock_urlopen):
         _seed_lead("L_T7", phone="5550000007", ghl_contact_id="GHL_T7")
+        _seed_invite("L_T7", "INV_T7", token="tok-t7")
         mock_urlopen.side_effect = urllib.error.URLError(reason="Connection refused")
 
         result = write_ghl_contact_fields(
@@ -246,6 +267,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_t8_no_api_url_safe_no_op(self, mock_urlopen):
         _seed_lead("L_T8", phone="5550000008", ghl_contact_id="GHL_T8")
+        _seed_invite("L_T8", "INV_T8", token="tok-t8")
 
         result = write_ghl_contact_fields(
             "L_T8",
@@ -304,6 +326,7 @@ class TestWriteGhlContactFields(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_t11_missing_api_key_returns_explicit_error(self, mock_urlopen):
         _seed_lead("L_T11", phone="5550000011", ghl_contact_id="GHL_T11")
+        _seed_invite("L_T11", "INV_T11", token="tok-t11")
         env_without_key = {k: v for k, v in os.environ.items() if k != "GHL_API_KEY"}
 
         with patch.dict(os.environ, env_without_key, clear=True):
