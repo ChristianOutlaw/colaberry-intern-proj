@@ -104,12 +104,12 @@ class TestGetCoraRecommendation(unittest.TestCase):
         record_progress_event(
             "E2", "L1", "P1_S2", occurred_at=activity_ts, db_path=TEST_DB_PATH
         )
-        # 2 distinct sections / 4 total = 50% ≥ 25% → HOT gate passes.
-        compute_course_state("L1", total_sections=4, db_path=TEST_DB_PATH)
+        # 2 distinct sections / 2 total = 100% → satisfies Rule 2 completion gate.
+        compute_course_state("L1", total_sections=2, db_path=TEST_DB_PATH)
 
         rec = get_cora_recommendation("L1", now=_NOW, db_path=TEST_DB_PATH)
 
-        self.assertEqual(rec["event_type"], "HOT_LEAD_BOOKING")
+        self.assertEqual(rec["event_type"], "READY_FOR_BOOKING")
         self.assertEqual(rec["priority"], "HIGH")
         self.assertEqual(rec["recommended_channel"], "CALL")
 
@@ -152,9 +152,9 @@ class TestGetCoraRecommendation(unittest.TestCase):
 
         rec = get_cora_recommendation("L1", now=_NOW, db_path=TEST_DB_PATH)
 
-        self.assertEqual(rec["event_type"], "NO_ACTION")
-        self.assertEqual(rec["priority"], "LOW")
-        self.assertIsNone(rec["recommended_channel"])
+        self.assertEqual(rec["event_type"], "REENGAGE_COMPLETED")
+        self.assertEqual(rec["priority"], "MEDIUM")
+        self.assertEqual(rec["recommended_channel"], "EMAIL")
 
     # ------------------------------------------------------------------
     # T6 — non-existent lead raises ValueError
