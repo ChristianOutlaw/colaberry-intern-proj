@@ -41,11 +41,17 @@ import json
 import os
 import urllib.error
 import urllib.request
+from datetime import datetime
 
+from execution.db.sqlite import connect, init_db
 from execution.ghl.build_ghl_full_field_payload import build_ghl_full_field_payload
+from execution.leads.mark_sync_record_failed import mark_sync_record_failed
+from execution.leads.mark_sync_record_sent import mark_sync_record_sent
 from execution.leads.sync_ghl_contact_id import sync_ghl_contact_id
 
-_CONTENT_TYPE = "application/json"
+_CONTENT_TYPE          = "application/json"
+_DESTINATION_WRITEBACK = "GHL_WRITEBACK"
+_STATUS_NEEDS_SYNC     = "NEEDS_SYNC"
 
 
 def write_ghl_contact_fields(
@@ -203,7 +209,38 @@ def write_ghl_contact_fields(
         }
 
     # ------------------------------------------------------------------
-    # 5. POST the canonical payload to GHL.
+    # 5. Write NEEDS_SYNC outbox record before the HTTP attempt.
+    #
+    #    DELETE all prior rows for (app_lead_id, GHL_WRITEBACK) first so
+    #    that mark_sync_record_failed — which has no record_id targeted path
+    #    and returns {changed: False} when a FAILED row already exists —
+    #    always finds a clean slate.  This makes retries safe.
+    # ------------------------------------------------------------------
+    now_dt = datetime.fromisoformat(now)
+    _conn = connect(db_path)
+    try:
+        init_db(_conn)
+        _conn.execute(
+            "DELETE FROM sync_records WHERE lead_id = ? AND destination = ?",
+            (app_lead_id, _DESTINATION_WRITEBACK),
+        )
+        _conn.execute(
+            """
+            INSERT INTO sync_records
+                (lead_id, destination, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (app_lead_id, _DESTINATION_WRITEBACK, _STATUS_NEEDS_SYNC, now, now),
+        )
+        _conn.commit()
+        _sync_record_id = _conn.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
+    finally:
+        _conn.close()
+
+    # ------------------------------------------------------------------
+    # 6. POST the canonical payload to GHL.
     #
     #    The body wraps the field payload with the target ghl_contact_id so
     #    the receiving endpoint always has full context in a single request.
@@ -228,6 +265,13 @@ def write_ghl_contact_fields(
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
+            mark_sync_record_sent(
+                app_lead_id,
+                now_dt,
+                destination=_DESTINATION_WRITEBACK,
+                db_path=db_path,
+                record_id=_sync_record_id,
+            )
             return {
                 "ok":             True,
                 "app_lead_id":    app_lead_id,
@@ -238,6 +282,13 @@ def write_ghl_contact_fields(
             }
 
     except urllib.error.HTTPError as exc:
+        mark_sync_record_failed(
+            app_lead_id,
+            now_dt,
+            destination=_DESTINATION_WRITEBACK,
+            error=f"HTTP {exc.code}: {exc.reason}",
+            db_path=db_path,
+        )
         return {
             "ok":             False,
             "app_lead_id":    app_lead_id,
@@ -248,6 +299,13 @@ def write_ghl_contact_fields(
         }
 
     except urllib.error.URLError as exc:
+        mark_sync_record_failed(
+            app_lead_id,
+            now_dt,
+            destination=_DESTINATION_WRITEBACK,
+            error=f"Network error: {exc.reason}",
+            db_path=db_path,
+        )
         return {
             "ok":             False,
             "app_lead_id":    app_lead_id,
