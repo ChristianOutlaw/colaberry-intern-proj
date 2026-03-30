@@ -504,6 +504,51 @@ The current manual retry flow is:
 No new infrastructure is required. When a background worker exists, it can
 follow the same three-step flow automatically with a configurable retry limit.
 
+### Stuck NEEDS_SYNC Detection and Recovery
+
+A `GHL_WRITEBACK` row that remains in `NEEDS_SYNC` for more than 5 minutes
+indicates the originating process did not complete (crash, kill, unhandled
+exception). These rows do not self-heal and will not appear in the standard
+FAILED recovery query.
+
+**Detection query:**
+
+```sql
+SELECT id, lead_id, updated_at
+FROM sync_records
+WHERE destination = 'GHL_WRITEBACK'
+  AND status      = 'NEEDS_SYNC'
+  AND updated_at  < datetime('now', '-5 minutes');
+```
+
+**Do not retry a stuck row directly.** The original request may have reached
+GHL before the process died. Retrying without inspection risks a duplicate
+contact update triggering a second invite send.
+
+**Recovery flow:**
+
+1. Check the GHL contact record to determine whether the original request was
+   delivered.
+2. If confirmed **not delivered** — manually transition the row to `FAILED`:
+   ```sql
+   UPDATE sync_records
+   SET status     = 'FAILED',
+       error      = 'Stuck NEEDS_SYNC — process did not complete',
+       updated_at = datetime('now')
+   WHERE id = <record_id>;
+   ```
+   Then call `retry_failed_ghl_writeback(record_id, now=..., ...)` as normal.
+3. If delivery status is **uncertain** — transition to `FAILED` with an
+   explanatory error:
+   ```sql
+   UPDATE sync_records
+   SET status     = 'FAILED',
+       error      = 'Stuck NEEDS_SYNC — delivery status unknown; verify GHL before retrying',
+       updated_at = datetime('now')
+   WHERE id = <record_id>;
+   ```
+   Inspect the GHL contact record before deciding whether to retry.
+
 ---
 
 ## Non-Goals (v1)
