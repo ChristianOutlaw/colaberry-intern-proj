@@ -25,6 +25,7 @@ def create_student_invite_from_payload(
     invite_id: str | None = None,
     base_url: str = "http://localhost:8501",
     db_path: str | None = None,
+    now: str | None = None,
 ) -> dict:
     """Upsert a lead, ensure enrollment, create an invite, and return all IDs + link.
 
@@ -43,6 +44,10 @@ def create_student_invite_from_payload(
         base_url:  Base URL of the student portal, without trailing slash.
                    Defaults to 'http://localhost:8501'.
         db_path:   Path to the SQLite file; defaults to tmp/app.db.
+        now:       ISO-8601 UTC string written to generated_at on the invite row.
+                   When None, generated_at is left null.  Callers should always
+                   supply this value; omitting it is only safe in legacy call
+                   sites that have not yet been updated.
 
     Returns:
         dict with keys:
@@ -81,10 +86,10 @@ def create_student_invite_from_payload(
         init_db(conn)
         conn.execute(
             """
-            INSERT OR IGNORE INTO course_invites (id, lead_id, course_id, token)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO course_invites (id, lead_id, course_id, token, generated_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (invite_id, lead_id, course_id, _token_candidate),
+            (invite_id, lead_id, course_id, _token_candidate, now),
         )
         conn.commit()
         row = conn.execute(
