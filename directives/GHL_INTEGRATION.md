@@ -481,6 +481,29 @@ webhooks, not Cory recommendations (which use their own `CORY_*` destinations).
 It is designed for failure visibility and retry, not full attempt-history
 analytics. Only the most recent outcome per lead is stored.
 
+### Retry Strategy (initial — manual)
+
+Automatic retry is deferred. GHL-side idempotency is not yet guaranteed: a
+timed-out request may have been processed by GHL before the connection dropped,
+so an automatic re-send risks a duplicate contact update triggering a second
+invite send.
+
+The current manual retry flow is:
+
+1. Query `sync_records` for rows needing retry:
+   ```sql
+   SELECT id, lead_id FROM sync_records
+   WHERE destination = 'GHL_WRITEBACK' AND status = 'FAILED';
+   ```
+2. For each row, call `requeue_failed_action(record_id)` — transitions the row
+   back to `NEEDS_SYNC`.
+3. Call `write_ghl_contact_fields(app_lead_id, now=..., ...)` — this deletes the
+   NEEDS_SYNC row, inserts a fresh one, attempts the HTTP POST, and persists the
+   new outcome as `SENT` or `FAILED`.
+
+No new infrastructure is required. When a background worker exists, it can
+follow the same three-step flow automatically with a configurable retry limit.
+
 ---
 
 ## Non-Goals (v1)
