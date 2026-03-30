@@ -364,5 +364,42 @@ class TestWriteGhlContactFields(unittest.TestCase):
         mock_urlopen.assert_not_called()
 
 
+    # ------------------------------------------------------------------
+    # T13 — failed HTTP send → sync_records row is FAILED with error set
+    # ------------------------------------------------------------------
+    @patch.dict(os.environ, {"GHL_API_KEY": "test-key-t13"})
+    @patch("urllib.request.urlopen")
+    def test_t13_failed_send_persists_failed_sync_record(self, mock_urlopen):
+        _seed_lead("L_T13", phone="5550000013", ghl_contact_id="GHL_T13")
+        _seed_invite("L_T13", "INV_T13", token="tok-t13")
+        mock_urlopen.side_effect = urllib.error.URLError(reason="Connection refused")
+
+        write_ghl_contact_fields(
+            "L_T13",
+            now=_NOW,
+            ghl_api_url=_GHL_URL,
+            db_path=TEST_DB,
+        )
+
+        conn = connect(TEST_DB)
+        try:
+            row = conn.execute(
+                """
+                SELECT destination, status, error
+                FROM sync_records
+                WHERE lead_id = ?
+                """,
+                ("L_T13",),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(row, "Expected a sync_records row for L_T13")
+        self.assertEqual(row["destination"], "GHL_WRITEBACK")
+        self.assertEqual(row["status"],      "FAILED")
+        self.assertIsNotNone(row["error"])
+        self.assertTrue(len(row["error"]) > 0)
+
+
 if __name__ == "__main__":
     unittest.main()
