@@ -448,6 +448,41 @@ live GHL account until this header is wired.
 
 ---
 
+## Writeback Outcome Tracking
+
+GHL full-field writeback attempts are persisted to the `sync_records` table
+for durable failure visibility and operational recovery.
+
+**Destination label:** `GHL_WRITEBACK`
+
+**Status lifecycle:**
+
+| Status | Meaning |
+|---|---|
+| `NEEDS_SYNC` | Writeback attempt is in progress. |
+| `SENT` | HTTP call succeeded (2xx response from GHL). |
+| `FAILED` | HTTP call failed (4xx/5xx, network error, or missing API key). |
+
+**Failure recovery:**
+FAILED rows are queryable with a single `SELECT` on `sync_records`:
+
+```sql
+SELECT * FROM sync_records
+WHERE destination = 'GHL_WRITEBACK' AND status = 'FAILED';
+```
+
+A FAILED row can be retried by calling `requeue_failed_action(record_id)`
+which transitions it back to `NEEDS_SYNC` for the next dispatch cycle.
+No other infrastructure changes are required.
+
+**Scope:**
+This tracking covers the Step 4 full-field writeback only — not GHL inbound
+webhooks, not Cory recommendations (which use their own `CORY_*` destinations).
+It is designed for failure visibility and retry, not full attempt-history
+analytics. Only the most recent outcome per lead is stored.
+
+---
+
 ## Non-Goals (v1)
 
 - **Building or replacing GHL's internal messaging workflows.** Our application
