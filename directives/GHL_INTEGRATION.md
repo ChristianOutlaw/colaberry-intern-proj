@@ -128,6 +128,67 @@ shortcut around this gate.
 
 ---
 
+## Inbound Webhook Payload Contract (Step 2)
+
+This section defines exactly what our application reads from the GHL webhook
+payload delivered in Step 2. Only the fields listed below are consumed.
+All other fields in the payload are ignored.
+
+### Accepted fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `phone` | string | No¹ | Primary matching field. Stripped of surrounding whitespace before comparison. |
+| `email` | string | No¹ | Matching fallback when phone is absent or unmatched. Lowercased and stripped. |
+| `name` | string | No¹ | Weak fallback. Used for matching only when the name is unique in the local dataset. If zero or multiple leads share the name, a new record is created. |
+| `ghl_contact_id` | string | No | Stored on the lead record when present. Not used as a matching key. Required only for the Step 4 GHL writeback to function. |
+
+¹ At least one of `phone`, `email`, or `name` must be present and non-empty.
+A payload with none of these three fields is rejected before any database
+mutation occurs.
+
+### Minimum viable payload
+
+Any single identity field is sufficient to enter the system:
+
+```json
+{ "phone": "5551234567" }
+```
+
+```json
+{ "email": "student@example.com" }
+```
+
+### Recommended payload
+
+Include all available identity fields plus `ghl_contact_id` so the full
+handshake can complete without a separate contact-lookup call:
+
+```json
+{
+  "ghl_contact_id": "abc123xyz",
+  "phone": "5551234567",
+  "email": "student@example.com",
+  "name": "Jane Smith"
+}
+```
+
+### Extra fields are ignored
+
+GHL webhooks may include many additional fields (tags, custom fields, pipeline
+data, etc.). Our application reads only the four fields listed above.
+All other fields in the inbound payload are discarded silently.
+
+### `ghl_contact_id` — when to include
+
+`ghl_contact_id` is not required for identity matching, but it must be present
+on the lead record before the Step 4 writeback can reach GHL. Including it in
+the inbound webhook payload is the simplest way to ensure it is stored. If it
+is absent on intake, the writeback step will attempt a separate lookup call to
+resolve it — or fail if no lookup URL is configured.
+
+---
+
 ## Identity Matching Rules
 
 Our application uses a matching hierarchy when resolving an inbound GHL contact
