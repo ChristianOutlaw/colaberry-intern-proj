@@ -99,7 +99,7 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
         # Most-recent invite row (by id DESC as stable tie-break; sent_at is often NULL).
         invite = conn.execute(
             """
-            SELECT token, sent_at, channel
+            SELECT token, generated_at, sent_at, channel
             FROM course_invites
             WHERE lead_id = ?
             ORDER BY id DESC
@@ -341,7 +341,7 @@ def build_ghl_full_field_payload(
         # ---- Group B: Invite / Access -----------------------------------
         "invite_ready":        course_link is not None,
         "invite_status":       invite_status,
-        "invite_generated_at": None,          # not persisted in this schema version
+        "invite_generated_at": invite.get("generated_at") if invite is not None else None,
         "invite_sent_at":      invite_sent_at,
         "invite_channel":      invite_channel,
 
