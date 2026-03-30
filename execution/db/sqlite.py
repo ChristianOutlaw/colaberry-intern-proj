@@ -88,6 +88,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             id             TEXT PRIMARY KEY,
             lead_id        TEXT NOT NULL,
             course_id      TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0',
+            generated_at   TEXT,
             sent_at        TEXT,
             channel        TEXT,
             token          TEXT,
@@ -191,6 +192,10 @@ def init_db(conn: sqlite3.Connection) -> None:
             "ALTER TABLE course_invites "
             "ADD COLUMN course_id TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0'"
         )
+        conn.commit()
+
+    if "generated_at" not in existing_columns:
+        conn.execute("ALTER TABLE course_invites ADD COLUMN generated_at TEXT")
         conn.commit()
 
     conn.execute(
