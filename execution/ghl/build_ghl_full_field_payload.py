@@ -341,7 +341,6 @@ def build_ghl_full_field_payload(
         # ---- Group B: Invite / Access -----------------------------------
         "invite_status":       invite_status,
         "invite_sent_at":      invite_sent_at,
-        "invite_channel":      invite_channel,
 
         # ---- Group C: Course Progress -----------------------------------
         "course_started":   started_at is not None,
