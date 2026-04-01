@@ -332,7 +332,10 @@ def build_ghl_full_field_payload(
         "has_quiz_data":      has_quiz_data,
         "has_reflection_data": has_reflection,
     }
-    computable = can_compute_final_score(score_gate_row)
+    computable = can_compute_final_score(
+        score_gate_row,
+        completion_pct=completion_pct,
+    )
 
     reflection_confidence = _resolve_reflection_confidence(app_lead_id, db_path)
 
