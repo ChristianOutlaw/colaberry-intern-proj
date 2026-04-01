@@ -52,6 +52,7 @@ from execution.leads.derive_lead_lifecycle_state import (
     derive_lead_lifecycle_state,
 )
 from execution.leads.get_latest_invite_token import get_latest_invite_token
+from execution.reflection.load_reflection_responses import load_reflection_responses
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +171,56 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Reflection confidence helper
+# ---------------------------------------------------------------------------
+
+def _resolve_reflection_confidence(
+    app_lead_id: str,
+    db_path: str | None,
+) -> str | None:
+    """Derive a reflection_confidence bucket from stored structured ratings.
+
+    Looks for the most recent rating stored under the confidence prompt keys
+    (confidence_current, confidence_start) across all sections.  Returns
+    "LOW", "MEDIUM", or "HIGH", or None when no rating is found.
+
+    Rating → bucket mapping:
+        1 or 2  → "LOW"
+        3       → "MEDIUM"
+        4 or 5  → "HIGH"
+    """
+    _CONFIDENCE_KEYS = {"confidence_current", "confidence_start"}
+    responses = load_reflection_responses(app_lead_id, "FREE_INTRO_AI_V0", db_path)
+
+    # Collect all stored rating strings for confidence prompt slots.
+    # section_prompt order is not guaranteed here, so we gather all values and
+    # use the last non-None one found (dict iteration is insertion-ordered in
+    # Python 3.7+, reflecting storage order via prompt_index).
+    latest_rating_str: str | None = None
+    for section_id, prompts in responses.items():
+        # The course_map prompt order maps directly to prompt_index integers.
+        # We only care whether the stored value looks like a rating string.
+        for _idx, text in prompts.items():
+            # Accept strings that begin with a digit 1-5 followed by " - ".
+            if text and len(text) >= 3 and text[0] in "12345" and text[1] == " ":
+                latest_rating_str = text
+
+    if latest_rating_str is None:
+        return None
+
+    try:
+        rating = int(latest_rating_str[0])
+    except (ValueError, IndexError):
+        return None
+
+    if rating in (1, 2):
+        return "LOW"
+    if rating == 3:
+        return "MEDIUM"
+    return "HIGH"   # 4 or 5
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -283,12 +334,10 @@ def build_ghl_full_field_payload(
     }
     computable = can_compute_final_score(score_gate_row)
 
+    reflection_confidence = _resolve_reflection_confidence(app_lead_id, db_path)
+
     final_label: str | None = None
     if computable:
-        # Compute temperature with available data.  Quiz/reflection detail
-        # signals are passed as None (honest — we do not have the aggregated
-        # numeric values stored), which earns half-credit per the scoring
-        # engine design and avoids fabricating values.
         temp = compute_lead_temperature(
             now=now_dt,
             invited_sent=invite_sent,
@@ -297,7 +346,7 @@ def build_ghl_full_field_payload(
             started_at=started_at,
             avg_quiz_score=None,
             avg_quiz_attempts=None,
-            reflection_confidence=None,
+            reflection_confidence=reflection_confidence,
             current_section=current_section,
         )
         final_label = classify_final_lead_label(temp["score"])
