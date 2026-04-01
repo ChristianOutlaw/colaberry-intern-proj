@@ -76,8 +76,8 @@ def derive_lead_lifecycle_state(
     if not invite_sent:
         return STATE_NOT_INVITED
 
-    # Rule 2 — HOT signal + 100 % complete → booking candidate
-    if hot_signal == "HOT" and completion_percent is not None and completion_percent >= 100.0:
+    # Rule 2 — 100 % complete → booking candidate (hot signal not required)
+    if completion_percent is not None and completion_percent >= 100.0:
         return STATE_BOOKING_READY
 
     # Rule 3 — started but stalled mid-course
