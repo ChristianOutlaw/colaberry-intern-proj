@@ -19,7 +19,8 @@
       "reflection_prompts": [
         "confidence_start",
         "early_surprise"
-      ]
+      ],
+      "rating_prompts": ["confidence_start"]
     },
 
     {
@@ -36,7 +37,8 @@
         "motivation",
         "interest_area",
         "confidence_current"
-      ]
+      ],
+      "rating_prompts": ["confidence_current"]
     },
 
     {
@@ -50,8 +52,10 @@
         "quiz_phase4_mod4_1"
       ],
       "reflection_prompts": [
-        "real_world_interest"
-      ]
+        "real_world_interest",
+        "confidence_current"
+      ],
+      "rating_prompts": ["confidence_current"]
     },
 
     {
@@ -64,8 +68,10 @@
         "quiz_phase2_mod2_1"
       ],
       "reflection_prompts": [
-        "motivation"
-      ]
+        "motivation",
+        "confidence_current"
+      ],
+      "rating_prompts": ["confidence_current"]
     },
 
     {
@@ -79,8 +85,10 @@
         "quiz_phase3_mod3_1"
       ],
       "reflection_prompts": [
-        "data_to_decision_reflection"
-      ]
+        "data_to_decision_reflection",
+        "confidence_current"
+      ],
+      "rating_prompts": ["confidence_current"]
     },
 
     {
@@ -96,7 +104,8 @@
       "reflection_prompts": [
         "confidence_current",
         "data_to_decision_reflection"
-      ]
+      ],
+      "rating_prompts": ["confidence_current"]
     },
 
     {
@@ -124,8 +133,10 @@
         "quiz_phase4_mod4_2"
       ],
       "reflection_prompts": [
-        "real_world_interest"
-      ]
+        "real_world_interest",
+        "confidence_current"
+      ],
+      "rating_prompts": ["confidence_current"]
     },
 
     {
@@ -141,8 +152,10 @@
       "reflection_prompts": [
         "intent_level",
         "preferred_path",
-        "open_reflection"
-      ]
+        "open_reflection",
+        "confidence_current"
+      ],
+      "rating_prompts": ["confidence_current"]
     }
 
   ]
