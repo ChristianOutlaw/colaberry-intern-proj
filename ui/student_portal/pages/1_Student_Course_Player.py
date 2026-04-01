@@ -40,6 +40,7 @@ from execution.decision.get_cora_recommendation import get_cora_recommendation  
 from execution.events.send_course_event import send_course_event                    # noqa: E402
 from execution.reflection.load_reflection_responses import load_reflection_responses  # noqa: E402
 from execution.reflection.save_reflection_response import save_reflection_response   # noqa: E402
+from execution.ghl.write_ghl_contact_fields import write_ghl_contact_fields          # noqa: E402
 from ui.theme import apply_colaberry_theme                                          # noqa: E402
 from ui.student_portal.ai_tutor import generate_tutor_reply                         # noqa: E402
 from ui.student_portal._player_debug import log as _dbg_log, snap as _dbg_snap, enabled as _dbg_enabled  # noqa: E402
@@ -51,6 +52,7 @@ DB_PATH = str(REPO_ROOT / "tmp" / "app.db")
 COURSE_CONTENT_DIR = REPO_ROOT / "course_content" / "FREE_INTRO_AI_V0"
 COURSE_ID = "FREE_INTRO_AI_V0"
 COURSE_EVENT_WEBHOOK_URL: str | None = os.environ.get("COURSE_EVENT_WEBHOOK_URL")
+GHL_API_URL: str | None = os.environ.get("GHL_API_URL")
 EM_DASH = "\u2014"
 
 
@@ -2037,6 +2039,16 @@ elif step == "complete":
                     webhook_url=COURSE_EVENT_WEBHOOK_URL,
                 )
                 compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH, webhook_url=COURSE_EVENT_WEBHOOK_URL)
+                try:
+                    if lead_id:
+                        write_ghl_contact_fields(
+                            lead_id,
+                            now=occurred_at,
+                            ghl_api_url=GHL_API_URL,
+                            db_path=DB_PATH,
+                        )
+                except Exception:
+                    logging.exception("GHL writeback failed at section completion")
                 updated_status = get_lead_status(lead_id, db_path=DB_PATH)
                 st.session_state["player_status"] = updated_status
                 _hydrate_completed_from_status(updated_status)
