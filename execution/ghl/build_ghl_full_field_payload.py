@@ -155,6 +155,16 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
             (app_lead_id,),
         ).fetchone()
 
+        # Locked final result — written once at course completion.
+        final_score_row = conn.execute(
+            """
+            SELECT final_label, final_score
+            FROM lead_final_scores
+            WHERE lead_id = ? AND course_id = ?
+            """,
+            (app_lead_id, "FREE_INTRO_AI_V0"),
+        ).fetchone()
+
     finally:
         conn.close()
 
@@ -167,6 +177,7 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
         "reflection_count":  reflection_count,
         "midpoint_events":   [dict(r) for r in midpoint_rows],
         "sync_latest":       dict(sync_latest) if sync_latest else None,
+        "final_score_row":   dict(final_score_row) if final_score_row else None,
     }
 
 
@@ -339,8 +350,14 @@ def build_ghl_full_field_payload(
 
     reflection_confidence = _resolve_reflection_confidence(app_lead_id, db_path)
 
+    persisted_final = data["final_score_row"]
+
     final_label: str | None = None
-    if computable:
+    final_confidence_score: int | None = None
+    if persisted_final is not None:
+        final_label = persisted_final["final_label"]
+        final_confidence_score = persisted_final["final_score"]
+    elif computable:
         temp = compute_lead_temperature(
             now=now_dt,
             invited_sent=invite_sent,
@@ -353,6 +370,7 @@ def build_ghl_full_field_payload(
             current_section=current_section,
         )
         final_label = classify_final_lead_label(temp["score"])
+        final_confidence_score = temp["score"]
 
     # ------------------------------------------------------------------
     # 6b. Rolling score — compute_lead_temperature at the midpoint of
@@ -443,7 +461,7 @@ def build_ghl_full_field_payload(
 
         # ---- Group D: Scoring / Qualification ---------------------------
         "final_label":            final_label,
-        "final_confidence_score":   temp["score"] if computable else None,
+        "final_confidence_score":   final_confidence_score,
         "rolling_confidence_score": rolling_score if midpoint_events else None,
         "rolling_label":            classify_final_lead_label(rolling_score) if midpoint_events else None,
         "needs_review":             final_label == "FINAL_WARM",
