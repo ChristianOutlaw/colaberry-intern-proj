@@ -390,6 +390,7 @@ def build_ghl_full_field_payload(
         "current_section":  current_section,
         "last_activity_at": last_activity_at,
         "started_at":       started_at,
+        "completed_at":     last_activity_at if (completion_pct is not None and completion_pct >= 100) else None,
 
         # ---- Group D: Scoring / Qualification ---------------------------
         "final_label":            final_label,
