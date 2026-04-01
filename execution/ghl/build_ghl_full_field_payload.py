@@ -41,6 +41,7 @@ ok=False (lead not found):
 
 from datetime import datetime, timezone
 
+from execution.course.course_registry import TOTAL_SECTIONS
 from execution.db.sqlite import connect, init_db
 from execution.decision.decide_next_cold_lead_action import decide_next_cold_lead_action
 from execution.leads.can_compute_final_score import can_compute_final_score
@@ -130,6 +131,18 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
             (app_lead_id,),
         ).fetchone()[0]
 
+        # Distinct completed sections ordered by first occurrence — used for rolling score.
+        midpoint_rows = conn.execute(
+            """
+            SELECT section, MIN(occurred_at) AS first_seen
+            FROM progress_events
+            WHERE lead_id = ?
+            GROUP BY section
+            ORDER BY first_seen ASC
+            """,
+            (app_lead_id,),
+        ).fetchall()
+
         # Most recent sync record of any status — used to derive action state.
         sync_latest = conn.execute(
             """
@@ -152,6 +165,7 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
         "invite_sent_count": invite_sent_count,
         "progress_count":    progress_count,
         "reflection_count":  reflection_count,
+        "midpoint_events":   [dict(r) for r in midpoint_rows],
         "sync_latest":       dict(sync_latest) if sync_latest else None,
     }
 
@@ -213,6 +227,7 @@ def build_ghl_full_field_payload(
     invite_sent     = data["invite_sent_count"] > 0
     has_quiz_data   = data["progress_count"] > 0
     has_reflection  = data["reflection_count"] > 0
+    all_sections    = data["midpoint_events"]
     sync_latest     = data["sync_latest"]
 
     # ------------------------------------------------------------------
@@ -289,6 +304,33 @@ def build_ghl_full_field_payload(
         final_label = classify_final_lead_label(temp["score"])
 
     # ------------------------------------------------------------------
+    # 6b. Rolling score — compute_lead_temperature at the midpoint of
+    #     observed progress (first half of distinct sections by first
+    #     occurrence).  Requires at least 2 distinct sections; otherwise
+    #     rolling_confidence_score is None.
+    # ------------------------------------------------------------------
+    midpoint_n      = len(all_sections) // 2
+    midpoint_events = all_sections[:midpoint_n] if midpoint_n > 0 else []
+
+    rolling_score: int | None = None
+    if midpoint_events:
+        mid_started_at       = midpoint_events[0]["first_seen"]
+        mid_last_activity_at = midpoint_events[-1]["first_seen"]
+        mid_completion_pct   = (midpoint_n / TOTAL_SECTIONS) * 100.0
+        mid_temp = compute_lead_temperature(
+            now=now_dt,
+            invited_sent=invite_sent,
+            completion_percent=mid_completion_pct,
+            last_activity_at=mid_last_activity_at,
+            started_at=mid_started_at,
+            avg_quiz_score=None,
+            avg_quiz_attempts=None,
+            reflection_confidence=None,
+            current_section=None,
+        )
+        rolling_score = mid_temp["score"]
+
+    # ------------------------------------------------------------------
     # 7. Invite / Access derived values.
     # ------------------------------------------------------------------
     # invite_status: SENT if any invite has been sent; GENERATED if an
@@ -351,8 +393,9 @@ def build_ghl_full_field_payload(
 
         # ---- Group D: Scoring / Qualification ---------------------------
         "final_label":            final_label,
-        "final_confidence_score": temp["score"] if computable else None,
-        "needs_review":           final_label == "FINAL_WARM",
+        "final_confidence_score":   temp["score"] if computable else None,
+        "rolling_confidence_score": rolling_score if midpoint_events else None,
+        "needs_review":             final_label == "FINAL_WARM",
         "booking_ready":     lifecycle_state == STATE_BOOKING_READY,
         "lead_state":        lifecycle_state,
 
