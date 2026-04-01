@@ -357,7 +357,6 @@ def build_ghl_full_field_payload(
         # ---- Group E: Action / Operational ------------------------------
         "intended_action":     intended_action,
         "action_status":       action_status,
-        "action_completed":    action_completed,
         "action_completed_at": action_completed_at,
         "last_action_sent_at": last_action_sent_at,
     }
