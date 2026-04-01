@@ -35,6 +35,7 @@ from execution.course.load_quiz_library import load_quiz_library                
 from execution.leads.get_lead_status import get_lead_status                         # noqa: E402
 from execution.leads.upsert_lead import upsert_lead                                 # noqa: E402
 from execution.progress.compute_course_state import compute_course_state            # noqa: E402
+from execution.progress.finalize_on_completion import finalize_on_completion        # noqa: E402
 from execution.progress.record_progress_event import record_progress_event          # noqa: E402
 from execution.decision.get_cora_recommendation import get_cora_recommendation       # noqa: E402
 from execution.events.send_course_event import send_course_event                    # noqa: E402
@@ -2038,7 +2039,13 @@ elif step == "complete":
                     db_path=DB_PATH,
                     webhook_url=COURSE_EVENT_WEBHOOK_URL,
                 )
-                compute_course_state(lead_id, total_sections=TOTAL_SECTIONS, db_path=DB_PATH, webhook_url=COURSE_EVENT_WEBHOOK_URL)
+                finalize_on_completion(
+                    lead_id,
+                    total_sections=TOTAL_SECTIONS,
+                    now=occurred_at,
+                    db_path=DB_PATH,
+                    webhook_url=COURSE_EVENT_WEBHOOK_URL,
+                )
                 try:
                     if lead_id:
                         write_ghl_contact_fields(
