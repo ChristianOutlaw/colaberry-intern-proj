@@ -350,8 +350,9 @@ def build_ghl_full_field_payload(
         "started_at":       started_at,
 
         # ---- Group D: Scoring / Qualification ---------------------------
-        "final_label":       final_label,
-        "needs_review":      final_label == "FINAL_WARM",
+        "final_label":            final_label,
+        "final_confidence_score": temp["score"] if computable else None,
+        "needs_review":           final_label == "FINAL_WARM",
         "booking_ready":     lifecycle_state == STATE_BOOKING_READY,
         "lead_state":        lifecycle_state,
 
