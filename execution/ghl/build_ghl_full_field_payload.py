@@ -350,11 +350,13 @@ def build_ghl_full_field_payload(
         "completion_pct":   completion_pct,
         "current_section":  current_section,
         "last_activity_at": last_activity_at,
+        "started_at":       started_at,
 
         # ---- Group D: Scoring / Qualification ---------------------------
         "can_compute_score": computable,
         "final_label":       final_label,
         "booking_ready":     lifecycle_state == STATE_BOOKING_READY,
+        "lead_state":        lifecycle_state,
 
         # ---- Group E: Action / Operational ------------------------------
         "intended_action":     intended_action,
