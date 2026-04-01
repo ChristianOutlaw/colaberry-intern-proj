@@ -133,7 +133,7 @@ def _read_lead_data(app_lead_id: str, db_path: str | None) -> dict | None:
         # Most recent sync record of any status — used to derive action state.
         sync_latest = conn.execute(
             """
-            SELECT status, updated_at
+            SELECT status, updated_at, error
             FROM sync_records
             WHERE lead_id = ?
             ORDER BY updated_at DESC
@@ -360,6 +360,7 @@ def build_ghl_full_field_payload(
         "action_status":       action_status,
         "action_completed_at": action_completed_at,
         "last_action_sent_at": last_action_sent_at,
+        "last_action_result":  sync_latest["error"] if sync_latest is not None else None,
     }
 
     return {"ok": True, "payload": payload}
