@@ -1488,7 +1488,8 @@ except Exception:
 
 section_data = course_map.get(active_section_id, {})
 section_quiz_ids: list[str] = section_data.get("quiz_ids", [])
-section_prompt_ids: list[str] = section_data.get("reflection_prompts", [])
+section_prompt_ids: list[str]   = section_data.get("reflection_prompts", [])
+section_rating_prompts: list[str] = section_data.get("rating_prompts", [])
 
 # Chunk the lesson markdown (deterministic — no randomness).
 chunks = _chunk_markdown(section_markdown) if section_markdown else ["Content unavailable."]
@@ -1920,13 +1921,33 @@ elif step == "reflection":
                 st.markdown(f"**{question}**")
                 st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
-                txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
-                st.text_area(
-                    label="Your response",
-                    key=txt_key,
-                    height=140,
-                    placeholder="Write your response here…",
-                )
+                _RATING_OPTIONS = [
+                    "1 - Very low",
+                    "2 - Low",
+                    "3 - Neutral",
+                    "4 - Confident",
+                    "5 - Very confident",
+                ]
+                _is_rating_prompt = prompt_id in section_rating_prompts
+
+                if _is_rating_prompt:
+                    rating_key = f"reflection_rating_{active_section_id}_{refl_idx}"
+                    st.selectbox(
+                        label="Select your confidence level:",
+                        options=_RATING_OPTIONS,
+                        key=rating_key,
+                    )
+                    input_key = rating_key
+                else:
+                    txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
+                    st.text_area(
+                        label="Your response",
+                        key=txt_key,
+                        height=140,
+                        placeholder="Write your response here…",
+                    )
+                    input_key = txt_key
+
                 st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
                 if st.button(
@@ -1935,7 +1956,7 @@ elif step == "reflection":
                     use_container_width=True,
                     key=f"refl_save_{active_section_id}_{refl_idx}",
                 ):
-                    current_text = st.session_state.get(txt_key, "").strip()
+                    current_text = st.session_state.get(input_key, "").strip()
                     if current_text:
                         try:
                             save_reflection_response(
