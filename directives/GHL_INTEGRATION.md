@@ -36,12 +36,12 @@ course access link.
 
 **Phase 2 — Writeback (our app → GHL)**
 Our application POSTs the full canonical custom field schema back to GHL.
-This includes the generated `course_link`, the `invite_ready` flag, and all
+This includes the generated `course_link`, the `invite_status` field, and all
 other learner-state and operational fields.
 
 **Phase 3 — Send (GHL acts)**
 GHL sends the invite communication to the lead using the `course_link` field.
-GHL must only send after `invite_ready = true` is confirmed on the contact.
+GHL must only send after `invite_status = SENT` is confirmed on the contact.
 
 ```
 GHL → webhook → our app → generates link → HTTP update → GHL → sends invite
@@ -104,26 +104,26 @@ Our application POSTs the full canonical GHL custom field payload to the
 contact in GHL. This single update must include all five field groups:
 
 - **Identity / Linking** — including `app_lead_id`, `course_link`
-- **Invite / Access** — including `invite_ready = true`, `invite_generated_at`
+- **Invite / Access** — including `invite_status`, `invite_sent_at`
 - **Course Progress** — with current known values; unknown fields as `null`
 - **Scoring / Qualification** — with current known values; unknown fields as `null` or `false`
 - **Action / Operational** — including `intended_action`, `action_status`
 
 The full schema is always sent. Partial payloads are not permitted.
 
-`invite_ready = true` in this payload is the signal that authorizes GHL to
+`invite_status = SENT` in this payload is the signal that authorizes GHL to
 proceed to Step 5.
 
 ---
 
 ### Step 5 — GHL sends the invite communication
 
-GHL's workflow detects that `invite_ready = true` on the contact and uses the
+GHL's workflow detects that `invite_status = SENT` on the contact and uses the
 `course_link` custom field to send the invite message (SMS, email, or other
 configured channel).
 
-**GHL must not send before `invite_ready = true` is set by our application.**
-If `invite_ready` is absent or false, GHL must wait. There is no valid
+**GHL must not send before `invite_status = SENT` is set by our application.**
+If `invite_status` is absent or not `SENT`, GHL must wait. There is no valid
 shortcut around this gate.
 
 ---
@@ -242,11 +242,8 @@ available values are sent as `null` or `false` per the field value rules below.
 
 | Field | Type | Description |
 |---|---|---|
-| `invite_ready` | boolean | True only after our app has generated `course_link` and written it back to GHL. This is the gate for GHL to send. |
-| `invite_status` | string | Current invite state. Examples: `GENERATED`, `SENT`, `OPENED`. Null until known. |
-| `invite_generated_at` | timestamp | When our app first generated the unique course link. |
+| `invite_status` | string | Current invite state. `GENERATED` once the course link exists, `SENT` once the invite communication is confirmed sent. Null until generated. |
 | `invite_sent_at` | timestamp | When the invite communication was confirmed sent. Null until sent. |
-| `invite_channel` | string | Channel used for invite delivery. Examples: `SMS`, `EMAIL`. Null until sent. |
 
 ---
 
@@ -258,6 +255,8 @@ available values are sent as `null` or `false` per the field value rules below.
 | `completion_pct` | number | Percentage of course content completed. 0.0–100.0. Null until first progress event. |
 | `current_section` | string | The section the lead is currently on or most recently completed. Null until progress begins. |
 | `last_activity_at` | timestamp | UTC timestamp of the most recent recorded course activity. Null until first progress event. |
+| `started_at` | timestamp | UTC timestamp of the lead's first recorded progress event. Null until course is started. |
+| `completed_at` | timestamp | UTC timestamp of the lead's last recorded activity when course is 100% complete. Derived: equals `last_activity_at` when `completion_pct >= 100`. Null until course is completed. |
 
 ---
 
@@ -265,9 +264,13 @@ available values are sent as `null` or `false` per the field value rules below.
 
 | Field | Type | Description |
 |---|---|---|
-| `can_compute_score` | boolean | True when our app has enough data (quiz + reflection) to compute a reliable final score. False until then. |
-| `final_label` | string | Computed lead quality label. Examples: `FINAL_HOT`, `FINAL_WARM`, `FINAL_COLD`. Null until score is finalized. |
-| `booking_ready` | boolean | True when the lead has completed the course and the hot lead signal is active. False otherwise. |
+| `final_label` | string | Computed lead quality label at current state. One of `FINAL_HOT`, `FINAL_WARM`, `FINAL_COLD`. Null until score is computable. |
+| `final_confidence_score` | number | Numeric lead temperature score (0–100) used to derive `final_label`. Null until score is computable. |
+| `rolling_label` | string | Lead quality label computed at the midpoint of observed course progress. Same values as `final_label`. Null until at least 2 distinct sections are completed. |
+| `rolling_confidence_score` | number | Numeric temperature score (0–100) at the midpoint of observed progress. Null until at least 2 distinct sections are completed. |
+| `needs_review` | boolean | True when `final_label` is `FINAL_WARM`, indicating the lead warrants manual review before progression. False otherwise. |
+| `booking_ready` | boolean | True when the lead has reached the `STATE_BOOKING_READY` lifecycle state. False otherwise. |
+| `lead_state` | string | Full lifecycle state label. Examples: `STATE_NOT_INVITED`, `STATE_STARTED_ACTIVE`, `STATE_BOOKING_READY`. |
 
 ---
 
@@ -277,9 +280,9 @@ available values are sent as `null` or `false` per the field value rules below.
 |---|---|---|
 | `intended_action` | string | The action our system has determined is appropriate for this lead right now. Examples: `SEND_INVITE`, `NUDGE_START`, `NUDGE_PROGRESS`, `READY_FOR_BOOKING`, `FINALIZE_LEAD_SCORE`. |
 | `action_status` | string | Whether the intended action has been acted on. Examples: `PENDING`, `SENT`, `FAILED`. |
-| `action_completed` | boolean | True when the intended action has been successfully dispatched. False otherwise. |
 | `action_completed_at` | timestamp | When the action was confirmed completed. Null until then. |
 | `last_action_sent_at` | timestamp | When the most recent action was last dispatched toward GHL. Null until first dispatch. |
+| `last_action_result` | string | Error message from the most recent sync attempt, if any. Null on success or when no attempt has been made. |
 
 ---
 
@@ -302,7 +305,7 @@ Incorrect: `"final_label": "NONE"`
 When a boolean state is known to be false (not merely unknown), send `false`.
 
 Correct: `"booking_ready": false`
-Correct: `"invite_ready": false`
+Correct: `"needs_review": false`
 
 Do not send `null` for a boolean when `false` is the accurate answer.
 
@@ -333,7 +336,7 @@ inconsistent GHL context, harder reporting, and harder debugging.
 **GHL must always have full lead context.**
 Every field in the schema must be present on every GHL contact, even when
 most values are `null` or `false`. A lead on Section 1 still has
-`final_label = null`, `booking_ready = false`, and `can_compute_score = false`
+`final_label = null`, `booking_ready = false`, and `needs_review = false`
 set explicitly in GHL.
 
 **Our application never depends on GHL for logic decisions.**
@@ -342,8 +345,8 @@ independently using its local data store. GHL custom fields are the output
 of our intelligence layer, not an input to it. No decision in our application
 may be conditional on data fetched from GHL at decision time.
 
-**`invite_ready` gates GHL send — no exceptions.**
-GHL workflows must be configured to wait for `invite_ready = true` before
+**`invite_status = SENT` gates GHL send — no exceptions.**
+GHL workflows must be configured to wait for `invite_status = SENT` before
 sending any invite communication. Our application is responsible for setting
 this field only after `course_link` exists and is stored internally.
 
@@ -366,17 +369,17 @@ following are true.
 |---|---|
 | GHL sends lead to our app | Inbound webhook is received and acknowledged with 2xx |
 | Identity matched or created | Lead record exists in our data store with `app_lead_id` assigned |
-| `course_link` generated before writeback | `invite_generated_at` is set and `course_link` is non-null in our data store before the GHL update is sent |
+| `course_link` generated before writeback | `course_link` is non-null in our data store before the GHL update is sent |
 | Full schema sent | All five field groups are present in the outgoing GHL payload; no field is omitted |
-| `invite_ready = true` in writeback | The outgoing payload includes `invite_ready: true` as part of the Invite/Access group |
-| GHL does not send before writeback | No invite communication is triggered by GHL before `invite_ready` is set |
+| `invite_status = SENT` in writeback | The outgoing payload includes `invite_status: SENT` as part of the Invite/Access group once the invite is dispatched |
+| GHL does not send before writeback | No invite communication is triggered by GHL before `invite_status = SENT` is set |
 
 ### Field schema correctness
 
 | Criterion | What to verify |
 |---|---|
 | Unknown fields are `null`, not placeholder strings | No `"NONE"`, `"N/A"`, or empty-string values in place of `null` |
-| Definitively false booleans are `false`, not `null` | `booking_ready`, `invite_ready`, `can_compute_score`, `action_completed` use `false` when appropriate |
+| Definitively false booleans are `false`, not `null` | `booking_ready`, `needs_review` use `false` when appropriate |
 | All timestamps are ISO-8601 UTC | No local-timezone strings; no epoch integers |
 
 ### Determinism
@@ -394,7 +397,7 @@ following are true.
 | Email-only contact is matched correctly | A contact with no phone is matched and processed using email |
 | Partial identity does not cause crash or data loss | A contact with only name (no phone, no email) either matches or creates cleanly without error |
 | GHL contact ID absent does not block flow | If `ghl_contact_id` is not in the inbound payload, matching still proceeds via phone/email |
-| `course_link` is never sent before it is generated | No GHL writeback occurs with `course_link: null` and `invite_ready: true` simultaneously |
+| `course_link` is never sent before it is generated | No GHL writeback occurs with `course_link: null` and `invite_status: SENT` simultaneously |
 
 ---
 
