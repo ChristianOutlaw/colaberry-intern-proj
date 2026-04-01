@@ -336,8 +336,14 @@ def compute_lead_temperature(
     rec_pts,   rec_code   = _recency_points(days)
     quiz_pts,  quiz_code  = _quiz_points(avg_quiz_score)
     refl_pts,  refl_code  = _reflection_points(reflection_confidence)
-    # MODE B: reflections stored but not scored until structured evaluation exists
-    refl_pts = 0
+    if reflection_confidence == "HIGH":
+        refl_pts = 15
+    elif reflection_confidence == "MEDIUM":
+        refl_pts = 8
+    elif reflection_confidence == "LOW":
+        refl_pts = 0
+    else:
+        refl_pts = 0
     retry_pen, retry_code = _retry_penalty(avg_quiz_attempts)
     vel_pts,   vel_code   = _velocity_points(started_at, completion_percent, now_utc)
 
