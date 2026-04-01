@@ -351,6 +351,7 @@ def build_ghl_full_field_payload(
 
         # ---- Group D: Scoring / Qualification ---------------------------
         "final_label":       final_label,
+        "needs_review":      final_label == "FINAL_WARM",
         "booking_ready":     lifecycle_state == STATE_BOOKING_READY,
         "lead_state":        lifecycle_state,
 
