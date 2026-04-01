@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 from execution.db.sqlite import connect, init_db
 from execution.ghl.write_ghl_contact_fields import write_ghl_contact_fields
-from execution.scans.find_ready_for_booking_leads import find_ready_for_booking_leads
+from execution.scans.find_all_completed_leads import find_all_completed_leads
 
 _DESTINATION = "GHL_WRITEBACK"
 _STATUS_SENT = "SENT"
@@ -123,7 +123,7 @@ def run_booking_ready_dispatch(
         }
 
     # B. SCAN
-    leads = find_ready_for_booking_leads(now=now, limit=limit, db_path=db_path)
+    leads = find_all_completed_leads(limit=limit, db_path=db_path)
     logger.info("run_booking_ready_dispatch: found %d booking-ready lead(s).", len(leads))
 
     dispatched       = 0
