@@ -22,9 +22,7 @@ def decide_next_cold_lead_action(
         "SEND_INVITE"        — lead exists but no course invite has been sent.
         "NUDGE_PROGRESS"     — invite sent but lead has not started the course,
                                OR lead has started but has not completed it.
-        "WARM_REVIEW"        — lead completed the course but hot signal is not HOT
-                               (completed warm or cold — not booking-ready).
-        "READY_FOR_BOOKING"  — lead completed the course AND hot signal is HOT.
+        "READY_FOR_BOOKING"  — lead completed the course (completion_pct >= 100).
 
     Args:
         lead_id: ID of the lead to evaluate.
@@ -46,9 +44,4 @@ def decide_next_cold_lead_action(
     if completion_pct < 100:
         return "NUDGE_PROGRESS"
 
-    # Lead has completed the course. Only book when the hot signal confirms
-    # strong engagement. Completed leads without a HOT signal go to WARM_REVIEW.
-    if status["hot_lead"]["signal"] == "HOT":
-        return "READY_FOR_BOOKING"
-
-    return "WARM_REVIEW"
+    return "READY_FOR_BOOKING"
