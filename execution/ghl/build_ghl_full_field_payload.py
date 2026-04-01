@@ -339,7 +339,6 @@ def build_ghl_full_field_payload(
         "course_link":        course_link,
 
         # ---- Group B: Invite / Access -----------------------------------
-        "invite_ready":        course_link is not None,
         "invite_status":       invite_status,
         "invite_generated_at": invite.get("generated_at") if invite is not None else None,
         "invite_sent_at":      invite_sent_at,
