@@ -340,7 +340,6 @@ def build_ghl_full_field_payload(
 
         # ---- Group B: Invite / Access -----------------------------------
         "invite_status":       invite_status,
-        "invite_generated_at": invite.get("generated_at") if invite is not None else None,
         "invite_sent_at":      invite_sent_at,
         "invite_channel":      invite_channel,
 
