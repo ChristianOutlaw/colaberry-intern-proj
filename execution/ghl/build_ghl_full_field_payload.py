@@ -11,8 +11,7 @@ No network calls.  No database writes.  Pure read + compute.
 Field groups
 ------------
 A  Identity / Linking     (app_lead_id, ghl_contact_id, phone, email, full_name, course_link)
-B  Invite / Access        (invite_ready, invite_status, invite_generated_at,
-                           invite_sent_at, invite_channel)
+B  Invite / Access        (invite_status, invite_sent_at)
 C  Course Progress        (course_started, completion_pct, current_section, last_activity_at)
 D  Scoring / Qualification (can_compute_score, final_label, booking_ready)
 E  Action / Operational   (intended_action, action_status, action_completed,
@@ -343,10 +342,8 @@ def build_ghl_full_field_payload(
         invite_status = None
 
     invite_sent_at: str | None = None
-    invite_channel: str | None = None
     if invite is not None:
         invite_sent_at = invite.get("sent_at")    # None when not yet sent
-        invite_channel = invite.get("channel")
 
     # ------------------------------------------------------------------
     # 8. Derive action / operational state from the most recent sync record.
