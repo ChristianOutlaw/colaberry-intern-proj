@@ -145,15 +145,12 @@ def build_cora_recommendation(
         evt_codes             = ["NOT_INVITED"]
         requires_finalization = False
 
-    elif hot_signal == "HOT" and completion_percent is not None and completion_percent >= 100.0:
-        # Rule 2 — HOT signal AND full course completion → booking call.
-        # Spec hard rule: READY_FOR_BOOKING requires 100% course completion.
-        # A lead at partial completion with a hot signal is still in progress
-        # and must be nudged, not booked.
-        event_type            = EVENT_HOT_BOOKING
+    elif completion_percent is not None and completion_percent >= 100.0:
+        # Rule 2 — course complete → booking call. final_label carries AI-fit segmentation.
+        event_type            = EVENT_HOT_BOOKING   # value is "READY_FOR_BOOKING"
         priority              = PRIORITY_HIGH
         channel               = CHANNEL_CALL
-        evt_codes             = ["HOT_SIGNAL_ACTIVE"]
+        evt_codes             = ["COURSE_COMPLETE"]
         requires_finalization = True
 
     elif (
@@ -170,32 +167,6 @@ def build_cora_recommendation(
         channel               = CHANNEL_CALL
         evt_codes             = ["ACTIVITY_STALLED"]
         requires_finalization = False
-
-    elif (
-        completion_percent is not None
-        and completion_percent >= 100.0
-        and days_inactive is not None
-        and days_inactive > STALL_DAYS
-    ):
-        # Rule 4a — course complete + gone stale → re-engage the completed learner.
-        # Uses the same STALL_DAYS threshold as REENGAGE_STALLED_LEAD so behaviour
-        # is consistent across the two re-engagement branches.
-        event_type            = EVENT_REENGAGE_COMPLETED
-        priority              = PRIORITY_MEDIUM
-        channel               = CHANNEL_EMAIL
-        evt_codes             = ["COMPLETED_GONE_STALE"]
-        requires_finalization = True
-
-    elif completion_percent is not None and completion_percent >= 100.0:
-        # Rule 4b — course complete, hot signal not active, not yet stale → WARM_REVIEW.
-        # The lead finished but did not meet final-hot criteria; route to
-        # human review rather than discarding. FINALIZE_LEAD_SCORE scoring
-        # will gate this more precisely in the next step.
-        event_type            = "WARM_REVIEW"
-        priority              = PRIORITY_LOW
-        channel               = None
-        evt_codes             = ["COURSE_COMPLETE"]
-        requires_finalization = True
 
     else:
         # Rule 5 — NUDGE_PROGRESS: catch-all for all invited leads not matched
