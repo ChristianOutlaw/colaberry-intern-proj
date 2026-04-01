@@ -162,6 +162,19 @@ def init_db(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_reflection_lead_course
             ON reflection_responses (lead_id, course_id);
+
+        CREATE TABLE IF NOT EXISTS lead_final_scores (
+            lead_id        TEXT NOT NULL,
+            course_id      TEXT NOT NULL DEFAULT 'FREE_INTRO_AI_V0',
+            final_label    TEXT NOT NULL,
+            final_score    INTEGER,
+            finalized_at   TEXT NOT NULL,
+            PRIMARY KEY (lead_id, course_id),
+            FOREIGN KEY (lead_id) REFERENCES leads (id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_lead_final_scores_label
+            ON lead_final_scores (final_label);
     """)
     conn.commit()
 
