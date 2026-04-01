@@ -395,6 +395,7 @@ def build_ghl_full_field_payload(
         "final_label":            final_label,
         "final_confidence_score":   temp["score"] if computable else None,
         "rolling_confidence_score": rolling_score if midpoint_events else None,
+        "rolling_label":            classify_final_lead_label(rolling_score) if midpoint_events else None,
         "needs_review":             final_label == "FINAL_WARM",
         "booking_ready":     lifecycle_state == STATE_BOOKING_READY,
         "lead_state":        lifecycle_state,
