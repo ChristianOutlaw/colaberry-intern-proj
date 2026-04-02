@@ -12,7 +12,7 @@ One-line reference for each directive in this folder. Read the linked file for f
 - **[PROJECT_BLUEPRINT.md](PROJECT_BLUEPRINT.md)** — Top-level problem statement, MVP outcomes, data entities, acceptance criteria, and open questions for the Cold Lead Conversion System.
 - **[SCAN_JOBS.md](SCAN_JOBS.md)** — Defines the read-only scan workers, scan naming conventions, requeue boundary, and expected outputs.
 - **[SCAN_SCHEDULER_DESIGN.md](SCAN_SCHEDULER_DESIGN.md)** — Design-only directive (not yet implemented) for a future scheduled scan runner and cron orchestration layer.
-- **[SYSTEM_STATUS_VS_SPEC.md](SYSTEM_STATUS_VS_SPEC.md)** — Dated build-vs-spec status report (2026-04-01) mapping each spec requirement to its implementation state.
+- **[SYSTEM_STATUS_VS_SPEC.md](../reports/SYSTEM_STATUS_VS_SPEC.md)** — Dated build-vs-spec status report (2026-04-01) mapping each spec requirement to its implementation state. *(moved to `/reports`)*
 - **[TRIGGER_OWNERSHIP_MATRIX.md](TRIGGER_OWNERSHIP_MATRIX.md)** — Defines which layer owns each trigger event (progress, GHL writeback, scan dispatch) and the boundary rules between them.
 - **[UI_LEAD_STATUS_VIEW.md](UI_LEAD_STATUS_VIEW.md)** — Directive for the operator-facing Lead Status Viewer UI page: lookup contract, display fields, and no-new-logic constraint.
 - **[UI_STUDENT_COURSE_PLAYER.md](UI_STUDENT_COURSE_PLAYER.md)** — Directive for the student-facing Course Player UI: section navigation, progress writes, and content rendering rules.
