@@ -5,7 +5,7 @@ One-line reference for each directive in this folder. Read the linked file for f
 - **[ADMIN_TEST_MODE.md](ADMIN_TEST_MODE.md)** — Contract for the dev-only Admin/Test Mode harness: seed leads, reset progress, and run deterministic scenarios against local SQLite without touching production.
 - **[CORA_RECOMMENDATION_EVENTS.md](CORA_RECOMMENDATION_EVENTS.md)** — Spec for converting a lead's current state into a structured Cora-ready recommendation event payload.
 - **[COURSE_STRUCTURE.md](COURSE_STRUCTURE.md)** — Defines the course identity, phase/section layout, and content structure for `FREE_INTRO_AI_V0`.
-- **[GHL_GAP_ANALYSIS.md](GHL_GAP_ANALYSIS.md)** — Point-in-time snapshot comparing the repo against the Kes GHL meeting decisions; identifies built, partial, and missing integration pieces.
+- **[GHL_GAP_ANALYSIS.md](../reports/GHL_GAP_ANALYSIS.md)** — Point-in-time snapshot comparing the repo against the Kes GHL meeting decisions; identifies built, partial, and missing integration pieces. *(moved to `/reports`)*
 - **[GHL_INTEGRATION.md](GHL_INTEGRATION.md)** — Authoritative contract for how the app integrates with GoHighLevel: field mapping, payload rules, writeback transport, and error handling.
 - **[HOT_LEAD_SIGNAL.md](HOT_LEAD_SIGNAL.md)** — Rule spec for the binary HOT lead signal: thresholds for course completion, invite status, and recent activity window.
 - **[LEAD_TEMPERATURE_SCORING.md](LEAD_TEMPERATURE_SCORING.md)** — Spec for the multi-signal weighted scoring engine (0–100) that classifies leads as HOT / WARM / COLD.
