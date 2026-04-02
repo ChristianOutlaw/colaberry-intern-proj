@@ -4,4 +4,5 @@ __pycache__/
 .playwright-mcp/
 tmp/*.log
 tmp/*.db
+tmp/*.md
 reports/
