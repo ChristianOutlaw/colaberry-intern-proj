@@ -11,7 +11,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parents[1]
+REPO_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from execution.scans.classify_no_start_threshold import classify_no_start_threshold
