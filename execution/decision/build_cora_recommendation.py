@@ -20,8 +20,9 @@ from execution.scans.classify_stale_progress_threshold import classify_stale_pro
 # ---------------------------------------------------------------------------
 
 # Event type labels
-EVENT_SEND_INVITE    = "SEND_INVITE"
-EVENT_HOT_BOOKING    = "READY_FOR_BOOKING"
+EVENT_SEND_INVITE         = "SEND_INVITE"
+EVENT_HOT_BOOKING         = "READY_FOR_BOOKING"
+EVENT_WARM_REVIEW         = "WARM_REVIEW"
 EVENT_REENGAGE            = "REENGAGE_STALLED_LEAD"
 EVENT_REENGAGE_COMPLETED  = "REENGAGE_COMPLETED"
 EVENT_NUDGE_PROGRESS      = "NUDGE_PROGRESS"
@@ -145,12 +146,31 @@ def build_cora_recommendation(
         evt_codes             = ["NOT_INVITED"]
         requires_finalization = False
 
-    elif completion_percent is not None and completion_percent >= 100.0:
-        # Rule 2 — course complete → booking call. final_label carries AI-fit segmentation.
-        event_type            = EVENT_HOT_BOOKING   # value is "READY_FOR_BOOKING"
+    elif hot_signal == "HOT" and completion_percent is not None and completion_percent >= 100.0:
+        # Rule 2 — HOT signal + full completion → booking call.
+        # Both conditions required: HOT encodes 7-day activity window;
+        # completion_percent >= 100 confirms the course is done.
+        event_type            = EVENT_HOT_BOOKING   # "READY_FOR_BOOKING"
         priority              = PRIORITY_HIGH
         channel               = CHANNEL_CALL
-        evt_codes             = ["COURSE_COMPLETE"]
+        evt_codes             = ["HOT_SIGNAL_ACTIVE"]
+        requires_finalization = True
+
+    elif completion_percent is not None and completion_percent >= 100.0:
+        # Rule 3 — course complete, not hot.
+        # Sub-split on staleness:
+        #   stale (> STALL_DAYS or no activity) → REENGAGE_COMPLETED
+        #   recent                               → WARM_REVIEW
+        if days_inactive is None or days_inactive > STALL_DAYS:
+            event_type = EVENT_REENGAGE_COMPLETED
+            priority   = PRIORITY_MEDIUM
+            channel    = CHANNEL_EMAIL
+            evt_codes  = ["COMPLETED_GONE_STALE"]
+        else:
+            event_type = EVENT_WARM_REVIEW
+            priority   = PRIORITY_LOW
+            channel    = None
+            evt_codes  = ["COURSE_COMPLETE"]
         requires_finalization = True
 
     elif (
@@ -159,9 +179,8 @@ def build_cora_recommendation(
         and completion_percent < 100.0
         and (days_inactive is None or days_inactive > STALL_DAYS)
     ):
-        # Rule 3 — started but stalled.  Guard requires completion_percent > 0
-        # so None / 0.0 (not-started) never reaches this branch, avoiding a
-        # TypeError on None < 100.0 comparisons.
+        # Rule 4 — started but stalled.  Guard requires completion_percent > 0
+        # so None / 0.0 (not-started) never reaches this branch.
         event_type            = EVENT_REENGAGE
         priority              = PRIORITY_HIGH
         channel               = CHANNEL_CALL
