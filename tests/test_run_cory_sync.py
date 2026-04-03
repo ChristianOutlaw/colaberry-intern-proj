@@ -58,18 +58,23 @@ class TestRunCorySync(unittest.TestCase):
 
     def setUp(self):
         (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+        # Remove stale db from any previous failed run before creating fresh one.
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
         conn = connect(TEST_DB_PATH)
-        init_db(conn)
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO leads
-                (id, name, ghl_contact_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (LEAD_ID, "Runner Test Lead", "GHL-RUNNER-TEST-CID", _SEED_TS, _SEED_TS),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            init_db(conn)
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO leads
+                    (id, name, ghl_contact_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (LEAD_ID, "Runner Test Lead", "GHL-RUNNER-TEST-CID", _SEED_TS, _SEED_TS),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def tearDown(self):
         if os.path.exists(TEST_DB_PATH):
@@ -77,23 +82,27 @@ class TestRunCorySync(unittest.TestCase):
 
     def _seed(self, destination: str, created_at: str = _SEED_TS) -> None:
         conn = connect(TEST_DB_PATH)
-        conn.execute(
-            """
-            INSERT INTO sync_records
-                (lead_id, destination, status, reason, created_at, updated_at)
-            VALUES (?, ?, 'NEEDS_SYNC', ?, ?, ?)
-            """,
-            (LEAD_ID, destination, destination.replace("CORY_", ""), created_at, created_at),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                """
+                INSERT INTO sync_records
+                    (lead_id, destination, status, reason, created_at, updated_at)
+                VALUES (?, ?, 'NEEDS_SYNC', ?, ?, ?)
+                """,
+                (LEAD_ID, destination, destination.replace("CORY_", ""), created_at, created_at),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def _rows(self) -> list[dict]:
         conn = connect(TEST_DB_PATH)
-        rows = [dict(r) for r in conn.execute(
-            "SELECT * FROM sync_records WHERE lead_id = ?", (LEAD_ID,)
-        ).fetchall()]
-        conn.close()
+        try:
+            rows = [dict(r) for r in conn.execute(
+                "SELECT * FROM sync_records WHERE lead_id = ?", (LEAD_ID,)
+            ).fetchall()]
+        finally:
+            conn.close()
         return rows
 
     def _call(self, dispatch_mode: str = "dry_run", log_dir: str | None = None,
