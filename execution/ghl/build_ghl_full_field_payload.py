@@ -411,6 +411,10 @@ def build_ghl_full_field_payload(
     else:
         invite_status = None
 
+    invite_ready: bool = invite is not None and bool(invite.get("token"))
+    invite_generated_at: str | None = invite.get("generated_at") if invite is not None else None
+    invite_channel: str | None = invite.get("channel") if invite is not None else None
+
     invite_sent_at: str | None = None
     if invite is not None:
         invite_sent_at = invite.get("sent_at")    # None when not yet sent
@@ -448,8 +452,11 @@ def build_ghl_full_field_payload(
         "course_link":        course_link,
 
         # ---- Group B: Invite / Access -----------------------------------
+        "invite_ready":        invite_ready,
         "invite_status":       invite_status,
+        "invite_generated_at": invite_generated_at,
         "invite_sent_at":      invite_sent_at,
+        "invite_channel":      invite_channel,
 
         # ---- Group C: Course Progress -----------------------------------
         "course_started":   started_at is not None,
@@ -460,6 +467,7 @@ def build_ghl_full_field_payload(
         "completed_at":     last_activity_at if (completion_pct is not None and completion_pct >= 100) else None,
 
         # ---- Group D: Scoring / Qualification ---------------------------
+        "can_compute_score":      computable,
         "final_label":            final_label,
         "final_confidence_score":   final_confidence_score,
         "rolling_confidence_score": rolling_score if midpoint_events else None,
@@ -471,6 +479,7 @@ def build_ghl_full_field_payload(
         # ---- Group E: Action / Operational ------------------------------
         "intended_action":     intended_action,
         "action_status":       action_status,
+        "action_completed":    action_completed,
         "action_completed_at": action_completed_at,
         "last_action_sent_at": last_action_sent_at,
         "last_action_result":  sync_latest["error"] if sync_latest is not None else None,
