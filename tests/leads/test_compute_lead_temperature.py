@@ -16,7 +16,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # PYTHONPATH bootstrap — repo root must be importable from any test runner.
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -267,14 +267,14 @@ class TestComputeLeadTemperature(unittest.TestCase):
     # T8 — HIGH vs LOW reflection tips the HOT/WARM boundary
     # ------------------------------------------------------------------
     def test_t8_reflection_high_tips_to_hot(self):
-        """T8: MODE B — reflection not scored; HIGH and LOW both yield same score (WARM)."""
+        """T8 (Mode A): HIGH reflection tips score into HOT; LOW reflection stays WARM."""
         # completion: int(55 * 40/100) = 22
         # recency:    4 days → 25
         # quiz:       int(70 * 20/100) = 14
         # velocity:   no started_at → 5 (VELOCITY_UNKNOWN)
-        # reflection: 0 (MODE B: not scored regardless of confidence)
-        # HIGH: 22+25+14+0+5 = 66 → WARM
-        # LOW:  22+25+14+0+5 = 66 → WARM
+        # reflection: HIGH=15, LOW=0 (Mode A: differentiated scoring)
+        # HIGH: 22+25+14+15+5 = 81 → HOT
+        # LOW:  22+25+14+0+5  = 66 → WARM
         shared = dict(
             now=_NOW,
             invited_sent=True,
@@ -287,14 +287,14 @@ class TestComputeLeadTemperature(unittest.TestCase):
         result_high = compute_lead_temperature(**shared, reflection_confidence="HIGH")
         result_low  = compute_lead_temperature(**shared, reflection_confidence="LOW")
 
-        self.assertEqual(result_high["signal"], "WARM")
+        self.assertEqual(result_high["signal"], "HOT")
         self.assertIn("REFLECTION_HIGH", result_high["reason_codes"])
 
         self.assertEqual(result_low["signal"], "WARM")
         self.assertIn("REFLECTION_LOW", result_low["reason_codes"])
 
-        # Confirm zero point spread under MODE B (scores are identical)
-        self.assertEqual(result_high["score"] - result_low["score"], 0)
+        # HIGH reflection contributes 15 pts; LOW contributes 0 (Mode A differentiated)
+        self.assertGreater(result_high["score"], result_low["score"])
 
     # ------------------------------------------------------------------
     # T9 — Output shape is always complete and valid

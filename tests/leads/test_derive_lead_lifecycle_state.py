@@ -12,7 +12,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -153,7 +153,7 @@ class TestDeriveLeadLifecycleState(unittest.TestCase):
         self.assertEqual(state, STATE_BOOKING_READY)
 
     def test_scenario_d_completed_warm_not_stale(self):
-        """Scenario D (warm): completion=100, not hot, activity recent → COMPLETED_WARM."""
+        """Scenario D: completion=100 → BOOKING_READY regardless of hot_signal (Rule 2)."""
         state = derive_lead_lifecycle_state(
             invite_sent=True,
             completion_percent=100.0,
@@ -161,10 +161,10 @@ class TestDeriveLeadLifecycleState(unittest.TestCase):
             hot_signal="NOT_HOT",
             now=_NOW,
         )
-        self.assertEqual(state, STATE_COMPLETED_WARM)
+        self.assertEqual(state, STATE_BOOKING_READY)
 
     def test_scenario_d_completed_reengage_stale(self):
-        """Scenario D (reengage): completion=100, not hot, inactive > STALL_DAYS → COMPLETED_REENGAGE."""
+        """Scenario D: completion=100 + stale → BOOKING_READY (hot_signal not required, Rule 2)."""
         state = derive_lead_lifecycle_state(
             invite_sent=True,
             completion_percent=100.0,
@@ -172,7 +172,7 @@ class TestDeriveLeadLifecycleState(unittest.TestCase):
             hot_signal="NOT_HOT",
             now=_NOW,
         )
-        self.assertEqual(state, STATE_COMPLETED_REENGAGE)
+        self.assertEqual(state, STATE_BOOKING_READY)
 
     def test_scenario_d_hot_partial_not_booking_ready(self):
         """Partial completion + HOT does NOT reach BOOKING_READY; maps to STARTED_ACTIVE."""
