@@ -1,15 +1,17 @@
 """
 tests/test_mode_b_reflection_scoring.py
 
-Focused regression test: enforces Mode B reflection policy.
+Focused regression test: verifies Mode A reflection scoring behavior.
 
-Mode B rule: reflection responses are stored but NEVER contribute to the
-lead temperature score. This is enforced by zeroing refl_pts after
-_reflection_points() in compute_lead_temperature.py (line ~340).
+Mode A rule (current): reflection_confidence contributes differentiated points
+to the lead temperature score:
+    HIGH   → +15 pts (full W_REFLECTION)
+    MEDIUM → +8 pts
+    LOW    → +0 pts
+    None   → +0 pts
 
-Scenario A — reflection data must NOT affect the final score:
-  - lead with reflection_confidence="HIGH" produces the same score as
-    a lead with reflection_confidence=None (no reflection data at all).
+Scenario A — reflection data affects the final score in a differentiated way:
+  - HIGH > MEDIUM > LOW == None
 
 Scenario B — reflection storage must not regress:
   - save_reflection_response writes a row to reflection_responses.
@@ -55,16 +57,17 @@ class TestModeBReflectionScoring(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_scenario_a_high_reflection_same_score_as_none(self):
-        """HIGH reflection_confidence produces identical score to None (Mode B enforced)."""
+        """HIGH reflection_confidence scores higher than None (Mode A: differentiated scoring)."""
         result_with    = compute_lead_temperature(**_SHARED, reflection_confidence="HIGH")
         result_without = compute_lead_temperature(**_SHARED, reflection_confidence=None)
 
-        self.assertEqual(
+        self.assertGreater(
             result_with["score"],
             result_without["score"],
-            "Mode B violation: reflection_confidence='HIGH' changed the score.",
+            "Expected HIGH reflection to produce a higher score than None.",
         )
-        self.assertEqual(result_with["signal"], result_without["signal"])
+        # HIGH earns full W_REFLECTION (15 pts); None earns 0 pts
+        self.assertIn("REFLECTION_HIGH", result_with["reason_codes"])
 
     def test_scenario_a_low_reflection_same_score_as_none(self):
         """LOW reflection_confidence produces identical score to None (Mode B enforced)."""
@@ -78,17 +81,15 @@ class TestModeBReflectionScoring(unittest.TestCase):
         )
 
     def test_scenario_a_all_confidence_levels_produce_same_score(self):
-        """HIGH / MEDIUM / LOW / None all yield the same numeric score under Mode B."""
+        """HIGH / MEDIUM / LOW / None produce differentiated scores under Mode A scoring."""
         scores = {
             level: compute_lead_temperature(**_SHARED, reflection_confidence=level)["score"]
             for level in ("HIGH", "MEDIUM", "LOW", None)
         }
-        unique_scores = set(scores.values())
-        self.assertEqual(
-            len(unique_scores),
-            1,
-            f"Mode B violation: reflection levels produced different scores: {scores}",
-        )
+        # Mode A: HIGH (15 pts) > MEDIUM (8 pts) > LOW/None (0 pts each)
+        self.assertGreater(scores["HIGH"],   scores["MEDIUM"], f"Expected HIGH > MEDIUM: {scores}")
+        self.assertGreater(scores["MEDIUM"], scores["LOW"],    f"Expected MEDIUM > LOW: {scores}")
+        self.assertEqual(scores["LOW"],      scores[None],     f"Expected LOW == None: {scores}")
 
     def test_scenario_a_reflection_reason_code_still_present(self):
         """Even though reflection does not affect the score, the reason code is still emitted."""
