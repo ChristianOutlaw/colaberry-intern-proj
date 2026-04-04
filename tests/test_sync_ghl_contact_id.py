@@ -55,9 +55,13 @@ class TestSyncGhlContactId(unittest.TestCase):
 
     def setUp(self):
         (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
         conn = connect(TEST_DB_PATH)
-        init_db(conn)
-        conn.close()
+        try:
+            init_db(conn)
+        finally:
+            conn.close()
 
     def tearDown(self):
         if os.path.exists(TEST_DB_PATH):
@@ -71,20 +75,24 @@ class TestSyncGhlContactId(unittest.TestCase):
               phone: str | None = "+15550001234",
               ghl_contact_id: str | None = None) -> None:
         conn = connect(TEST_DB_PATH)
-        conn.execute(
-            "INSERT INTO leads (id, email, phone, ghl_contact_id, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (_LEAD_ID, email, phone, ghl_contact_id, _SEED_TS, _SEED_TS),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                "INSERT INTO leads (id, email, phone, ghl_contact_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (_LEAD_ID, email, phone, ghl_contact_id, _SEED_TS, _SEED_TS),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def _fetch_ghl_id(self) -> str | None:
         conn = connect(TEST_DB_PATH)
-        row = conn.execute(
-            "SELECT ghl_contact_id FROM leads WHERE id = ?", (_LEAD_ID,)
-        ).fetchone()
-        conn.close()
+        try:
+            row = conn.execute(
+                "SELECT ghl_contact_id FROM leads WHERE id = ?", (_LEAD_ID,)
+            ).fetchone()
+        finally:
+            conn.close()
         return row["ghl_contact_id"] if row else None
 
     def _call(self, **kwargs) -> dict:
