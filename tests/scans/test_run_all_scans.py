@@ -12,7 +12,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parents[1]
+REPO_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from execution.db.sqlite import connect, init_db
