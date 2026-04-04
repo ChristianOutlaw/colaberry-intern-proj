@@ -28,7 +28,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -88,9 +88,13 @@ class TestHandleGhlIntakeRequest(unittest.TestCase):
 
     def setUp(self):
         (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
         conn = connect(TEST_DB)
-        init_db(conn)
-        conn.close()
+        try:
+            init_db(conn)
+        finally:
+            conn.close()
 
     def tearDown(self):
         if os.path.exists(TEST_DB):
