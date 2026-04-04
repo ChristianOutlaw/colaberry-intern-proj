@@ -1,0 +1,27 @@
+Use FAST mode when:
+- the change is small and local
+- the target file or function is already known
+- the task is a narrow bug fix, rename, guard, query tweak, UI text change, or small test update
+- you want the lightest valid solution first
+- the task is to locate where logic lives, identify a threshold, or find the smallest file/line to change
+- the task can likely be answered by grep plus a targeted local read
+
+Use DEEP mode when:
+- the bug cause is unclear
+- behavior spans multiple files or layers
+- the task requires tracing data flow, state flow, or control flow
+- the question is architectural, ambiguous, or high risk
+- you need investigation before edits
+- do not use DEEP when the task is only to locate code ownership or identify a single threshold/constant without diagnosing unclear behavior
+
+Use LARGE-FILE TARGETING when:
+- the relevant file is large
+- the task is inside a long UI file, service file, or mixed-concern module
+- Claude is likely to read too much context unless the target area is named first
+- do not invoke LARGE-FILE TARGETING for medium files unless the file is actually slow to inspect or the relevant section is still unclear after grep
+
+Selection rule:
+1. Start in FAST by default.
+2. Switch to DEEP only when evidence shows FAST is insufficient.
+3. Apply LARGE-FILE TARGETING whenever a large file is involved, regardless of FAST or DEEP mode.
+4. Prefer the lightest mode that can solve the problem safely.

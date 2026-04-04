@@ -1,0 +1,16 @@
+Use CLAUDE_MODE_SELECTION.txt to choose the working mode for this task.
+- If the task is small and local, apply CLAUDE_SESSION_FAST.txt.
+- If the task needs tracing or investigation, apply CLAUDE_SESSION_DEEP.txt.
+- If a large file is involved, also apply CLAUDE_LARGE_FILE_TARGETING.txt.
+
+Before doing anything else, respond with:
+- Selected mode
+- Why that mode
+- Files needed
+- Smallest next step
+- Risks
+
+If the answer is already known from the current session, return the cached answer directly and say so.
+
+Then proceed with this task:
+[TASK HERE]

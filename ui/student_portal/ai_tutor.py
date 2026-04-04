@@ -16,6 +16,8 @@ import os
 import pathlib
 import re
 
+import streamlit as st
+
 
 # ---------------------------------------------------------------------------
 # Follow-up guidance lines — deterministic rotation, no randomness
@@ -109,8 +111,14 @@ def _build_quiz_hints() -> dict[str, list[str]]:
 
 
 # Built once at import time; empty strings/dicts are safe fallbacks if files are missing.
-_FULL_COURSE_SUMMARY: str = _build_course_summary()
-_SECTION_QUIZ_HINTS: dict[str, list[str]] = _build_quiz_hints()
+@st.cache_resource
+def get_full_course_summary() -> str:
+    return _build_course_summary()
+
+
+@st.cache_resource
+def get_section_quiz_hints() -> dict[str, list[str]]:
+    return _build_quiz_hints()
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +331,7 @@ def generate_tutor_reply(
                 if section_idx is not None and 0 <= section_idx < len(_SECTION_FILES)
                 else ""
             )
-            _active_hints: list[str] = _SECTION_QUIZ_HINTS.get(_active_sid, [])
+            _active_hints: list[str] = get_section_quiz_hints().get(_active_sid, [])
 
             system_prompt = (
                 "You are an encouraging learning guide — warm, clear, and direct. "
@@ -354,8 +362,8 @@ def generate_tutor_reply(
                     "## Full course overview (background — lower priority)\n"
                     "The course covers 9 sections. Use this only for cross-section questions "
                     "or to help students connect ideas across the course:\n"
-                    + _FULL_COURSE_SUMMARY + "\n\n"
-                    if _FULL_COURSE_SUMMARY else ""
+                    + get_full_course_summary() + "\n\n"
+                    if get_full_course_summary() else ""
                 )
 
                 + f"## Current section (primary grounding source)\n"

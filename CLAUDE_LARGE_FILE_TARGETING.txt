@@ -1,0 +1,28 @@
+When working with a large file in this repo, use this procedure before doing anything else:
+
+1. Do not read the whole file first.
+2. Identify the exact target area:
+   - function
+   - class
+   - UI section
+   - state block
+   - handler
+   - query
+3. Inspect only the smallest surrounding section needed to understand that target.
+4. Summarize:
+   - what that section does
+   - what inputs it depends on
+   - what outputs or side effects it creates
+5. Expand outward only if evidence requires it.
+6. If more context is needed, name the next exact section before reading it.
+7. Do not propose a refactor until the target area is clearly isolated.
+8. Prefer local fixes over file-wide changes.
+9. If the file is slow because it mixes concerns, explain which concerns are mixed before suggesting a split.
+10. End with the smallest safe next action.
+
+Required response format:
+- Target area
+- Why this area first
+- Local context needed
+- Next section if needed
+- Smallest safe action

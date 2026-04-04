@@ -1634,14 +1634,14 @@ def _render_tutor_expander() -> None:
 
         b_left, b_right = st.columns(2)
         with b_left:
-            if st.button(_btn_labels[0], use_container_width=True, key="btn_0"):
+            if st.button(_btn_labels[0], use_container_width=True, key=f"btn_0_{step}_{active_section_id}"):
                 st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[0], _btn_labels[0])
-            if st.button(_btn_labels[1], use_container_width=True, key="btn_1"):
+            if st.button(_btn_labels[1], use_container_width=True, key=f"btn_1_{step}_{active_section_id}"):
                 st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[1], _btn_labels[1])
         with b_right:
-            if st.button(_btn_labels[2], use_container_width=True, key="btn_2"):
+            if st.button(_btn_labels[2], use_container_width=True, key=f"btn_2_{step}_{active_section_id}"):
                 st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[2], _btn_labels[2])
-            if st.button(_btn_labels[3], use_container_width=True, key="btn_3"):
+            if st.button(_btn_labels[3], use_container_width=True, key=f"btn_3_{step}_{active_section_id}"):
                 st.session_state["tutor_input"] = _step_button_prompts.get(_btn_labels[3], _btn_labels[3])
 
         st.divider()
@@ -1943,6 +1943,8 @@ elif step == "reflection":
                     input_key = rating_key
                 else:
                     txt_key = f"reflection_txt_{active_section_id}_{refl_idx}"
+                    if txt_key not in st.session_state:
+                        st.session_state[txt_key] = ""
                     st.text_area(
                         label="Your response",
                         key=txt_key,
