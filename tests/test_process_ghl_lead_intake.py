@@ -82,9 +82,13 @@ class TestProcessGhlLeadIntake(unittest.TestCase):
 
     def setUp(self):
         (REPO_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
         conn = connect(TEST_DB)
-        init_db(conn)
-        conn.close()
+        try:
+            init_db(conn)
+        finally:
+            conn.close()
 
     def tearDown(self):
         if os.path.exists(TEST_DB):
