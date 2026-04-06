@@ -21,6 +21,7 @@ def upsert_lead(
     email: str | None = None,
     name: str | None = None,
     db_path: str | None = None,
+    now: str | None = None,
 ) -> None:
     """Insert a new lead row or update an existing one.
 
@@ -35,11 +36,13 @@ def upsert_lead(
         email:   Optional email address; ignored on update when None.
         name:    Optional display name; ignored on update when None.
         db_path: Path to the SQLite file; defaults to the repo tmp/app.db.
+        now:     ISO 8601 timestamp string to use for created_at/updated_at.
+                 If None, falls back to _utc_now() for backward compatibility.
     """
     conn = connect(db_path)
     try:
         init_db(conn)
-        now = _utc_now()
+        current_time = now if now is not None else _utc_now()
 
         existing = conn.execute(
             "SELECT id FROM leads WHERE id = ?", (lead_id,)
@@ -51,11 +54,11 @@ def upsert_lead(
                 INSERT INTO leads (id, phone, email, name, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (lead_id, phone, email, name, now, now),
+                (lead_id, phone, email, name, current_time, current_time),
             )
         else:
             # Build SET clause dynamically; only include fields that were supplied.
-            updates: list[tuple[str, object]] = [("updated_at", now)]
+            updates: list[tuple[str, object]] = [("updated_at", current_time)]
             if phone is not None:
                 updates.append(("phone", phone))
             if email is not None:
