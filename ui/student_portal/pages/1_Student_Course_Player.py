@@ -1274,7 +1274,10 @@ if st.session_state.get("_backnav_pending_idx") is not None:
                 )
                 try:
                     st.session_state["player_status"] = get_lead_status(lead_id, db_path=DB_PATH)
-                    _hydrate_completed_from_status(st.session_state.get("player_status"))
+                    # Do NOT call _hydrate_completed_from_status here.
+                    # player_completed was deliberately trimmed to set(_keep) above;
+                    # hydrating from completion_pct would re-add sections that should
+                    # now be locked, causing "Not started" instead of "Locked" in sidebar.
                 except Exception:
                     pass
                 st.session_state["_section_radio_confirmed"] = _target_idx
