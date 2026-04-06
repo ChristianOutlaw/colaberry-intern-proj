@@ -130,7 +130,7 @@ def _reset_db_progress_from_idx(lead_id: str, from_idx: int, to_idx: int) -> Non
     from_sid   = SECTIONS[from_idx][0] if 0 <= from_idx < len(SECTIONS) else None
     now_iso    = datetime.now(timezone.utc).isoformat()
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect(DB_PATH)
 
         if sections_to_delete:
             ph = ", ".join("?" for _ in sections_to_delete)
@@ -180,8 +180,7 @@ def _reset_db_progress_from_idx(lead_id: str, from_idx: int, to_idx: int) -> Non
                 [lead_id, target_sid, completion_pct, last_activity, now_iso],
             )
 
-        # Ensure audit table exists, then log the reset.
-        conn.execute(_BACKNAV_AUDIT_DDL)
+        # Log the reset to the audit table (created during DB init).
         conn.execute(
             "INSERT INTO backnav_audit "
             "(lead_id, from_section_id, to_section_id, from_idx, to_idx, occurred_at, metadata_json) "
@@ -1711,6 +1710,14 @@ elif step == "lesson":
         _chunk_ph = st.empty()
         if _chunk_key not in st.session_state:
             st.session_state[_chunk_key] = False
+        # Skip animation when entering chunk 0 of a newly-navigated section.
+        # Preserves the animation for all other chunks and for first-ever section entry.
+        if (
+            chunk_idx == 0
+            and st.session_state.get("last_section_id") != active_section_id
+        ):
+            st.session_state[_chunk_key] = True
+        st.session_state["last_section_id"] = active_section_id
         if st.session_state.get(_chunk_key) is False:
             _chunk_text = chunks[chunk_idx]
             _built = ""
@@ -1962,6 +1969,14 @@ elif step == "reflection":
                     key=f"refl_save_{active_section_id}_{refl_idx}",
                 ):
                     current_text = st.session_state.get(input_key, "").strip()
+                    _dbg_log(
+                        "refl_save_gate",
+                        input_key=input_key,
+                        current_text=current_text,
+                        active_section_id=active_section_id,
+                        refl_idx=refl_idx,
+                        player_refl_idx_before=st.session_state.get("player_refl_idx"),
+                    )
                     if current_text:
                         try:
                             save_reflection_response(
@@ -1972,6 +1987,13 @@ elif step == "reflection":
                                 current_text,
                                 created_at=datetime.now(timezone.utc).isoformat(),
                                 db_path=DB_PATH,
+                            )
+                            _dbg_log(
+                                "refl_save_ok",
+                                input_key=input_key,
+                                active_section_id=active_section_id,
+                                refl_idx=refl_idx,
+                                player_refl_idx_after=refl_idx + 1,
                             )
                             st.session_state["player_refl_idx"] = refl_idx + 1
                             # Cadence: fire on 1-based odd positions (refl_idx 0, 2, 4...).
