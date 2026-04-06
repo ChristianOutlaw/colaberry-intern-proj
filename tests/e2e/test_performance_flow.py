@@ -251,6 +251,134 @@ def test_section_completion_timing(page: Page) -> None:
     print("[PERF]   write_ghl_contact_fields -> grep terminal for '\"step\": \"write_ghl_contact_fields\"'")
 
 
+HANDOFF_LEAD_ID = "pw_handoff_perf"
+
+
+def test_next_section_handoff_timing(page: Page) -> None:
+    """Benchmark the full post-completion handoff into the next section.
+
+    Navigates P1_S1 through lesson -> quiz -> reflection (untimed setup), then
+    measures three timed segments back-to-back:
+
+      1. Completion:  'Continue to Complete ->' click -> 'Section complete' visible
+      2. Handoff:     'Go to next section ->'  click -> 'Begin Section'    visible
+      3. Entry:       'Begin Section ->'       click -> first lesson chunk  visible
+
+    Pre-conditions (manual setup required before running):
+      - Streamlit app must be running at http://localhost:8501
+          streamlit run ui/student_portal/student_app.py
+      - HANDOFF_LEAD_ID must have a lead row and a course invite in tmp/app.db:
+          INSERT OR IGNORE INTO leads (id, created_at, updated_at)
+              VALUES ('pw_handoff_perf', datetime('now'), datetime('now'));
+          INSERT OR IGNORE INTO course_invites (id, lead_id, sent_at, course_id)
+              VALUES (hex(randomblob(16)), 'pw_handoff_perf', datetime('now'), 'FREE_INTRO_AI_V0');
+      - Section P1_S1 must NOT already be completed for this lead.
+    """
+
+    # ── Setup: login ──────────────────────────────────────────────────────────
+    page.goto(BASE_URL)
+    page.wait_for_selector("text=Welcome to", timeout=15_000)
+    page.get_by_placeholder("Enter your access code").fill(HANDOFF_LEAD_ID)
+    page.keyboard.press("Enter")
+    page.wait_for_selector("text=Begin Course", timeout=10_000)
+
+    # ── Setup: start course, enter section ───────────────────────────────────
+    page.get_by_role("button", name="Begin Course").click()
+    page.wait_for_selector("text=Begin Section", timeout=10_000)
+    page.get_by_role("button", name="Begin Section →").click()
+    page.wait_for_selector("text=Continue", timeout=10_000)
+
+    # ── Setup: step through 9 lesson chunks ──────────────────────────────────
+    page.get_by_role("button", name="Continue →").click()
+    btn = page.get_by_role("button", name="Continue →")
+    btn.wait_for(state="visible")
+    expect(btn).to_be_enabled()
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue →").click()
+    page.wait_for_timeout(1_500)
+    page.get_by_role("button", name="Continue to Quiz →").click()
+    page.wait_for_selector("text=Submit Answer", timeout=10_000)
+
+    # ── Setup: Quiz 1 of 2 ───────────────────────────────────────────────────
+    page.get_by_text("Artificial Intelligence").click()
+    page.get_by_role("button", name="Submit Answer").click()
+    page.wait_for_selector("text=Correct", timeout=8_000)
+    page.get_by_role("button", name="Next →").click()
+    page.wait_for_timeout(1_000)
+    page.get_by_text("Systems that simulate human-like reasoning or learning").click()
+    page.get_by_role("button", name="Submit Answer").click()
+    page.wait_for_selector("text=Correct", timeout=8_000)
+    page.get_by_role("button", name="Next →").click()
+    page.wait_for_timeout(1_000)
+
+    # ── Setup: Quiz 2 of 2 ───────────────────────────────────────────────────
+    page.get_by_text("A spam filter that learns from feedback").click()
+    page.get_by_role("button", name="Submit Answer").click()
+    page.wait_for_selector("text=Correct", timeout=8_000)
+    page.get_by_role("button", name="Next →").click()
+    page.wait_for_timeout(1_000)
+    page.get_by_text("Computer science").click()
+    page.get_by_role("button", name="Submit Answer").click()
+    page.wait_for_selector("text=Correct", timeout=8_000)
+    page.get_by_role("button", name="Next →").click()
+    page.wait_for_selector("text=Quiz complete", timeout=10_000)
+
+    # ── Setup: Reflection 1 (no text input) ──────────────────────────────────
+    page.get_by_role("button", name="Continue to Reflection →").click()
+    page.wait_for_selector("text=Reflection 1 of", timeout=10_000)
+    btn = page.get_by_role("button", name="Save & Continue →")
+    btn.wait_for(state="visible")
+    btn.click(force=True)
+    page.wait_for_timeout(5_000)
+
+    # ── Setup: Reflection 2 (free text) ──────────────────────────────────────
+    page.get_by_role("textbox", name="Your response").fill(
+        "Solid intro -- the examples made the concepts concrete."
+    )
+    page.get_by_role("button", name="Save & Continue →").click()
+    page.wait_for_selector("text=Reflections saved", timeout=15_000)
+
+    # ── TIMED 1: completion transition ───────────────────────────────────────
+    page.get_by_role("button", name="Continue to Complete", exact=False).wait_for(
+        state="visible", timeout=10_000
+    )
+    t0_complete = time.perf_counter()
+    page.get_by_role("button", name="Continue to Complete", exact=False).click()
+    page.wait_for_selector("text=Section complete", timeout=30_000)
+    elapsed_complete = round((time.perf_counter() - t0_complete) * 1000)
+
+    # ── TIMED 2: next-section handoff ─────────────────────────────────────────
+    page.get_by_role("button", name="Go to next section", exact=False).wait_for(
+        state="visible", timeout=10_000
+    )
+    t0_handoff = time.perf_counter()
+    page.get_by_role("button", name="Go to next section", exact=False).click()
+    page.wait_for_selector("text=Begin Section", timeout=15_000)
+    elapsed_handoff = round((time.perf_counter() - t0_handoff) * 1000)
+
+    # ── TIMED 3: next-section entry ───────────────────────────────────────────
+    t0_entry = time.perf_counter()
+    page.get_by_role("button", name="Begin Section →").click()
+    page.wait_for_selector("text=Continue", timeout=15_000)
+    elapsed_entry = round((time.perf_counter() - t0_entry) * 1000)
+
+    print(f"\n[PERF] Completion transition  -> Section complete : {elapsed_complete} ms")
+    print(f"[PERF] Next-section handoff   -> Begin Section    : {elapsed_handoff} ms")
+    print(f"[PERF] Next-section entry     -> Continue visible : {elapsed_entry} ms")
+    print(f"[PERF] Total post-reflection  -> lesson ready     : {elapsed_complete + elapsed_handoff + elapsed_entry} ms")
+
+
 BACKNAV_LEAD_ID = "Test 2"
 
 
