@@ -15,6 +15,7 @@ Invite-token flow:
 """
 
 import sys
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -111,6 +112,13 @@ def _prewarm_player_resources() -> bool:
         return True
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Server-startup warmup — fires in background when module first loads so
+# the @st.cache_resource result is populated before the first user arrives.
+# ---------------------------------------------------------------------------
+threading.Thread(target=_prewarm_player_resources, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
