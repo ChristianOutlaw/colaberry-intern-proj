@@ -75,9 +75,40 @@ if token:
         st.stop()
 
 # ---------------------------------------------------------------------------
-# Brief loading state — visible for a moment while the player page loads.
+# Process-level warmup — runs once per server process, not per session.
+# Subsequent calls are instant (cache hit).
+# ---------------------------------------------------------------------------
+@st.cache_resource
+def _prewarm_player_resources() -> bool:
+    """Initialise DB schema and load course data files before any student
+    reaches interactive controls.
+
+    Returns True on success, False on any error (caller shows retry prompt).
+    """
+    try:
+        from execution.course.load_course_map import load_course_map
+        from execution.course.load_quiz_library import load_quiz_library
+        from execution.db.sqlite import connect, init_db, get_db_path
+        conn = connect(get_db_path())
+        init_db(conn)
+        conn.close()
+        load_course_map("FREE_INTRO_AI_V0")
+        load_quiz_library("FREE_INTRO_AI_V0")
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Readiness gate — warm resources, then switch to the player.
 # ---------------------------------------------------------------------------
 st.markdown("### 🎓 Loading your course…")
-st.caption("Setting up your learning session — you'll be redirected automatically.")
+with st.spinner("Setting up your learning session…"):
+    _ready = _prewarm_player_resources()
+
+if not _ready:
+    st.error("Course resources could not be loaded.")
+    st.caption("This is usually a temporary issue. Please refresh the page to try again.")
+    st.stop()
 
 st.switch_page("pages/1_Student_Course_Player.py")
