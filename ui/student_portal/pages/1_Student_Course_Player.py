@@ -180,17 +180,27 @@ def _reset_db_progress_from_idx(lead_id: str, from_idx: int, to_idx: int) -> Non
                 [lead_id, target_sid, completion_pct, last_activity, now_iso],
             )
 
-        # Log the reset to the audit table (created during DB init).
-        conn.execute(
-            "INSERT INTO backnav_audit "
-            "(lead_id, from_section_id, to_section_id, from_idx, to_idx, occurred_at, metadata_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                lead_id, from_sid, target_sid, from_idx, to_idx, now_iso,
-                json.dumps({"reason": "user_backnav_confirm", "ui": "student_course_player"}),
-            ],
-        )
+        # Commit the reset (DELETE + UPDATE) before attempting the audit
+        # INSERT.  If the audit fails for any reason the reset is already
+        # durable — a failed audit will no longer roll back the deletion and
+        # course_state update that the caller depends on.
         conn.commit()
+
+        # Log the reset to the audit table (best-effort; non-critical).
+        try:
+            conn.execute(
+                "INSERT INTO backnav_audit "
+                "(lead_id, from_section_id, to_section_id, from_idx, to_idx, occurred_at, metadata_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    lead_id, from_sid, target_sid, from_idx, to_idx, now_iso,
+                    json.dumps({"reason": "user_backnav_confirm", "ui": "student_course_player"}),
+                ],
+            )
+            conn.commit()
+        except Exception:
+            pass
+
         conn.close()
     except Exception:
         pass
