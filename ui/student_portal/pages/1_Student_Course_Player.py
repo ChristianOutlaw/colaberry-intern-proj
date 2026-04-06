@@ -2041,6 +2041,7 @@ elif step == "complete":
                     db_path=DB_PATH,
                     webhook_url=COURSE_EVENT_WEBHOOK_URL,
                 )
+                _t0 = time.perf_counter()
                 finalize_on_completion(
                     lead_id,
                     total_sections=TOTAL_SECTIONS,
@@ -2048,14 +2049,17 @@ elif step == "complete":
                     db_path=DB_PATH,
                     webhook_url=COURSE_EVENT_WEBHOOK_URL,
                 )
+                _dbg_log("timing", step="finalize_on_completion", elapsed_ms=round((time.perf_counter()-_t0)*1000))
                 try:
                     if lead_id:
+                        _t0 = time.perf_counter()
                         write_ghl_contact_fields(
                             lead_id,
                             now=occurred_at,
                             ghl_api_url=GHL_API_URL,
                             db_path=DB_PATH,
                         )
+                        _dbg_log("timing", step="write_ghl_contact_fields", elapsed_ms=round((time.perf_counter()-_t0)*1000))
                 except Exception:
                     logging.exception("GHL writeback failed at section completion")
                 updated_status = get_lead_status(lead_id, db_path=DB_PATH)
