@@ -247,8 +247,8 @@ def test_section_completion_timing(page: Page) -> None:
 
     print(f"\n[PERF] Completion transition -> Section complete: {elapsed} ms")
     print("[PERF] Sub-timings (requires PLAYER_DEBUG=1 on the app process):")
-    print("[PERF]   finalize_on_completion  → grep terminal for '\"step\": \"finalize_on_completion\"'")
-    print("[PERF]   write_ghl_contact_fields → grep terminal for '\"step\": \"write_ghl_contact_fields\"'")
+    print("[PERF]   finalize_on_completion  -> grep terminal for '\"step\": \"finalize_on_completion\"'")
+    print("[PERF]   write_ghl_contact_fields -> grep terminal for '\"step\": \"write_ghl_contact_fields\"'")
 
 
 BACKNAV_LEAD_ID = "Test 2"
