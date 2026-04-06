@@ -378,6 +378,8 @@ def test_next_section_handoff_timing(page: Page) -> None:
     print(f"[PERF] Next-section entry     -> Continue visible : {elapsed_entry} ms")
     print(f"[PERF] Total post-reflection  -> lesson ready     : {elapsed_complete + elapsed_handoff + elapsed_entry} ms")
 
+    assert elapsed_entry < 400, f"Next-section entry too slow: {elapsed_entry} ms (limit 400 ms)"
+
 
 BACKNAV_LEAD_ID = "Test 2"
 
