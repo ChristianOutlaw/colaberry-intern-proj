@@ -125,5 +125,24 @@ class TestUpsertLead(unittest.TestCase):
         )
 
 
+    # ------------------------------------------------------------------
+    # Test 4 — injected time on update: created_at frozen, updated_at advances
+    # ------------------------------------------------------------------
+    def test_update_respects_injected_now(self):
+        """On update, created_at must stay at the insert time and updated_at
+        must equal the caller-supplied now value."""
+        INSERT_TIME = "2026-02-25T10:00:00+00:00"
+        UPDATE_TIME = "2026-02-25T11:00:00+00:00"
+
+        upsert_lead("L_UPD", phone="111", db_path=TEST_DB_PATH, now=INSERT_TIME)
+        upsert_lead("L_UPD", email="x@y.com", db_path=TEST_DB_PATH, now=UPDATE_TIME)
+
+        row = _fetch_lead("L_UPD")
+        self.assertEqual(row["created_at"], INSERT_TIME,
+                         "created_at must not change on update")
+        self.assertEqual(row["updated_at"], UPDATE_TIME,
+                         "updated_at must equal the injected update time")
+
+
 if __name__ == "__main__":
     unittest.main()
