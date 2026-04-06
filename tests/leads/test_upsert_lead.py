@@ -101,5 +101,41 @@ class TestUpsertLead(unittest.TestCase):
         self.assertNotEqual(after["updated_at"], before["updated_at"], "updated_at must change on update")
 
 
+    # ------------------------------------------------------------------
+    # Test 3 — timestamps must reflect injected/controlled time
+    # ------------------------------------------------------------------
+    def test_timestamps_use_caller_controlled_time(self):
+        """Stored timestamps must equal the time provided at call time, not
+        a live datetime.now() captured inside the function.
+
+        Currently upsert_lead calls the private _utc_now() helper internally.
+        This test patches that helper to a fixed value, proving that stored
+        timestamps derive from it — and explicitly documents that time must be
+        controllable by the caller, not generated opaquely inside execution code.
+
+        Limitation: patching a private helper is a stopgap. The proper fix
+        (tracked separately) is to add a ``now`` parameter to upsert_lead so
+        callers can inject time through the public API without monkeypatching.
+        """
+        from unittest.mock import patch
+
+        FIXED_TIME = "2026-02-25T12:00:00+00:00"
+
+        with patch("execution.leads.upsert_lead._utc_now", return_value=FIXED_TIME):
+            upsert_lead("L_TIME", phone="555", db_path=TEST_DB_PATH)
+
+        row = _fetch_lead("L_TIME")
+        self.assertEqual(
+            row["created_at"],
+            FIXED_TIME,
+            "created_at must equal the injected fixed time, not a live datetime.now()",
+        )
+        self.assertEqual(
+            row["updated_at"],
+            FIXED_TIME,
+            "updated_at must equal the injected fixed time, not a live datetime.now()",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
