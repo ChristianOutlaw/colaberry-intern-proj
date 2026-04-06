@@ -85,15 +85,29 @@ def _prewarm_player_resources() -> bool:
 
     Returns True on success, False on any error (caller shows retry prompt).
     """
+    import time
     try:
         from execution.course.load_course_map import load_course_map
         from execution.course.load_quiz_library import load_quiz_library
         from execution.db.sqlite import connect, init_db, get_db_path
+
+        t_total = time.perf_counter()
+
+        t0 = time.perf_counter()
         conn = connect(get_db_path())
         init_db(conn)
         conn.close()
+        print(f"[WARMUP] db_init: {round((time.perf_counter() - t0) * 1000)} ms", flush=True)
+
+        t0 = time.perf_counter()
         load_course_map("FREE_INTRO_AI_V0")
+        print(f"[WARMUP] course_map: {round((time.perf_counter() - t0) * 1000)} ms", flush=True)
+
+        t0 = time.perf_counter()
         load_quiz_library("FREE_INTRO_AI_V0")
+        print(f"[WARMUP] quiz_library: {round((time.perf_counter() - t0) * 1000)} ms", flush=True)
+
+        print(f"[WARMUP] total: {round((time.perf_counter() - t_total) * 1000)} ms", flush=True)
         return True
     except Exception:
         return False
